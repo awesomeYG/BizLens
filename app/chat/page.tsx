@@ -27,9 +27,9 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-base">
+    <div className="h-screen flex flex-col bg-base overflow-hidden">
       {/* Top nav */}
-      <nav className="flex items-center justify-between px-5 h-12 border-b border-border-subtle bg-surface/80 backdrop-blur-md shrink-0">
+      <nav className="flex items-center justify-between px-5 h-12 border-b border-border-subtle bg-surface/80 backdrop-blur-md shrink-0 z-10">
         <Link href="/" className="text-sm font-semibold text-txt-primary tracking-tight hover:text-accent transition-colors">
           BizLens
         </Link>
@@ -56,7 +56,7 @@ export default function ChatPage() {
       </nav>
 
       {/* Chat area */}
-      <main className="flex-1 flex min-h-0">
+      <main className="flex-1 flex min-h-0 overflow-hidden">
         <ChatPanel companyProfile={companyProfile} />
       </main>
     </div>
