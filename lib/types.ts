@@ -89,3 +89,26 @@ export interface DashboardTemplate {
   description: string;
   layout: string;
 }
+
+/* ---- 钉钉通知事件 ---- */
+
+export interface NotificationRule {
+  id: string;
+  name: string;
+  /** 用户用自然语言描述的触发条件，如"当日销售额超过1000" */
+  condition: string;
+  /** 通知消息模板 */
+  messageTemplate: string;
+  /** 钉钉 Webhook URL */
+  webhookUrl: string;
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** chat API 返回中可能携带的通知事件操作指令 */
+export interface NotificationAction {
+  type: "create" | "update" | "delete" | "list";
+  rule?: Omit<NotificationRule, "id" | "createdAt" | "updatedAt">;
+  ruleId?: string;
+}

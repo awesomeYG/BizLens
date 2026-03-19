@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation";
 import { saveDashboard } from "@/lib/dashboard-store";
 import { DASHBOARD_TEMPLATES } from "@/lib/templates";
 import { DEFAULT_DASHBOARD_DATA, mapSampleToDashboard } from "@/lib/data-mapper";
+import { addNotificationRule } from "@/lib/notification-store";
 import type {
   ChatMessage,
   CompanyProfile,
   DashboardData,
   DashboardTemplateId,
+  NotificationAction,
 } from "@/lib/types";
 
 interface ChatPanelProps {
@@ -27,9 +29,9 @@ export default function ChatPanel({
     {
       id: "welcome",
       role: "assistant",
-      content: `你好！我是 AI BI 助手。你可以：\n1. 上传 CSV/Excel 等数据文件，我会学习并分析\n2. 向我提问，我会基于数据给出洞察\n3. 说「生成数据大屏」，我会帮你创建可视化大屏\n\n${
+      content: `你好！我是 AI BI 助手。你可以：\n1. 上传 CSV/Excel 等数据文件，我会学习并分析\n2. 向我提问，我会基于数据给出洞察\n3. 告诉我你想监控的指标条件，我会帮你配置钉钉通知\n\n${
         companyProfile?.summary ? `当前企业画像：${companyProfile.summary}\n\n` : ""
-      }请上传数据或直接提问～`,
+      }试试说「当日销售额超过1000时通知我」~`,
       timestamp: Date.now(),
     },
   ]);
@@ -111,6 +113,19 @@ export default function ChatPanel({
     e.target.value = "";
   };
 
+  const parseNotificationAction = (text: string): { cleanContent: string; action?: NotificationAction } => {
+    const regex = /<!--NOTIFICATION_ACTION-->\s*([\s\S]*?)\s*<!--\/NOTIFICATION_ACTION-->/;
+    const match = text.match(regex);
+    if (!match) return { cleanContent: text };
+    try {
+      const action = JSON.parse(match[1]) as NotificationAction;
+      const cleanContent = text.replace(regex, "").trim();
+      return { cleanContent, action };
+    } catch {
+      return { cleanContent: text };
+    }
+  };
+
   const sendToAI = async (
     msgList: { role: string; content: string }[],
     appendUser = true
@@ -128,7 +143,13 @@ export default function ChatPanel({
         }),
       });
       const data = await res.json();
-      const content = data.content || data.error || "无回复";
+      const rawContent = data.content || data.error || "无回复";
+      const { cleanContent, action } = parseNotificationAction(rawContent);
+
+      if (action?.type === "create" && action.rule) {
+        addNotificationRule(action.rule);
+      }
+
       setMessages((prev) => [
         ...prev,
         ...(appendUser
@@ -144,7 +165,7 @@ export default function ChatPanel({
         {
           id: crypto.randomUUID(),
           role: "assistant" as const,
-          content,
+          content: cleanContent,
           timestamp: Date.now(),
         },
       ]);
@@ -211,12 +232,6 @@ export default function ChatPanel({
               已上传 {uploadedFiles.length} 个文件
             </span>
           )}
-          <Link
-            href="/dashboards"
-            className="text-sm text-cyan-400 hover:text-cyan-300"
-          >
-            查看大屏 →
-          </Link>
         </div>
       </header>
 
@@ -266,74 +281,6 @@ export default function ChatPanel({
               {dataSummary.length > 500 && "..."}
             </pre>
           </div>
-
-          <div className="border-t border-slate-700/60 pt-3">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-slate-300">大屏草稿</h3>
-              <button
-                onClick={handleGenerateDashboard}
-                className="text-xs px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white"
-              >
-                生成
-              </button>
-            </div>
-            <label htmlFor="template-select-side" className="block text-xs text-slate-400 mb-1">
-              模板
-            </label>
-            <select
-              id="template-select-side"
-              value={selectedTemplate}
-              onChange={(e) => setSelectedTemplate(e.target.value as DashboardTemplateId)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-xs px-2 py-1"
-            >
-              {DASHBOARD_TEMPLATES.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-            <label htmlFor="dashboard-title-side" className="block text-xs text-slate-400 mt-3 mb-1">
-              标题
-            </label>
-            <input
-              id="dashboard-title-side"
-              value={dashboardTitle}
-              onChange={(e) => setDashboardTitle(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-xs px-2 py-1"
-            />
-            <div className="grid grid-cols-2 gap-2 mt-3">
-              <div>
-                <div className="text-[11px] text-slate-400 mb-1">总销售额</div>
-                <input
-                  type="number"
-                  value={draftData.totalSales}
-                  onChange={(e) => handleKpiChange("totalSales", e.target.value)}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-xs px-2 py-1"
-                />
-              </div>
-              <div>
-                <div className="text-[11px] text-slate-400 mb-1">同比增长%</div>
-                <input
-                  type="number"
-                  value={draftData.growth}
-                  onChange={(e) => handleKpiChange("growth", e.target.value)}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-xs px-2 py-1"
-                />
-              </div>
-              <div>
-                <div className="text-[11px] text-slate-400 mb-1">客户数</div>
-                <input
-                  type="number"
-                  value={draftData.customers}
-                  onChange={(e) => handleKpiChange("customers", e.target.value)}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-xs px-2 py-1"
-                />
-              </div>
-              <div className="text-[11px] text-slate-500 col-span-2">
-                上传数据后会自动填充，可手动微调。
-              </div>
-            </div>
-          </div>
         </aside>
       </div>
 
@@ -350,36 +297,13 @@ export default function ChatPanel({
             onClick={() => fileInputRef.current?.click()}
             className="px-4 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-slate-300 text-sm"
           >
-            📎 上传数据
-          </button>
-          <select
-            value={selectedTemplate}
-            onChange={(e) => setSelectedTemplate(e.target.value as DashboardTemplateId)}
-            className="px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-slate-200 text-sm"
-          >
-            {DASHBOARD_TEMPLATES.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          <input
-            value={dashboardTitle}
-            onChange={(e) => setDashboardTitle(e.target.value)}
-            className="w-40 sm:w-56 px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-slate-200 text-sm"
-            placeholder="大屏标题"
-          />
-          <button
-            onClick={handleGenerateDashboard}
-            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm"
-          >
-            📊 生成大屏
+            上传数据
           </button>
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-            placeholder="输入问题或说「生成数据大屏」..."
+            placeholder="输入问题，或描述你想配置的通知事件..."
             className="flex-1 min-w-[180px] px-4 py-2 rounded-lg bg-slate-700 border border-slate-600 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
           <button

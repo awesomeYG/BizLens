@@ -34,17 +34,17 @@ export default function HomePage() {
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [error, setError] = useState("");
 
-  const [loginForm, setLoginForm] = useState({ name: "", email: "" });
+  const [loginForm, setLoginForm] = useState({ name: "张三", email: "zhangsan@example.com" });
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
-    companyName: "",
-    industry: "",
-    size: "",
-    region: "",
-    businessModel: "",
-    coreGoals: "",
+    companyName: "星辰科技有限公司",
+    industry: "电商零售",
+    size: "200-500人",
+    region: "华东 + 东南亚",
+    businessModel: "B2C 跨境电商",
+    coreGoals: "提升复购率、降低库存资金占用、优化供应链效率",
   });
-  const [selectedSourceTypes, setSelectedSourceTypes] = useState<DataSourceType[]>(["mysql", "excel"]);
-  const [sourceDetailText, setSourceDetailText] = useState("");
+  const [selectedSourceTypes, setSelectedSourceTypes] = useState<DataSourceType[]>(["mysql", "excel", "api", "kafka"]);
+  const [sourceDetailText, setSourceDetailText] = useState("MySQL 存储交易订单和用户数据，Excel 存储财务报表，API 对接 ERP 系统，Kafka 存储用户行为埋点流数据");
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -292,13 +292,7 @@ export default function HomePage() {
                 href="/chat"
                 className="px-8 py-4 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 text-cyan-300 font-medium transition-all hover:scale-105"
               >
-                🤖 AI 对话
-              </Link>
-              <Link
-                href="/dashboards"
-                className="px-8 py-4 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 font-medium transition-all hover:scale-105"
-              >
-                📊 数据大屏
+                AI 对话
               </Link>
             </div>
             <button

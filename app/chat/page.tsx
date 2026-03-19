@@ -33,7 +33,7 @@ export default function ChatPage() {
         <Link href="/" className="text-cyan-400 hover:text-cyan-300 font-medium">
           ← AI BI
         </Link>
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
           <Link
             href="/chat"
             className="text-cyan-400 font-medium border-b-2 border-cyan-400 pb-1"
@@ -42,9 +42,15 @@ export default function ChatPage() {
           </Link>
           <Link
             href="/dashboards"
-            className="text-slate-400 hover:text-slate-300"
+            className="text-slate-500 hover:text-slate-400 text-sm"
           >
-            数据大屏
+            大屏
+          </Link>
+          <Link
+            href="/settings"
+            className="text-slate-500 hover:text-slate-400 text-sm"
+          >
+            设置
           </Link>
         </div>
       </nav>
