@@ -90,6 +90,14 @@ export interface DashboardTemplate {
   layout: string;
 }
 
+/* ---- AI API 配置 ---- */
+
+export interface AIConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}
+
 /* ---- 钉钉通知事件 ---- */
 
 export interface NotificationRule {

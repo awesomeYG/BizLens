@@ -9,7 +9,6 @@ import type { CompanyProfile } from "@/lib/types";
 
 export default function ChatPage() {
   const router = useRouter();
-  const [dataSummary, setDataSummary] = useState("");
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | undefined>(undefined);
   const [ready, setReady] = useState(false);
 
@@ -24,55 +23,41 @@ export default function ChatPage() {
   }, [router]);
 
   if (!ready) {
-    return <div className="min-h-screen bg-slate-900" />;
+    return <div className="min-h-screen bg-base" />;
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-900">
-      <nav className="flex items-center justify-between px-6 py-3 border-b border-slate-700/50 bg-slate-800/80">
-        <Link href="/" className="text-cyan-400 hover:text-cyan-300 font-medium">
-          ← AI BI
+    <div className="min-h-screen flex flex-col bg-base">
+      {/* Top nav */}
+      <nav className="flex items-center justify-between px-5 h-12 border-b border-border-subtle bg-surface/80 backdrop-blur-md shrink-0">
+        <Link href="/" className="text-sm font-semibold text-txt-primary tracking-tight hover:text-accent transition-colors">
+          BizLens
         </Link>
-        <div className="flex gap-4 items-center">
+        <div className="flex items-center gap-1">
           <Link
             href="/chat"
-            className="text-cyan-400 font-medium border-b-2 border-cyan-400 pb-1"
+            className="px-3 py-1.5 rounded-lg text-xs font-medium text-accent bg-accent/[0.08]"
           >
-            AI 对话
+            对话
           </Link>
           <Link
             href="/dashboards"
-            className="text-slate-500 hover:text-slate-400 text-sm"
+            className="px-3 py-1.5 rounded-lg text-xs text-txt-tertiary hover:text-txt-secondary hover:bg-white/[0.03] transition-all"
           >
             大屏
           </Link>
           <Link
             href="/settings"
-            className="text-slate-500 hover:text-slate-400 text-sm"
+            className="px-3 py-1.5 rounded-lg text-xs text-txt-tertiary hover:text-txt-secondary hover:bg-white/[0.03] transition-all"
           >
             设置
           </Link>
         </div>
       </nav>
 
+      {/* Chat area */}
       <main className="flex-1 flex min-h-0">
-        <div className="flex-1 flex flex-col">
-          <ChatPanel
-            onDataSummaryChange={setDataSummary}
-            companyProfile={companyProfile}
-          />
-        </div>
-        {dataSummary && (
-          <aside className="w-80 border-l border-slate-700/50 bg-slate-800/30 p-4 overflow-y-auto">
-            <h3 className="text-sm font-medium text-slate-400 mb-2">
-              已学习数据
-            </h3>
-            <pre className="text-xs text-slate-500 whitespace-pre-wrap break-words">
-              {dataSummary.slice(0, 500)}
-              {dataSummary.length > 500 && "..."}
-            </pre>
-          </aside>
-        )}
+        <ChatPanel companyProfile={companyProfile} />
       </main>
     </div>
   );

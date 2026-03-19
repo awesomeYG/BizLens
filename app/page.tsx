@@ -4,28 +4,61 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { completeOnboarding, getCurrentUser, loginUser, logoutUser } from "@/lib/user-store";
+import { getAIConfig } from "@/lib/ai-config-store";
 import type { CompanyInfo, DataSourceConfig, DataSourceType, UserSession } from "@/lib/types";
 
-const DATA_SOURCE_OPTIONS: { type: DataSourceType; label: string }[] = [
-  { type: "mysql", label: "MySQL" },
-  { type: "postgresql", label: "PostgreSQL" },
-  { type: "sqlserver", label: "SQL Server" },
-  { type: "oracle", label: "Oracle" },
-  { type: "mongodb", label: "MongoDB" },
-  { type: "redis", label: "Redis" },
-  { type: "elasticsearch", label: "Elasticsearch" },
-  { type: "clickhouse", label: "ClickHouse" },
-  { type: "snowflake", label: "Snowflake" },
-  { type: "bigquery", label: "BigQuery" },
-  { type: "hive", label: "Hive" },
-  { type: "spark", label: "Spark" },
-  { type: "csv", label: "CSV 文件" },
-  { type: "excel", label: "Excel 文件" },
-  { type: "api", label: "业务 API" },
-  { type: "s3", label: "对象存储（S3/OSS）" },
-  { type: "kafka", label: "Kafka 消息流" },
-  { type: "other", label: "其他" },
+const DATA_SOURCE_OPTIONS: { type: DataSourceType; label: string; desc: string }[] = [
+  { type: "mysql", label: "MySQL", desc: "关系型数据库" },
+  { type: "postgresql", label: "PostgreSQL", desc: "关系型数据库" },
+  { type: "sqlserver", label: "SQL Server", desc: "关系型数据库" },
+  { type: "oracle", label: "Oracle", desc: "关系型数据库" },
+  { type: "mongodb", label: "MongoDB", desc: "文档数据库" },
+  { type: "redis", label: "Redis", desc: "缓存/KV" },
+  { type: "elasticsearch", label: "Elasticsearch", desc: "搜索引擎" },
+  { type: "clickhouse", label: "ClickHouse", desc: "列式分析" },
+  { type: "snowflake", label: "Snowflake", desc: "云数仓" },
+  { type: "bigquery", label: "BigQuery", desc: "云数仓" },
+  { type: "hive", label: "Hive", desc: "大数据" },
+  { type: "spark", label: "Spark", desc: "大数据" },
+  { type: "csv", label: "CSV", desc: "文件" },
+  { type: "excel", label: "Excel", desc: "文件" },
+  { type: "api", label: "API", desc: "业务接口" },
+  { type: "s3", label: "S3/OSS", desc: "对象存储" },
+  { type: "kafka", label: "Kafka", desc: "消息流" },
+  { type: "other", label: "Other", desc: "其他" },
 ];
+
+/* ---- step indicator ---- */
+function StepIndicator({ current, total }: { current: number; total: number }) {
+  return (
+    <div className="flex items-center gap-2">
+      {Array.from({ length: total }, (_, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <div
+            className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all duration-300 ${
+              i < current
+                ? "bg-accent/20 text-accent border border-accent/40"
+                : i === current
+                ? "bg-accent text-white shadow-lg shadow-accent/25"
+                : "bg-white/[0.03] text-txt-tertiary border border-border-subtle"
+            }`}
+          >
+            {i < current ? (
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ) : (
+              i + 1
+            )}
+          </div>
+          {i < total - 1 && (
+            <div className={`w-8 h-px transition-colors duration-300 ${i < current ? "bg-accent/40" : "bg-border-subtle"}`} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function HomePage() {
   const router = useRouter();
@@ -33,6 +66,7 @@ export default function HomePage() {
   const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [error, setError] = useState("");
+  const [onboardStep, setOnboardStep] = useState(0); // 0=company info, 1=data sources
 
   const [loginForm, setLoginForm] = useState({ name: "张三", email: "zhangsan@example.com" });
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
@@ -85,8 +119,7 @@ export default function HomePage() {
     );
   };
 
-  const handleCompleteOnboarding = async (e: React.SyntheticEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleNextStep = () => {
     setError("");
     const requiredValues = [
       companyInfo.companyName,
@@ -97,9 +130,14 @@ export default function HomePage() {
       companyInfo.coreGoals,
     ];
     if (requiredValues.some((v) => !v.trim())) {
-      setError("请完整填写公司信息");
+      setError("请完整填写企业信息");
       return;
     }
+    setOnboardStep(1);
+  };
+
+  const handleCompleteOnboarding = async () => {
+    setError("");
     if (!sourceConfigs.length) {
       setError("请至少选择一个数据源");
       return;
@@ -107,21 +145,31 @@ export default function HomePage() {
 
     setLoadingProfile(true);
     try {
-      const res = await fetch("/api/company-profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyInfo,
-          dataSources: sourceConfigs,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "画像生成失败");
+      let profileData: { summary: string; analysisFocuses: string[]; recommendedMetrics: string[] };
+
+      try {
+        const aiConfig = getAIConfig();
+        const res = await fetch("/api/company-profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ companyInfo, dataSources: sourceConfigs, aiConfig: aiConfig.apiKey ? aiConfig : undefined }),
+        });
+        const ct = res.headers.get("content-type") || "";
+        if (!res.ok || !ct.includes("application/json")) throw new Error("API 不可用");
+        profileData = await res.json();
+      } catch {
+        // fallback: 本地生成画像
+        profileData = {
+          summary: `${companyInfo.companyName} 属于${companyInfo.industry}行业，当前业务目标是${companyInfo.coreGoals}。已接入 ${sourceConfigs.length} 个数据源，可用于构建统一经营分析视图。`,
+          analysisFocuses: ["收入增长趋势与异常波动", "渠道转化漏斗与客户分层", "区域/产品利润结构优化"],
+          recommendedMetrics: ["营收、毛利率、客单价", "获客成本、留存率、复购率", "库存周转、履约时效、退款率"],
+        };
+      }
 
       const nextUser = completeOnboarding(companyInfo, sourceConfigs, {
-        summary: data.summary || "",
-        analysisFocuses: data.analysisFocuses || [],
-        recommendedMetrics: data.recommendedMetrics || [],
+        summary: profileData.summary || "",
+        analysisFocuses: profileData.analysisFocuses || [],
+        recommendedMetrics: profileData.recommendedMetrics || [],
       });
       setCurrentUser(nextUser);
       router.push("/chat");
@@ -138,170 +186,240 @@ export default function HomePage() {
   };
 
   if (!hydrated) {
-    return <div className="min-h-screen bg-slate-900" />;
+    return <div className="min-h-screen bg-base" />;
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <div className="w-full max-w-4xl px-6">
-        <div className="text-center space-y-3 mb-8">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-            AI BI 智能数据分析
+    <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden">
+      {/* Background glow */}
+      <div className="absolute top-[-40%] left-1/2 -translate-x-1/2 w-[800px] h-[800px] rounded-full bg-accent/[0.03] blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[400px] h-[400px] rounded-full bg-indigo-500/[0.02] blur-[80px] pointer-events-none" />
+
+      <div className="w-full max-w-2xl px-6 relative z-10">
+        {/* Brand */}
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/[0.08] border border-accent/20 mb-6">
+            <div className="glow-dot" style={{ background: "var(--accent)", boxShadow: "0 0 8px var(--accent)" }} />
+            <span className="text-xs font-medium text-accent tracking-wide">AI-Powered Analytics</span>
+          </div>
+          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-txt-primary mb-3">
+            BizLens
           </h1>
-          <p className="text-slate-400 text-lg">
-            登录后接入公司数据源，让 AI 先理解企业，再进行后续分析
+          <p className="text-txt-secondary text-base max-w-md mx-auto leading-relaxed">
+            智能商业分析平台，对话即洞察
           </p>
         </div>
 
+        {/* Login */}
         {!currentUser && (
           <form
             onSubmit={handleLogin}
-            className="mx-auto max-w-xl rounded-2xl border border-slate-700 bg-slate-800/60 p-6 space-y-4"
+            className="glass-card rounded-2xl p-8 space-y-5 animate-fade-in-up"
           >
-            <h2 className="text-xl text-slate-100 font-semibold">登录</h2>
-            <input
-              value={loginForm.name}
-              onChange={(e) => setLoginForm((prev) => ({ ...prev, name: e.target.value }))}
-              placeholder="姓名"
-              className="w-full rounded-lg bg-slate-700 border border-slate-600 px-3 py-2 text-slate-100"
-            />
-            <input
-              value={loginForm.email}
-              onChange={(e) => setLoginForm((prev) => ({ ...prev, email: e.target.value }))}
-              placeholder="邮箱"
-              type="email"
-              className="w-full rounded-lg bg-slate-700 border border-slate-600 px-3 py-2 text-slate-100"
-            />
-            {error ? <p className="text-red-400 text-sm">{error}</p> : null}
-            <button
-              type="submit"
-              className="w-full rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white py-2 font-medium"
-            >
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold text-txt-primary">登录</h2>
+              <p className="text-sm text-txt-tertiary">输入信息开始使用</p>
+            </div>
+            <div className="space-y-3">
+              <input
+                value={loginForm.name}
+                onChange={(e) => setLoginForm((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="姓名"
+                className="input-base w-full rounded-xl px-4 py-3 text-sm"
+              />
+              <input
+                value={loginForm.email}
+                onChange={(e) => setLoginForm((prev) => ({ ...prev, email: e.target.value }))}
+                placeholder="邮箱"
+                type="email"
+                className="input-base w-full rounded-xl px-4 py-3 text-sm"
+              />
+            </div>
+            {error && <p className="text-red-400 text-sm">{error}</p>}
+            <button type="submit" className="btn-primary w-full rounded-xl py-3 text-sm">
               进入平台
             </button>
           </form>
         )}
 
+        {/* Onboarding */}
         {currentUser && !currentUser.isOnboarded && (
-          <form
-            onSubmit={handleCompleteOnboarding}
-            className="rounded-2xl border border-slate-700 bg-slate-800/60 p-6 space-y-5"
-          >
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl text-slate-100 font-semibold">新用户初始化</h2>
+          <div className="glass-card rounded-2xl p-8 animate-fade-in-up">
+            <div className="flex items-center justify-between mb-8">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold text-txt-primary">初始化配置</h2>
+                <p className="text-sm text-txt-tertiary">帮助 AI 理解你的业务</p>
+              </div>
+              <div className="flex items-center gap-4">
+                <StepIndicator current={onboardStep} total={2} />
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="text-xs text-txt-tertiary hover:text-txt-secondary transition-colors"
+                >
+                  退出
+                </button>
+              </div>
+            </div>
+
+            {onboardStep === 0 && (
+              <div className="space-y-4 animate-fade-in-up">
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-txt-secondary">公司名称</label>
+                    <input
+                      value={companyInfo.companyName}
+                      onChange={(e) => setCompanyInfo((prev) => ({ ...prev, companyName: e.target.value }))}
+                      className="input-base w-full rounded-xl px-4 py-2.5 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-txt-secondary">行业</label>
+                    <input
+                      value={companyInfo.industry}
+                      onChange={(e) => setCompanyInfo((prev) => ({ ...prev, industry: e.target.value }))}
+                      className="input-base w-full rounded-xl px-4 py-2.5 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-txt-secondary">企业规模</label>
+                    <input
+                      value={companyInfo.size}
+                      onChange={(e) => setCompanyInfo((prev) => ({ ...prev, size: e.target.value }))}
+                      className="input-base w-full rounded-xl px-4 py-2.5 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-txt-secondary">业务区域</label>
+                    <input
+                      value={companyInfo.region}
+                      onChange={(e) => setCompanyInfo((prev) => ({ ...prev, region: e.target.value }))}
+                      className="input-base w-full rounded-xl px-4 py-2.5 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-txt-secondary">业务模式</label>
+                  <input
+                    value={companyInfo.businessModel}
+                    onChange={(e) => setCompanyInfo((prev) => ({ ...prev, businessModel: e.target.value }))}
+                    className="input-base w-full rounded-xl px-4 py-2.5 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-txt-secondary">核心目标</label>
+                  <textarea
+                    value={companyInfo.coreGoals}
+                    onChange={(e) => setCompanyInfo((prev) => ({ ...prev, coreGoals: e.target.value }))}
+                    rows={2}
+                    className="input-base w-full rounded-xl px-4 py-2.5 text-sm resize-none"
+                  />
+                </div>
+                {error && <p className="text-red-400 text-sm">{error}</p>}
+                <button
+                  type="button"
+                  onClick={handleNextStep}
+                  className="btn-primary w-full rounded-xl py-3 text-sm"
+                >
+                  下一步
+                </button>
+              </div>
+            )}
+
+            {onboardStep === 1 && (
+              <div className="space-y-5 animate-fade-in-up">
+                <div>
+                  <p className="text-sm text-txt-secondary mb-3">选择数据来源</p>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    {DATA_SOURCE_OPTIONS.map((option) => (
+                      <button
+                        key={option.type}
+                        type="button"
+                        onClick={() => toggleSourceType(option.type)}
+                        className={`group rounded-xl px-3 py-2.5 text-left transition-all duration-200 ${
+                          selectedSourceTypes.includes(option.type)
+                            ? "bg-accent/10 border border-accent/30 ring-1 ring-accent/10"
+                            : "bg-white/[0.02] border border-border-subtle hover:bg-white/[0.04] hover:border-border-default"
+                        }`}
+                      >
+                        <div className={`text-xs font-medium ${selectedSourceTypes.includes(option.type) ? "text-accent" : "text-txt-primary"}`}>
+                          {option.label}
+                        </div>
+                        <div className="text-[10px] text-txt-tertiary mt-0.5">{option.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-txt-secondary">补充说明（可选）</label>
+                  <textarea
+                    value={sourceDetailText}
+                    onChange={(e) => setSourceDetailText(e.target.value)}
+                    rows={2}
+                    placeholder="描述各数据源的用途..."
+                    className="input-base w-full rounded-xl px-4 py-2.5 text-sm resize-none"
+                  />
+                </div>
+                {error && <p className="text-red-400 text-sm">{error}</p>}
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setOnboardStep(0)}
+                    className="btn-ghost rounded-xl px-6 py-3 text-sm"
+                  >
+                    上一步
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCompleteOnboarding}
+                    disabled={loadingProfile}
+                    className="btn-primary flex-1 rounded-xl py-3 text-sm"
+                  >
+                    {loadingProfile ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        AI 正在分析...
+                      </span>
+                    ) : (
+                      "完成配置"
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Welcome back */}
+        {currentUser?.isOnboarded && (
+          <div className="text-center space-y-8 animate-fade-in-up">
+            <div className="space-y-3">
+              <p className="text-txt-secondary">
+                欢迎回来，<span className="text-txt-primary font-medium">{currentUser.name}</span>
+              </p>
+              <p className="text-sm text-txt-tertiary">企业画像已就绪</p>
+            </div>
+            <Link
+              href="/chat"
+              className="btn-primary inline-flex items-center gap-2 rounded-xl px-8 py-3.5 text-sm"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M2 3.5C2 2.67 2.67 2 3.5 2h9c.83 0 1.5.67 1.5 1.5v7c0 .83-.67 1.5-1.5 1.5H5L2 14.5V3.5z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              开始对话
+            </Link>
+            <div>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="text-sm text-slate-400 hover:text-slate-300"
+                className="text-xs text-txt-tertiary hover:text-txt-secondary transition-colors"
               >
                 退出登录
               </button>
             </div>
-
-            <div className="grid sm:grid-cols-2 gap-3">
-              <input
-                value={companyInfo.companyName}
-                onChange={(e) =>
-                  setCompanyInfo((prev) => ({ ...prev, companyName: e.target.value }))
-                }
-                placeholder="公司名称"
-                className="rounded-lg bg-slate-700 border border-slate-600 px-3 py-2 text-slate-100"
-              />
-              <input
-                value={companyInfo.industry}
-                onChange={(e) => setCompanyInfo((prev) => ({ ...prev, industry: e.target.value }))}
-                placeholder="行业（如电商、制造）"
-                className="rounded-lg bg-slate-700 border border-slate-600 px-3 py-2 text-slate-100"
-              />
-              <input
-                value={companyInfo.size}
-                onChange={(e) => setCompanyInfo((prev) => ({ ...prev, size: e.target.value }))}
-                placeholder="企业规模（如 200-500 人）"
-                className="rounded-lg bg-slate-700 border border-slate-600 px-3 py-2 text-slate-100"
-              />
-              <input
-                value={companyInfo.region}
-                onChange={(e) => setCompanyInfo((prev) => ({ ...prev, region: e.target.value }))}
-                placeholder="业务区域（如华东 + 东南亚）"
-                className="rounded-lg bg-slate-700 border border-slate-600 px-3 py-2 text-slate-100"
-              />
-            </div>
-
-            <input
-              value={companyInfo.businessModel}
-              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, businessModel: e.target.value }))}
-              placeholder="业务模式（如 B2B SaaS、D2C）"
-              className="w-full rounded-lg bg-slate-700 border border-slate-600 px-3 py-2 text-slate-100"
-            />
-            <textarea
-              value={companyInfo.coreGoals}
-              onChange={(e) => setCompanyInfo((prev) => ({ ...prev, coreGoals: e.target.value }))}
-              placeholder="核心目标（如提升复购率、降低库存资金占用）"
-              rows={3}
-              className="w-full rounded-lg bg-slate-700 border border-slate-600 px-3 py-2 text-slate-100"
-            />
-
-            <div>
-              <p className="text-slate-300 text-sm mb-2">
-                选择数据来源（可多选，支持 SQL/NoSQL/文件/API/流式数据）
-              </p>
-              <div className="grid sm:grid-cols-3 gap-2">
-                {DATA_SOURCE_OPTIONS.map((option) => (
-                  <button
-                    key={option.type}
-                    type="button"
-                    onClick={() => toggleSourceType(option.type)}
-                    className={`rounded-lg border px-3 py-2 text-sm text-left ${
-                      selectedSourceTypes.includes(option.type)
-                        ? "border-cyan-500 bg-cyan-500/20 text-cyan-200"
-                        : "border-slate-600 bg-slate-700/50 text-slate-300"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <textarea
-              value={sourceDetailText}
-              onChange={(e) => setSourceDetailText(e.target.value)}
-              placeholder="补充数据说明（例如：MySQL 存交易单、Kafka 存埋点流、S3 存日志）"
-              rows={3}
-              className="w-full rounded-lg bg-slate-700 border border-slate-600 px-3 py-2 text-slate-100"
-            />
-
-            {error ? <p className="text-red-400 text-sm">{error}</p> : null}
-            <button
-              disabled={loadingProfile}
-              type="submit"
-              className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-70 text-white py-2 font-medium"
-            >
-              {loadingProfile ? "AI 正在分析公司信息..." : "完成初始化并进入分析"}
-            </button>
-          </form>
-        )}
-
-        {currentUser?.isOnboarded && (
-          <div className="mx-auto max-w-2xl text-center space-y-6 rounded-2xl border border-slate-700 bg-slate-800/60 p-6">
-            <p className="text-slate-300">
-              欢迎回来，{currentUser.name}。企业画像已就绪，可直接开始 AI 分析。
-            </p>
-            <div className="flex gap-6 justify-center flex-wrap">
-              <Link
-                href="/chat"
-                className="px-8 py-4 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 text-cyan-300 font-medium transition-all hover:scale-105"
-              >
-                AI 对话
-              </Link>
-            </div>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="text-sm text-slate-400 hover:text-slate-300"
-            >
-              退出登录
-            </button>
           </div>
         )}
       </div>

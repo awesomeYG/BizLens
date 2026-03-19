@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getCurrentUser } from "@/lib/user-store";
+import { getAIConfig, saveAIConfig } from "@/lib/ai-config-store";
 import {
   getNotificationRules,
   deleteNotificationRule,
   toggleNotificationRule,
   addNotificationRule,
 } from "@/lib/notification-store";
-import type { NotificationRule } from "@/lib/types";
+import type { AIConfig, NotificationRule } from "@/lib/types";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -23,6 +24,8 @@ export default function SettingsPage() {
     messageTemplate: "",
     webhookUrl: "",
   });
+  const [aiConfig, setAiConfig] = useState<AIConfig>({ apiKey: "", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" });
+  const [aiSaved, setAiSaved] = useState(false);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -31,6 +34,7 @@ export default function SettingsPage() {
       return;
     }
     setRules(getNotificationRules());
+    setAiConfig(getAIConfig());
     setReady(true);
   }, [router]);
 
@@ -61,139 +65,222 @@ export default function SettingsPage() {
   };
 
   if (!ready) {
-    return <div className="min-h-screen bg-slate-900" />;
+    return <div className="min-h-screen bg-base" />;
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-900">
-      <nav className="flex items-center justify-between px-6 py-3 border-b border-slate-700/50 bg-slate-800/80">
-        <Link href="/" className="text-cyan-400 hover:text-cyan-300 font-medium">
-          &larr; AI BI
+    <div className="min-h-screen flex flex-col bg-base">
+      {/* Nav */}
+      <nav className="flex items-center justify-between px-5 h-12 border-b border-border-subtle bg-surface/80 backdrop-blur-md shrink-0">
+        <Link href="/" className="text-sm font-semibold text-txt-primary tracking-tight hover:text-accent transition-colors">
+          BizLens
         </Link>
-        <div className="flex gap-4 items-center">
-          <Link href="/chat" className="text-slate-400 hover:text-slate-300">
-            AI 对话
+        <div className="flex items-center gap-1">
+          <Link
+            href="/chat"
+            className="px-3 py-1.5 rounded-lg text-xs text-txt-tertiary hover:text-txt-secondary hover:bg-white/[0.03] transition-all"
+          >
+            对话
+          </Link>
+          <Link
+            href="/dashboards"
+            className="px-3 py-1.5 rounded-lg text-xs text-txt-tertiary hover:text-txt-secondary hover:bg-white/[0.03] transition-all"
+          >
+            大屏
           </Link>
           <Link
             href="/settings"
-            className="text-cyan-400 font-medium border-b-2 border-cyan-400 pb-1"
+            className="px-3 py-1.5 rounded-lg text-xs font-medium text-accent bg-accent/[0.08]"
           >
             设置
           </Link>
         </div>
       </nav>
 
-      <main className="flex-1 p-6 max-w-4xl mx-auto w-full">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-semibold text-slate-100">钉钉通知事件</h1>
-          <button
-            onClick={() => setShowAdd(!showAdd)}
-            className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm"
-          >
-            {showAdd ? "取消" : "添加规则"}
-          </button>
-        </div>
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto px-6 py-10 space-y-12">
 
-        <p className="text-sm text-slate-400 mb-6">
-          配置数据监控规则，当条件触发时自动发送钉钉通知。你也可以在 AI 对话中用自然语言描述来创建规则。
-        </p>
-
-        {showAdd && (
-          <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-5 mb-6 space-y-3">
-            <input
-              value={form.name}
-              onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-              placeholder="规则名称，如：日销售额破千提醒"
-              className="w-full rounded-lg bg-slate-700 border border-slate-600 px-3 py-2 text-slate-100 text-sm"
-            />
-            <input
-              value={form.condition}
-              onChange={(e) => setForm((p) => ({ ...p, condition: e.target.value }))}
-              placeholder="触发条件，如：当日销售额超过1000元"
-              className="w-full rounded-lg bg-slate-700 border border-slate-600 px-3 py-2 text-slate-100 text-sm"
-            />
-            <input
-              value={form.messageTemplate}
-              onChange={(e) => setForm((p) => ({ ...p, messageTemplate: e.target.value }))}
-              placeholder="通知消息模板（可选），如：今日销售额已突破目标！"
-              className="w-full rounded-lg bg-slate-700 border border-slate-600 px-3 py-2 text-slate-100 text-sm"
-            />
-            <input
-              value={form.webhookUrl}
-              onChange={(e) => setForm((p) => ({ ...p, webhookUrl: e.target.value }))}
-              placeholder="钉钉 Webhook URL"
-              className="w-full rounded-lg bg-slate-700 border border-slate-600 px-3 py-2 text-slate-100 text-sm"
-            />
-            <button
-              onClick={handleAdd}
-              disabled={!form.name.trim() || !form.condition.trim() || !form.webhookUrl.trim()}
-              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm"
-            >
-              保存规则
-            </button>
-          </div>
-        )}
-
-        {rules.length === 0 ? (
-          <div className="text-center py-16 text-slate-500">
-            <p className="mb-2">暂无通知规则</p>
-            <p className="text-sm">
-              点击上方「添加规则」或在 AI 对话中说「当日销售额超过1000时通知我」来创建
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {rules.map((rule) => (
-              <div
-                key={rule.id}
-                className={`rounded-xl border p-4 transition-colors ${
-                  rule.enabled
-                    ? "border-slate-700 bg-slate-800/60"
-                    : "border-slate-700/50 bg-slate-800/30 opacity-60"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-sm font-medium text-slate-200 truncate">
-                        {rule.name}
-                      </h3>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          rule.enabled
-                            ? "bg-emerald-500/20 text-emerald-400"
-                            : "bg-slate-600/30 text-slate-500"
-                        }`}
-                      >
-                        {rule.enabled ? "启用" : "停用"}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 mb-1">
-                      条件：{rule.condition}
-                    </p>
-                    <p className="text-xs text-slate-500 truncate">
-                      消息：{rule.messageTemplate}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => handleToggle(rule.id)}
-                      className="text-xs px-3 py-1 rounded-lg border border-slate-600 text-slate-400 hover:text-slate-300 hover:border-slate-500"
-                    >
-                      {rule.enabled ? "停用" : "启用"}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(rule.id)}
-                      className="text-xs px-3 py-1 rounded-lg border border-red-800/50 text-red-400 hover:text-red-300 hover:border-red-700"
-                    >
-                      删除
-                    </button>
-                  </div>
+          {/* AI API Config */}
+          <section>
+            <div className="mb-6">
+              <h1 className="text-xl font-semibold text-txt-primary mb-1">AI 模型配置</h1>
+              <p className="text-sm text-txt-tertiary">
+                配置 OpenAI 兼容的 API 接口，支持自定义 Base URL
+              </p>
+            </div>
+            <div className="glass-card rounded-2xl p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-txt-secondary">API Key</label>
+                <input
+                  value={aiConfig.apiKey}
+                  onChange={(e) => { setAiConfig((p) => ({ ...p, apiKey: e.target.value })); setAiSaved(false); }}
+                  placeholder="sk-..."
+                  type="password"
+                  className="input-base w-full rounded-xl px-4 py-2.5 text-sm font-mono"
+                />
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-txt-secondary">Base URL</label>
+                  <input
+                    value={aiConfig.baseUrl}
+                    onChange={(e) => { setAiConfig((p) => ({ ...p, baseUrl: e.target.value })); setAiSaved(false); }}
+                    placeholder="https://api.openai.com/v1"
+                    className="input-base w-full rounded-xl px-4 py-2.5 text-sm font-mono"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-txt-secondary">模型</label>
+                  <input
+                    value={aiConfig.model}
+                    onChange={(e) => { setAiConfig((p) => ({ ...p, model: e.target.value })); setAiSaved(false); }}
+                    placeholder="gpt-4o-mini"
+                    className="input-base w-full rounded-xl px-4 py-2.5 text-sm font-mono"
+                  />
                 </div>
               </div>
-            ))}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => { saveAIConfig(aiConfig); setAiSaved(true); }}
+                  className="btn-primary rounded-xl px-6 py-2.5 text-sm"
+                >
+                  保存配置
+                </button>
+                {aiSaved && (
+                  <span className="text-xs text-emerald-400 animate-fade-in-up">已保存</span>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Notification Rules */}
+          <section>
+          <div className="flex items-start justify-between mb-6">
+            <div>
+              <h1 className="text-xl font-semibold text-txt-primary mb-1">通知规则</h1>
+              <p className="text-sm text-txt-tertiary">
+                配置数据监控条件，触发时自动推送钉钉通知
+              </p>
+            </div>
+            <button
+              onClick={() => setShowAdd(!showAdd)}
+              className={showAdd ? "btn-ghost rounded-xl px-4 py-2 text-xs" : "btn-primary rounded-xl px-4 py-2 text-xs"}
+            >
+              {showAdd ? "取消" : "添加规则"}
+            </button>
           </div>
-        )}
+
+          {/* Add form */}
+          {showAdd && (
+            <div className="glass-card rounded-2xl p-6 mb-8 space-y-4 animate-fade-in-up">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-txt-secondary">规则名称</label>
+                  <input
+                    value={form.name}
+                    onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="如：日销售额破千提醒"
+                    className="input-base w-full rounded-xl px-4 py-2.5 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-txt-secondary">触发条件</label>
+                  <input
+                    value={form.condition}
+                    onChange={(e) => setForm((p) => ({ ...p, condition: e.target.value }))}
+                    placeholder="如：当日销售额超过1000元"
+                    className="input-base w-full rounded-xl px-4 py-2.5 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-txt-secondary">通知消息（可选）</label>
+                <input
+                  value={form.messageTemplate}
+                  onChange={(e) => setForm((p) => ({ ...p, messageTemplate: e.target.value }))}
+                  placeholder="如：今日销售额已突破目标！"
+                  className="input-base w-full rounded-xl px-4 py-2.5 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-txt-secondary">钉钉 Webhook URL</label>
+                <input
+                  value={form.webhookUrl}
+                  onChange={(e) => setForm((p) => ({ ...p, webhookUrl: e.target.value }))}
+                  placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."
+                  className="input-base w-full rounded-xl px-4 py-2.5 text-sm font-mono"
+                />
+              </div>
+              <button
+                onClick={handleAdd}
+                disabled={!form.name.trim() || !form.condition.trim() || !form.webhookUrl.trim()}
+                className="btn-primary rounded-xl px-6 py-2.5 text-sm"
+              >
+                保存
+              </button>
+            </div>
+          )}
+
+          {/* Rules list */}
+          {rules.length === 0 ? (
+            <div className="text-center py-20">
+              <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-border-subtle flex items-center justify-center mx-auto mb-4">
+                <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 1.33v2M8 12.67v2M3.29 3.29l1.42 1.42M11.29 11.29l1.42 1.42M1.33 8h2M12.67 8h2M3.29 12.71l1.42-1.42M11.29 4.71l1.42-1.42" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" className="text-txt-tertiary"/>
+                </svg>
+              </div>
+              <p className="text-sm text-txt-tertiary mb-1">暂无通知规则</p>
+              <p className="text-xs text-txt-tertiary/60">
+                点击「添加规则」或在对话中用自然语言创建
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {rules.map((rule) => (
+                <div
+                  key={rule.id}
+                  className={`glass-card rounded-xl p-4 transition-all duration-200 ${
+                    rule.enabled ? "" : "opacity-50"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className={`w-1.5 h-1.5 rounded-full ${rule.enabled ? "bg-emerald-400 shadow-[0_0_6px] shadow-emerald-400/50" : "bg-txt-tertiary"}`} />
+                        <h3 className="text-sm font-medium text-txt-primary truncate">
+                          {rule.name}
+                        </h3>
+                      </div>
+                      <p className="text-xs text-txt-tertiary mb-0.5 pl-3.5">
+                        {rule.condition}
+                      </p>
+                      {rule.messageTemplate && (
+                        <p className="text-xs text-txt-tertiary/60 truncate pl-3.5">
+                          {rule.messageTemplate}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => handleToggle(rule.id)}
+                        className="btn-ghost rounded-lg px-3 py-1.5 text-[11px]"
+                      >
+                        {rule.enabled ? "停用" : "启用"}
+                      </button>
+                      <button
+                        onClick={() => handleDelete(rule.id)}
+                        className="rounded-lg px-3 py-1.5 text-[11px] border border-red-500/20 text-red-400/80 hover:text-red-400 hover:bg-red-500/[0.06] transition-all"
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          </section>
+        </div>
       </main>
     </div>
   );

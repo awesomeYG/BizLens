@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
-import type { CompanyInfo, DataSourceConfig } from "@/lib/types";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || "",
-});
+import type { AIConfig, CompanyInfo, DataSourceConfig } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as {
       companyInfo?: CompanyInfo;
       dataSources?: DataSourceConfig[];
+      aiConfig?: AIConfig;
     };
-    const companyInfo = body.companyInfo;
+    const { companyInfo, aiConfig } = body;
     const dataSources = body.dataSources ?? [];
 
     if (!companyInfo) {
@@ -23,7 +20,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "至少配置一个数据源" }, { status: 400 });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    const apiKey = aiConfig?.apiKey || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
       return NextResponse.json({
         summary: `公司 ${companyInfo.companyName} 属于 ${companyInfo.industry} 行业，当前业务目标是 ${companyInfo.coreGoals}。已接入 ${dataSources.length} 个数据源（如 ${dataSources
           .slice(0, 3)
@@ -42,8 +40,14 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const client = new OpenAI({
+      apiKey,
+      baseURL: aiConfig?.baseUrl || process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
+    });
+    const modelName = aiConfig?.model || process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+    const response = await client.chat.completions.create({
+      model: modelName,
       messages: [
         {
           role: "system",

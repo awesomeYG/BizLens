@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI BI - 智能数据分析平台",
-  description: "与 AI 对话分析数据，一键生成数据大屏",
+  title: "BizLens - AI 智能商业分析",
+  description: "对话即洞察，智能商业分析平台",
 };
 
 export default function RootLayout({
@@ -25,7 +25,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-base text-txt-primary`}
       >
         {children}
       </body>
