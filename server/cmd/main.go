@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -19,15 +20,25 @@ func main() {
 	cfg := config.Load()
 
 	// 连接数据库
-	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
+	var db *gorm.DB
+	var err error
+
+	if cfg.UseSQLite {
+		log.Println("使用 SQLite 数据库...")
+		db, err = gorm.Open(sqlite.Open(cfg.DSN()), &gorm.Config{})
+	} else {
+		log.Println("使用 PostgreSQL 数据库...")
+		db, err = gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
+	}
+
 	if err != nil {
-		log.Fatalf("数据库连接失败: %v", err)
+		log.Fatalf("数据库连接失败：%v", err)
 	}
 	log.Println("数据库连接成功")
 
 	// 自动迁移
 	if err := model.AutoMigrate(db); err != nil {
-		log.Fatalf("数据库迁移失败: %v", err)
+		log.Fatalf("数据库迁移失败：%v", err)
 	}
 	log.Println("数据库迁移完成")
 
@@ -44,7 +55,7 @@ func main() {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	// IM 配置路由: /api/tenants/{tenantId}/im-configs[/{configId}[/test]]
+	// IM 配置路由：/api/tenants/{tenantId}/im-configs[/{configId}[/test]]
 	mux.HandleFunc("/api/tenants/", func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/api/tenants/")
 		parts := strings.Split(strings.Trim(path, "/"), "/")
@@ -107,6 +118,6 @@ func main() {
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Printf("服务启动在 %s", addr)
 	if err := http.ListenAndServe(addr, middleware.CORS(mux)); err != nil {
-		log.Fatalf("服务启动失败: %v", err)
+		log.Fatalf("服务启动失败：%v", err)
 	}
 }

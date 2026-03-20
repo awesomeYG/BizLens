@@ -13,6 +13,7 @@ type Config struct {
 	DBPassword string
 	DBName     string
 	DBSSLMode  string
+	UseSQLite  bool
 }
 
 func Load() *Config {
@@ -24,10 +25,14 @@ func Load() *Config {
 		DBPassword: getEnv("DB_PASSWORD", "postgres"),
 		DBName:     getEnv("DB_NAME", "ai_bi"),
 		DBSSLMode:  getEnv("DB_SSLMODE", "disable"),
+		UseSQLite:  getEnv("USE_SQLITE", "false") == "true",
 	}
 }
 
 func (c *Config) DSN() string {
+	if c.UseSQLite {
+		return "/workspace/server/ai_bi.db"
+	}
 	return fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		c.DBHost, c.DBPort, c.DBUser, c.DBPassword, c.DBName, c.DBSSLMode,
