@@ -211,3 +211,121 @@ export interface DashboardTemplate {
   description: string;
   layout: string;
 }
+
+// ============ AI 自动发现类型定义 ============
+
+/**
+ * AI 发现类型
+ */
+export type AIFindingType = "pattern" | "anomaly" | "trend" | "insight" | "recommend";
+
+/**
+ * AI 发现严重程度
+ */
+export type AIFindingSeverity = "high" | "medium" | "low" | "info";
+
+/**
+ * AI 数据发现
+ */
+export interface AIFinding {
+  id: string;
+  tenantId: string;
+  dataSourceId: string;
+  type: AIFindingType;
+  severity: AIFindingSeverity;
+  title: string;
+  description: string;
+  tableName?: string;
+  columnName?: string;
+  metricValue?: number;
+  evidence?: string; // JSON 字符串
+  suggestion?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * AI 发现统计
+ */
+export interface AIFindingStats {
+  total: number;
+  byType: { type: string; count: number }[];
+  bySeverity: { severity: string; count: number }[];
+}
+
+/**
+ * 大屏布局类型
+ */
+export type DashboardLayoutType = "auto" | "grid" | "free" | "story";
+
+/**
+ * 大屏组件配置
+ */
+export interface DashboardWidget {
+  id: string;
+  type: string; // metric_card, bar_chart, line_chart, alert_list, etc.
+  title: string;
+  query: {
+    type: string;
+    tableName?: string;
+    column?: string;
+    aggregation?: string;
+    groupColumn?: string;
+    valueColumn?: string;
+    timeColumn?: string;
+    limit?: number;
+    interval?: string;
+  };
+  config: Record<string, any>;
+  layout: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  priority: number;
+}
+
+/**
+ * 大屏配置（后端生成）
+ */
+export interface DashboardConfigBackend {
+  id: string;
+  tenantId: string;
+  dataSourceId: string;
+  name: string;
+  description?: string;
+  layoutType: DashboardLayoutType;
+  widgets?: string; // JSON 字符串
+  storyOrder?: string; // JSON 字符串
+  theme: string;
+  isAutoGen: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * 布局建议
+ */
+export interface LayoutSuggestions {
+  recommendedLayout: DashboardLayoutType;
+  widgetCount: number;
+  storyMode: boolean;
+  reason?: string;
+}
+
+/**
+ * 语义模型缓存（后端）
+ */
+export interface SemanticModelCache {
+  id: string;
+  tenantId: string;
+  dataSourceId: string;
+  metrics?: string; // JSON 字符串
+  dimensions?: string; // JSON 字符串
+  relations?: string; // JSON 字符串
+  nlQueries?: string; // JSON 字符串
+  lastBuiltAt: number;
+  createdAt: number;
+  updatedAt: number;
+}

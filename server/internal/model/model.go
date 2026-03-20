@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"time"
 
 	"gorm.io/gorm"
@@ -198,6 +199,97 @@ type DataSource struct {
 	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
 }
 
+// AIFindingType AI 发现类型
+type AIFindingType string
+
+const (
+	AIFindingPattern   AIFindingType = "pattern"   // 数据模式
+	AIFindingAnomaly   AIFindingType = "anomaly"   // 异常检测
+	AIFindingTrend     AIFindingType = "trend"     // 趋势分析
+	AIFindingInsight   AIFindingType = "insight"   // 业务洞察
+	AIFindingRecommend AIFindingType = "recommend" // 优化建议
+)
+
+// AIFindingSeverity 发现严重程度
+type AIFindingSeverity string
+
+const (
+	AIFindingSeverityHigh   AIFindingSeverity = "high"
+	AIFindingSeverityMedium AIFindingSeverity = "medium"
+	AIFindingSeverityLow    AIFindingSeverity = "low"
+	AIFindingSeverityInfo   AIFindingSeverity = "info"
+)
+
+// AIFinding AI 自动发现结果
+type AIFinding struct {
+	ID           string            `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID     string            `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	DataSourceID string            `gorm:"type:varchar(50);not null;index" json:"dataSourceId"`
+	Type         AIFindingType     `gorm:"size:50;not null" json:"type"`
+	Severity     AIFindingSeverity `gorm:"size:50;default:'info'" json:"severity"`
+	Title        string            `gorm:"size:500;not null" json:"title"`
+	Description  string            `gorm:"type:text;not null" json:"description"`
+	TableName    string            `gorm:"size:200" json:"tableName,omitempty"`
+	ColumnName   string            `gorm:"size:200" json:"columnName,omitempty"`
+	MetricValue  float64           `json:"metricValue,omitempty"`
+	Evidence     string            `gorm:"type:text" json:"evidence,omitempty"` // JSON 数组，存储支持数据
+	Suggestion   string            `gorm:"type:text" json:"suggestion,omitempty"`
+	CreatedAt    time.Time         `json:"createdAt"`
+	UpdatedAt    time.Time         `json:"updatedAt"`
+	DeletedAt    gorm.DeletedAt    `gorm:"index" json:"-"`
+
+	DataSource DataSource `gorm:"foreignKey:DataSourceID" json:"dataSource,omitempty"`
+	Tenant     Tenant     `gorm:"foreignKey:TenantID" json:"-"`
+}
+
+// DashboardLayoutType 大屏布局类型
+type DashboardLayoutType string
+
+const (
+	LayoutAuto  DashboardLayoutType = "auto"  // AI 自动布局
+	LayoutGrid  DashboardLayoutType = "grid"  // 网格布局
+	LayoutFree  DashboardLayoutType = "free"  // 自由布局
+	LayoutStory DashboardLayoutType = "story" // 故事线布局
+)
+
+// DashboardConfig 大屏配置
+type DashboardConfig struct {
+	ID           string              `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID     string              `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	DataSourceID string              `gorm:"type:varchar(50);not null;index" json:"dataSourceId"`
+	Name         string              `gorm:"size:200;not null" json:"name"`
+	Description  string              `gorm:"size:500" json:"description"`
+	LayoutType   DashboardLayoutType `gorm:"size:50;default:'auto'" json:"layoutType"`
+	Widgets      string              `gorm:"type:text" json:"widgets,omitempty"`    // JSON 数组，存储组件配置
+	StoryOrder   string              `gorm:"type:text" json:"storyOrder,omitempty"` // JSON 数组，故事线顺序
+	Theme        string              `gorm:"size:100;default:'default'" json:"theme"`
+	IsAutoGen    bool                `gorm:"default:false" json:"isAutoGen"` // 是否 AI 自动生成
+	CreatedAt    time.Time           `json:"createdAt"`
+	UpdatedAt    time.Time           `json:"updatedAt"`
+	DeletedAt    gorm.DeletedAt      `gorm:"index" json:"-"`
+
+	DataSource DataSource `gorm:"foreignKey:DataSourceID" json:"dataSource,omitempty"`
+	Tenant     Tenant     `gorm:"foreignKey:TenantID" json:"-"`
+}
+
+// SemanticModelCache 语义模型缓存（用于 AI 对话增强）
+type SemanticModelCache struct {
+	ID           string         `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID     string         `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	DataSourceID string         `gorm:"type:varchar(50);not null;index" json:"dataSourceId"`
+	Metrics      string         `gorm:"type:text" json:"metrics,omitempty"`    // JSON 数组
+	Dimensions   string         `gorm:"type:text" json:"dimensions,omitempty"` // JSON 数组
+	Relations    string         `gorm:"type:text" json:"relations,omitempty"`  // JSON 数组
+	NLQueries    string         `gorm:"type:text" json:"nlQueries,omitempty"`  // JSON 数组，存储常见自然语言查询模式
+	LastBuiltAt  time.Time      `json:"lastBuiltAt"`
+	CreatedAt    time.Time      `json:"createdAt"`
+	UpdatedAt    time.Time      `json:"updatedAt"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+
+	DataSource DataSource `gorm:"foreignKey:DataSourceID" json:"dataSource,omitempty"`
+	Tenant     Tenant     `gorm:"foreignKey:TenantID" json:"-"`
+}
+
 // AutoMigrate 自动迁移所有表
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
@@ -208,5 +300,21 @@ func AutoMigrate(db *gorm.DB) error {
 		&AlertEvent{},
 		&AlertTriggerLog{},
 		&DataSource{},
+		&AIFinding{},
+		&DashboardConfig{},
+		&SemanticModelCache{},
 	)
+}
+
+// SerializeSchemaInfo 序列化 schema 信息为 JSON
+func SerializeSchemaInfo(schema map[string]interface{}) (string, error) {
+	data, err := json.Marshal(schema)
+	return string(data), err
+}
+
+// DeserializeSchemaInfo 反序列化 schema 信息
+func DeserializeSchemaInfo(data string) (map[string]interface{}, error) {
+	var schema map[string]interface{}
+	err := json.Unmarshal([]byte(data), &schema)
+	return schema, err
 }

@@ -64,6 +64,23 @@ func main() {
 	dataSourceHandler := handler.NewDataSourceHandler(dataSourceService)
 	schemaHandler := handler.NewSchemaHandler(dataSourceService)
 
+	// AI 发现服务
+	aiFindingService := service.NewAIFindingService(db, dataSourceService)
+	aiFindingHandler := handler.NewAIFindingHandler(aiFindingService)
+
+	// 语义模型服务
+	semanticModelService := service.NewSemanticModelService(db, dataSourceService)
+	semanticModelHandler := handler.NewSemanticModelHandler(semanticModelService)
+
+	// 大屏服务
+	dashboardService := service.NewDashboardService(db, dataSourceService, aiFindingService)
+	dashboardHandler := handler.NewDashboardHandler(dashboardService)
+
+	// 设置服务依赖（数据源 handler 需要其他服务的引用以支持自动发现）
+	dataSourceHandler.SetAIFindingService(aiFindingService)
+	dataSourceHandler.SetSemanticService(semanticModelService)
+	dataSourceHandler.SetDashboardService(dashboardService)
+
 	// 路由
 	mux := http.NewServeMux()
 
@@ -227,6 +244,131 @@ func main() {
 				default:
 					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				}
+				return
+			}
+		}
+
+		// /api/tenants/{tenantId}/ai-findings[/{findingId}]
+		if len(parts) >= 2 && parts[1] == "ai-findings" {
+			switch {
+			// GET /api/tenants/{id}/ai-findings
+			case len(parts) == 2 && r.Method == http.MethodGet:
+				aiFindingHandler.ListFindings(w, r)
+				return
+
+			// DELETE /api/tenants/{id}/ai-findings/{findingId}
+			case len(parts) == 3:
+				if r.Method == http.MethodDelete {
+					aiFindingHandler.DeleteFinding(w, r)
+					return
+				}
+			}
+		}
+
+		// /api/tenants/{tenantId}/dashboards[/{dashboardId}[/{action}]]
+		if len(parts) >= 2 && parts[1] == "dashboards" {
+			switch {
+			// POST /api/tenants/{id}/dashboards/{dashboardId}/regenerate
+			case len(parts) == 4 && parts[3] == "regenerate" && r.Method == http.MethodPost:
+				dashboardHandler.RegenerateDashboard(w, r)
+				return
+
+			// GET /api/tenants/{id}/dashboards/{dashboardId}/preview
+			case len(parts) == 4 && parts[3] == "preview" && r.Method == http.MethodGet:
+				dashboardHandler.GetDashboardPreview(w, r)
+				return
+
+			// GET/PUT/DELETE /api/tenants/{id}/dashboards/{dashboardId}
+			case len(parts) == 3:
+				switch r.Method {
+				case http.MethodGet:
+					dashboardHandler.GetDashboard(w, r)
+				case http.MethodPut:
+					dashboardHandler.UpdateDashboard(w, r)
+				case http.MethodDelete:
+					dashboardHandler.DeleteDashboard(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+
+			// GET/POST /api/tenants/{id}/dashboards
+			case len(parts) == 2:
+				switch r.Method {
+				case http.MethodGet:
+					dashboardHandler.ListDashboards(w, r)
+				case http.MethodPost:
+					dashboardHandler.CreateDashboard(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+			}
+		}
+
+		// More specific routes for data-sources sub-resources
+		// /api/tenants/{tenantId}/data-sources/{dsId}/ai-findings[/{action}]
+		if len(parts) >= 6 && parts[1] == "data-sources" && parts[3] == "ai-findings" {
+			dataSourceID := parts[2]
+			_ = dataSourceID
+
+			switch {
+			// GET /api/tenants/{id}/data-sources/{dsId}/ai-findings/stats
+			case len(parts) == 6 && parts[5] == "stats" && r.Method == http.MethodGet:
+				aiFindingHandler.GetFindingStats(w, r)
+				return
+
+			// GET /api/tenants/{id}/data-sources/{dsId}/ai-findings/summary
+			case len(parts) == 6 && parts[5] == "summary" && r.Method == http.MethodGet:
+				aiFindingHandler.GetInsightSummary(w, r)
+				return
+
+			// POST /api/tenants/{id}/data-sources/{dsId}/ai-findings/rediscover
+			case len(parts) == 6 && parts[5] == "rediscover" && r.Method == http.MethodPost:
+				aiFindingHandler.TriggerRediscovery(w, r)
+				return
+
+			// GET /api/tenants/{id}/data-sources/{dsId}/ai-findings[?type=xxx]
+			case len(parts) == 5 && r.Method == http.MethodGet:
+				aiFindingHandler.ListDataSourceFindings(w, r)
+				return
+			}
+		}
+
+		// /api/tenants/{tenantId}/data-sources/{dsId}/semantic-model[/{action}]
+		if len(parts) >= 5 && parts[1] == "data-sources" && parts[3] == "semantic-model" {
+			switch {
+			// POST /api/tenants/{id}/data-sources/{dsId}/semantic-model/build
+			case len(parts) == 5 && r.Method == http.MethodPost:
+				semanticModelHandler.BuildSemanticCache(w, r)
+				return
+
+			// GET /api/tenants/{id}/data-sources/{dsId}/semantic-model
+			case len(parts) == 5 && r.Method == http.MethodGet:
+				semanticModelHandler.GetSemanticCache(w, r)
+				return
+
+			// GET /api/tenants/{id}/data-sources/{dsId}/semantic-model/context
+			case len(parts) == 6 && parts[5] == "context" && r.Method == http.MethodGet:
+				semanticModelHandler.GetSemanticContext(w, r)
+				return
+
+			// POST /api/tenants/{id}/data-sources/{dsId}/semantic-model/refresh
+			case len(parts) == 6 && parts[5] == "refresh" && r.Method == http.MethodPost:
+				semanticModelHandler.RefreshSemanticCache(w, r)
+				return
+
+			// POST /api/tenants/{id}/data-sources/{dsId}/semantic-model/nl2sql
+			case len(parts) == 6 && parts[5] == "nl2sql" && r.Method == http.MethodPost:
+				semanticModelHandler.NL2SQL(w, r)
+				return
+			}
+		}
+
+		// /api/tenants/{tenantId}/data-sources/{dsId}/dashboards/suggestions
+		if len(parts) >= 6 && parts[1] == "data-sources" && parts[4] == "dashboards" && parts[5] == "suggestions" {
+			if r.Method == http.MethodGet {
+				dashboardHandler.GetLayoutSuggestions(w, r)
 				return
 			}
 		}
