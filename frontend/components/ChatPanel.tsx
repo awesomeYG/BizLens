@@ -28,7 +28,7 @@ export default function ChatPanel({
     {
       id: "welcome",
       role: "assistant",
-      content: `你好！我是 AI BI 助手。你可以：\n1. 上传 CSV/Excel 等数据文件，我会学习并分析\n2. 向我提问，我会基于数据给出洞察\n3. 说「生成数据大屏」，我会帮你创建可视化大屏\n\n${
+      content: `你好！我是 AI BI 助手。你可以：\n1. 上传 CSV/Excel 等数据文件，我会学习并分析\n2. 向我提问，我会基于数据给出洞察\n3. 说「生成数据大屏」，我会帮你创建可视化大屏\n4. **创建智能通知**：例如「当今日销售额超过 1000 时，发钉钉通知我」\n\n${
         companyProfile?.summary ? `当前企业画像：${companyProfile.summary}\n\n` : ""
       }请上传数据或直接提问～`,
       timestamp: Date.now(),
@@ -160,7 +160,7 @@ export default function ChatPanel({
               {
                 id: crypto.randomUUID(),
                 role: "assistant" as const,
-                content: cleanContent + `\n\n✅ 告警规则「${created.name}」已自动创建，可在[智能告警](/alerts)页面查看和管理。`,
+                content: cleanContent + `\n\n✅ 告警规则「${created.name}」已自动创建，可在 [智能告警](/alerts) 页面查看和管理。`,
                 timestamp: Date.now(),
               },
             ]);
@@ -169,6 +169,48 @@ export default function ChatPanel({
           }
         } catch {
           // JSON 解析失败，按普通消息处理
+        }
+      }
+
+      // 检测 AI 回复中的通知规则配置
+      const notificationMatch = content.match(/```notification_rule\s*\n([\s\S]*?)\n```/);
+      if (notificationMatch) {
+        try {
+          const ruleConfig = JSON.parse(notificationMatch[1]);
+          const user = getCurrentUser();
+          const tenantId = user?.id || "demo-tenant";
+          const ruleRes = await fetch(`/api/tenants/${tenantId}/notification-rules`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(ruleConfig),
+          });
+          if (ruleRes.ok) {
+            const created = await ruleRes.json();
+            // 在回复后追加创建成功的提示
+            const cleanContent = content.replace(/```notification_rule\s*\n[\s\S]*?\n```/, "").trim();
+            setMessages((prev) => [
+              ...prev,
+              ...(appendUser
+                ? [{
+                    id: crypto.randomUUID(),
+                    role: "user" as const,
+                    content: input,
+                    timestamp: Date.now(),
+                  }]
+                : []),
+              {
+                id: crypto.randomUUID(),
+                role: "assistant" as const,
+                content: cleanContent + `\n\n✅ 智能通知规则「${created.name}」已自动创建！\n\n**配置详情**：\n- 触发条件：${formatCondition(created.conditionType)} ${created.threshold}\n- 时间范围：${formatTimeRange(created.timeRange)}\n- 通知频率：${formatFrequency(created.frequency)}\n\n你可以在对话中继续调整规则，或说"查看通知规则"来管理。`,
+                timestamp: Date.now(),
+              },
+            ]);
+            setInput("");
+            return;
+          }
+        } catch (err) {
+          // JSON 解析失败，按普通消息处理
+          console.error("创建通知规则失败:", err);
         }
       }
 
@@ -243,6 +285,46 @@ export default function ChatPanel({
       [key]: Number.isFinite(num) ? num : prev[key],
     }));
   };
+
+  // 辅助函数：格式化条件类型
+  function formatCondition(type?: string): string {
+    if (!type) return "";
+    const map: Record<string, string> = {
+      greater: "大于",
+      less: "小于",
+      equals: "等于",
+      change: "变化率",
+      custom: "自定义",
+    };
+    return map[type] || type;
+  }
+
+  // 辅助函数：格式化时间范围
+  function formatTimeRange(range?: string): string {
+    if (!range) return "";
+    const map: Record<string, string> = {
+      today: "今日",
+      yesterday: "昨日",
+      last_7_days: "近 7 天",
+      last_30_days: "近 30 天",
+      this_month: "本月",
+    };
+    return map[range] || range;
+  }
+
+  // 辅助函数：格式化频率
+  function formatFrequency(freq?: string): string {
+    if (!freq) return "";
+    const map: Record<string, string> = {
+      once: "仅一次",
+      hourly: "每小时",
+      daily: "每天",
+      weekly: "每周",
+      monthly: "每月",
+      realtime: "实时",
+    };
+    return map[freq] || freq;
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -367,6 +449,9 @@ export default function ChatPanel({
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
             </svg>
           </button>
+        </div>
+        <div className="max-w-4xl mx-auto mt-2 text-xs text-zinc-500">
+          提示：可以说 "当今日销售额超过 1000 时，发钉钉通知我" 来创建智能通知规则
         </div>
       </div>
     </div>

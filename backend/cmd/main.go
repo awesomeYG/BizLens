@@ -3,12 +3,12 @@ package main
 import (
 	"ai-bi-server/internal/config"
 	"ai-bi-server/internal/handler"
-	"ai-bi-server/internal/middleware"
 	"ai-bi-server/internal/model"
 	"ai-bi-server/internal/service"
 	"fmt"
 	"log"
 	"net/http"
+	"runtime/debug"
 	"strings"
 
 	"github.com/google/uuid"
@@ -16,6 +16,19 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+// recoveryMiddleware 恢复中间件
+func recoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Printf("Panic recovered: %v\n%s", err, debug.Stack())
+				http.Error(w, fmt.Sprintf("Internal error: %v", err), http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
 
 func main() {
 	cfg := config.Load()
@@ -26,7 +39,7 @@ func main() {
 
 	if cfg.UseSQLite {
 		log.Println("使用 SQLite 数据库...")
-		db, err = gorm.Open(sqlite.Open(cfg.DSN()), &gorm.Config{})
+		db, err = gorm.Open(sqlite.Open("/workspace/server/ai_bi.db"), &gorm.Config{})
 	} else {
 		log.Println("使用 PostgreSQL 数据库...")
 		db, err = gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
@@ -63,6 +76,8 @@ func main() {
 	dataSourceService := service.NewDataSourceService(db)
 	dataSourceHandler := handler.NewDataSourceHandler(dataSourceService)
 	schemaHandler := handler.NewSchemaHandler(dataSourceService)
+	notificationRuleService := service.NewNotificationRuleService(db, imService)
+	notificationRuleHandler := handler.NewNotificationRuleHandler(notificationRuleService)
 
 	// 路由
 	mux := http.NewServeMux()
@@ -70,6 +85,7 @@ func main() {
 	// 健康检查
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
@@ -231,13 +247,59 @@ func main() {
 			}
 		}
 
+		// /api/tenants/{tenantId}/notification-rules[/{ruleId}[/{action}]]
+		if len(parts) >= 2 && parts[1] == "notification-rules" {
+			switch {
+			// POST /api/tenants/{id}/notification-rules/parse-nl
+			case len(parts) == 3 && parts[2] == "parse-nl" && r.Method == http.MethodPost:
+				notificationRuleHandler.ParseNLQuery(w, r)
+				return
+
+			// POST /api/tenants/{id}/notification-rules/{ruleId}/trigger
+			case len(parts) == 4 && parts[3] == "trigger" && r.Method == http.MethodPost:
+				notificationRuleHandler.TriggerNotificationRule(w, r)
+				return
+
+			// POST /api/tenants/{id}/notification-rules/{ruleId}/toggle
+			case len(parts) == 4 && parts[3] == "toggle" && r.Method == http.MethodPost:
+				notificationRuleHandler.ToggleNotificationRule(w, r)
+				return
+
+			// GET/PUT/DELETE /api/tenants/{id}/notification-rules/{ruleId}
+			case len(parts) == 3 && parts[2] != "":
+				switch r.Method {
+				case http.MethodGet:
+					notificationRuleHandler.GetNotificationRule(w, r)
+				case http.MethodPut:
+					notificationRuleHandler.UpdateNotificationRule(w, r)
+				case http.MethodDelete:
+					notificationRuleHandler.DeleteNotificationRule(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+
+			// GET/POST /api/tenants/{id}/notification-rules
+			case len(parts) == 2:
+				switch r.Method {
+				case http.MethodGet:
+					notificationRuleHandler.ListNotificationRules(w, r)
+				case http.MethodPost:
+					notificationRuleHandler.CreateNotificationRule(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+			}
+		}
+
 		http.NotFound(w, r)
 	})
 
 	// 启动服务
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Printf("服务启动在 %s", addr)
-	if err := http.ListenAndServe(addr, middleware.CORS(mux)); err != nil {
+	if err := http.ListenAndServe(addr, recoveryMiddleware(mux)); err != nil {
 		log.Fatalf("服务启动失败：%v", err)
 	}
 }
