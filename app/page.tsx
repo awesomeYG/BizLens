@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { completeOnboarding, getCurrentUser, loginUser, logoutUser } from "@/lib/user-store";
+import { completeOnboarding, getCurrentUser, loginUser, logoutUser, quickLoginWithMockData } from "@/lib/user-store";
 import type { CompanyInfo, DataSourceConfig, DataSourceType, UserSession } from "@/lib/types";
 
 const DATA_SOURCE_OPTIONS: { type: DataSourceType; label: string; icon: string; category: string }[] = [
@@ -142,13 +142,31 @@ export default function HomePage() {
 
           {/* 登录 */}
           {!currentUser && (
-            <form onSubmit={handleLogin} className="mx-auto max-w-md glass-card rounded-2xl p-8 space-y-5 animate-fade-in">
-              <h2 className="text-xl text-zinc-100 font-semibold">登录</h2>
-              <input value={loginForm.name} onChange={(e) => setLoginForm((p) => ({ ...p, name: e.target.value }))} placeholder="姓名" className="input-base" />
-              <input value={loginForm.email} onChange={(e) => setLoginForm((p) => ({ ...p, email: e.target.value }))} placeholder="邮箱" type="email" className="input-base" />
-              {error && <p className="text-red-400 text-sm">{error}</p>}
-              <button type="submit" className="btn-primary w-full">进入平台</button>
-            </form>
+            <div className="space-y-4">
+              <form onSubmit={handleLogin} className="mx-auto max-w-md glass-card rounded-2xl p-8 space-y-5 animate-fade-in">
+                <h2 className="text-xl text-zinc-100 font-semibold">登录</h2>
+                <input value={loginForm.name} onChange={(e) => setLoginForm((p) => ({ ...p, name: e.target.value }))} placeholder="姓名" className="input-base" />
+                <input value={loginForm.email} onChange={(e) => setLoginForm((p) => ({ ...p, email: e.target.value }))} placeholder="邮箱" type="email" className="input-base" />
+                {error && <p className="text-red-400 text-sm">{error}</p>}
+                <button type="submit" className="btn-primary w-full">进入平台</button>
+              </form>
+              
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    quickLoginWithMockData();
+                    setCurrentUser(getCurrentUser());
+                  }}
+                  className="text-sm text-zinc-400 hover:text-zinc-300 transition-colors underline"
+                >
+                  🚀 快速测试（使用 Mock 数据）
+                </button>
+                <p className="text-xs text-zinc-600 mt-1">
+                  自动填充电商公司数据，跳过初始化流程
+                </p>
+              </div>
+            </div>
           )}
 
           {/* Onboarding 向导 */}
