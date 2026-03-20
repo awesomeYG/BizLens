@@ -300,6 +300,18 @@ export default function HomePage() {
               >
                 📊 数据大屏
               </Link>
+              <Link
+                href="/im/settings"
+                className="px-8 py-4 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 font-medium transition-all hover:scale-105"
+              >
+                💬 IM 平台
+              </Link>
+              <Link
+                href="/im/notifications"
+                className="px-8 py-4 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 font-medium transition-all hover:scale-105"
+              >
+                📤 通知中心
+              </Link>
             </div>
             <button
               type="button"
