@@ -93,14 +93,30 @@ export default function HomePage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ companyInfo, dataSources: sourceConfigs }),
       });
+      
+      // 检查响应状态
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("API 响应错误:", res.status, text);
+        // 尝试解析 JSON 错误
+        try {
+          const errorData = JSON.parse(text);
+          throw new Error(errorData.error || "画像生成失败");
+        } catch {
+          throw new Error(`服务器错误 (${res.status})`);
+        }
+      }
+      
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "画像生成失败");
       const nextUser = completeOnboarding(companyInfo, sourceConfigs, {
         summary: data.summary || "", analysisFocuses: data.analysisFocuses || [], recommendedMetrics: data.recommendedMetrics || [],
       });
       setCurrentUser(nextUser);
       router.push("/chat");
-    } catch (err) { setError(err instanceof Error ? err.message : "画像生成失败"); }
+    } catch (err) {
+      console.error("Onboarding 错误:", err);
+      setError(err instanceof Error ? err.message : "画像生成失败，请稍后重试");
+    }
     finally { setLoadingProfile(false); }
   };
 
