@@ -1,11 +1,6 @@
 #!/bin/bash
 
-echo "=== AI BI 平台启动 ==="
-echo ""
-echo "注意：本脚本假设 PostgreSQL 已经运行。"
-echo "如果没有数据库，请先安装并启动 PostgreSQL，然后执行："
-echo "  docker compose up -d postgres  # 使用 Docker"
-echo "或手动安装 PostgreSQL 并创建数据库 ai_bi"
+echo "=== BizLens AI BI 平台启动 ==="
 echo ""
 
 # 检查 PostgreSQL 是否可连接
@@ -22,14 +17,14 @@ fi
 
 # 启动 Go 后端
 echo "[1/2] 启动 Go 后端 (端口 3001)..."
-cd /workspace/server && go run cmd/main.go &
+cd /workspace/backend && go run cmd/main.go &
 BACKEND_PID=$!
 cd /workspace
 sleep 3
 
 # 启动 Next.js 前端
 echo "[2/2] 启动 Next.js 前端 (端口 3000)..."
-cd /workspace && npm run dev &
+cd /workspace/frontend && npm run dev &
 FRONTEND_PID=$!
 
 echo ""

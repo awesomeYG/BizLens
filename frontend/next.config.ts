@@ -9,12 +9,8 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: "/api/tenants/:path*",
-        destination: "http://localhost:3001/api/tenants/:path*",
-      },
-      {
-        source: "/api/health",
-        destination: "http://localhost:3001/api/health",
+        source: "/api/:path*",
+        destination: "http://localhost:3001/api/:path*",
       },
     ];
   },

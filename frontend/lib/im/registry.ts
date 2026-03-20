@@ -43,6 +43,33 @@ export const IM_PLATFORM_REGISTRY: Record<string, IMPlatformMeta> = {
     iconBg: "bg-green-500/20",
     fields: [COMMON_WEBHOOK_FIELD],
   },
+  slack: {
+    type: "slack",
+    label: "Slack",
+    description: "通过 Slack Incoming Webhook 发送消息",
+    color: "#4A154B",
+    iconBg: "bg-purple-500/20",
+    fields: [COMMON_WEBHOOK_FIELD],
+  },
+  telegram: {
+    type: "telegram",
+    label: "Telegram",
+    description: "通过 Telegram Bot API 发送消息",
+    color: "#24A1DE",
+    iconBg: "bg-sky-500/20",
+    fields: [
+      COMMON_WEBHOOK_FIELD,
+      { key: "chatId", label: "Chat ID", placeholder: "发送目标的 Chat ID", required: false, type: "text" },
+    ],
+  },
+  discord: {
+    type: "discord",
+    label: "Discord",
+    description: "通过 Discord Webhook 发送消息",
+    color: "#5865F2",
+    iconBg: "bg-indigo-500/20",
+    fields: [COMMON_WEBHOOK_FIELD],
+  },
 };
 
 export const IM_PLATFORMS_LIST = Object.values(IM_PLATFORM_REGISTRY);

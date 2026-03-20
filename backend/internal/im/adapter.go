@@ -31,6 +31,12 @@ func GetAdapter(t model.IMPlatformType) Adapter {
 		return &FeishuAdapter{}
 	case model.IMPlatformWecom:
 		return &WecomAdapter{}
+	case model.IMPlatformSlack:
+		return &SlackAdapter{}
+	case model.IMPlatformTelegram:
+		return &TelegramAdapter{}
+	case model.IMPlatformDiscord:
+		return &DiscordAdapter{}
 	default:
 		return nil
 	}

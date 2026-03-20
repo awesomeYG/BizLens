@@ -1,7 +1,7 @@
 /**
  * IM 平台类型标识
  */
-export type IMPlatformType = "dingtalk" | "feishu" | "wecom";
+export type IMPlatformType = "dingtalk" | "feishu" | "wecom" | "slack" | "telegram" | "discord";
 
 /**
  * IM 平台连接状态

@@ -37,6 +37,9 @@ const (
 	IMPlatformDingtalk IMPlatformType = "dingtalk"
 	IMPlatformFeishu   IMPlatformType = "feishu"
 	IMPlatformWecom    IMPlatformType = "wecom"
+	IMPlatformSlack    IMPlatformType = "slack"
+	IMPlatformTelegram IMPlatformType = "telegram"
+	IMPlatformDiscord  IMPlatformType = "discord"
 )
 
 // IMConnectionStatus 连接状态
