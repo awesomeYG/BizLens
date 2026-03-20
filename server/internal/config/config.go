@@ -25,7 +25,7 @@ func Load() *Config {
 		DBPassword: getEnv("DB_PASSWORD", "postgres"),
 		DBName:     getEnv("DB_NAME", "ai_bi"),
 		DBSSLMode:  getEnv("DB_SSLMODE", "disable"),
-		UseSQLite:  getEnv("USE_SQLITE", "false") == "true",
+		UseSQLite:  getEnv("USE_SQLITE", "true") == "true",
 	}
 }
 
