@@ -8,7 +8,7 @@ import (
 
 // Tenant 租户（SaaS 多租户）
 type Tenant struct {
-	ID        string         `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	ID        string         `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
 	Name      string         `gorm:"size:200;not null" json:"name"`
 	Plan      string         `gorm:"size:50;default:'free'" json:"plan"` // free / pro / enterprise
 	CreatedAt time.Time      `json:"createdAt"`
@@ -18,8 +18,8 @@ type Tenant struct {
 
 // User 用户
 type User struct {
-	ID        string         `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	TenantID  string         `gorm:"type:uuid;not null;index" json:"tenantId"`
+	ID        string         `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID  string         `gorm:"type:varchar(50);not null;index" json:"tenantId"`
 	Name      string         `gorm:"size:100;not null" json:"name"`
 	Email     string         `gorm:"size:200;not null;uniqueIndex" json:"email"`
 	Role      string         `gorm:"size:50;default:'member'" json:"role"` // owner / admin / member
@@ -50,8 +50,8 @@ const (
 
 // IMConfig IM 平台配置
 type IMConfig struct {
-	ID         string             `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	TenantID   string             `gorm:"type:uuid;not null;index" json:"tenantId"`
+	ID         string             `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID   string             `gorm:"type:varchar(50);not null;index" json:"tenantId"`
 	Type       IMPlatformType     `gorm:"size:50;not null" json:"type"`
 	Name       string             `gorm:"size:200;not null" json:"name"`
 	Enabled    bool               `gorm:"default:true" json:"enabled"`
@@ -76,9 +76,9 @@ const (
 
 // NotificationRecord 通知记录
 type NotificationRecord struct {
-	ID           string             `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	TenantID     string             `gorm:"type:uuid;not null;index" json:"tenantId"`
-	PlatformID   string             `gorm:"type:uuid;not null;index" json:"platformId"`
+	ID           string             `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID     string             `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	PlatformID   string             `gorm:"type:varchar(50);not null;index" json:"platformId"`
 	PlatformType IMPlatformType     `gorm:"size:50;not null" json:"platformType"`
 	TemplateType string             `gorm:"size:50;not null" json:"templateType"`
 	Title        string             `gorm:"size:500" json:"title"`

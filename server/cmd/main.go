@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -41,6 +42,18 @@ func main() {
 		log.Fatalf("数据库迁移失败：%v", err)
 	}
 	log.Println("数据库迁移完成")
+
+	// SQLite 需要手动生成 UUID (通过 BeforeCreate hook)
+	if cfg.UseSQLite {
+		type BaseEntity struct {
+			ID string `gorm:"type:varchar(50);primaryKey"`
+		}
+		db.Callback().Create().Before("gorm:before_create").Register("uuid_gen", func(tx *gorm.DB) {
+			if id := tx.Statement.Context.Value("generated_id"); id == nil {
+				tx.Statement.SetColumn("ID", uuid.New().String())
+			}
+		})
+	}
 
 	// 初始化服务和 handler
 	imService := service.NewIMService(db)
