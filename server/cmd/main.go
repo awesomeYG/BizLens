@@ -58,6 +58,8 @@ func main() {
 	// 初始化服务和 handler
 	imService := service.NewIMService(db)
 	imHandler := handler.NewIMHandler(imService)
+	alertService := service.NewAlertService(db, imService)
+	alertHandler := handler.NewAlertHandler(alertService)
 
 	// 路由
 	mux := http.NewServeMux()
@@ -120,6 +122,47 @@ func main() {
 			// GET /api/tenants/{id}/notifications
 			case len(parts) == 2 && r.Method == http.MethodGet:
 				imHandler.ListNotifications(w, r)
+				return
+			}
+		}
+
+		// /api/tenants/{tenantId}/alerts[/{eventId}[/trigger]] | /alerts/logs
+		if len(parts) >= 2 && parts[1] == "alerts" {
+			switch {
+			// GET /api/tenants/{id}/alerts/logs
+			case len(parts) == 3 && parts[2] == "logs" && r.Method == http.MethodGet:
+				alertHandler.ListTriggerLogs(w, r)
+				return
+
+			// POST /api/tenants/{id}/alerts/{eventId}/trigger
+			case len(parts) == 4 && parts[3] == "trigger" && r.Method == http.MethodPost:
+				alertHandler.TriggerAlertEvent(w, r)
+				return
+
+			// GET/PUT/DELETE /api/tenants/{id}/alerts/{eventId}
+			case len(parts) == 3 && parts[2] != "logs":
+				switch r.Method {
+				case http.MethodGet:
+					alertHandler.GetAlertEvent(w, r)
+				case http.MethodPut:
+					alertHandler.UpdateAlertEvent(w, r)
+				case http.MethodDelete:
+					alertHandler.DeleteAlertEvent(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+
+			// GET/POST /api/tenants/{id}/alerts
+			case len(parts) == 2:
+				switch r.Method {
+				case http.MethodGet:
+					alertHandler.ListAlertEvents(w, r)
+				case http.MethodPost:
+					alertHandler.CreateAlertEvent(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
 				return
 			}
 		}

@@ -287,30 +287,42 @@ export default function HomePage() {
             <p className="text-slate-300">
               欢迎回来，{currentUser.name}。企业画像已就绪，可直接开始 AI 分析。
             </p>
-            <div className="flex gap-6 justify-center flex-wrap">
+            <div className="grid sm:grid-cols-2 gap-4">
               <Link
                 href="/chat"
-                className="px-8 py-4 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 text-cyan-300 font-medium transition-all hover:scale-105"
+                className="group px-8 py-6 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 border border-cyan-500/50 text-cyan-300 font-medium transition-all hover:scale-105"
               >
-                🤖 AI 对话
+                <div className="text-2xl mb-2">🤖</div>
+                <div className="text-lg font-semibold">AI 对话分析</div>
+                <div className="text-xs text-cyan-400/70 mt-1">与 AI 对话，获取商业洞察</div>
               </Link>
               <Link
-                href="/dashboards"
-                className="px-8 py-4 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 font-medium transition-all hover:scale-105"
+                href="/alerts"
+                className="group px-8 py-6 rounded-xl bg-gradient-to-br from-orange-500/20 to-red-500/20 hover:from-orange-500/30 hover:to-red-500/30 border border-orange-500/50 text-orange-300 font-medium transition-all hover:scale-105"
               >
-                📊 数据大屏
+                <div className="text-2xl mb-2">🔔</div>
+                <div className="text-lg font-semibold">智能告警</div>
+                <div className="text-xs text-orange-400/70 mt-1">数据异常实时通知</div>
+              </Link>
+            </div>
+            <div className="flex gap-4 justify-center flex-wrap pt-4 border-t border-slate-700/50">
+              <Link
+                href="/dashboards"
+                className="px-4 py-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-slate-300 text-sm transition-all"
+              >
+                数据大屏
               </Link>
               <Link
                 href="/im/settings"
-                className="px-8 py-4 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 font-medium transition-all hover:scale-105"
+                className="px-4 py-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-slate-300 text-sm transition-all"
               >
-                💬 IM 平台
+                IM 设置
               </Link>
               <Link
-                href="/im/notifications"
-                className="px-8 py-4 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 font-medium transition-all hover:scale-105"
+                href="/alerts/config"
+                className="px-4 py-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-slate-300 text-sm transition-all"
               >
-                📤 通知中心
+                告警配置
               </Link>
             </div>
             <button

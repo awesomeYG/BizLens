@@ -33,7 +33,7 @@ export default function ChatPage() {
         <Link href="/" className="text-cyan-400 hover:text-cyan-300 font-medium">
           ← AI BI
         </Link>
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
           <Link
             href="/chat"
             className="text-cyan-400 font-medium border-b-2 border-cyan-400 pb-1"
@@ -41,11 +41,36 @@ export default function ChatPage() {
             AI 对话
           </Link>
           <Link
-            href="/dashboards"
+            href="/alerts"
             className="text-slate-400 hover:text-slate-300"
           >
-            数据大屏
+            智能告警
           </Link>
+          <div className="relative group">
+            <button className="text-slate-400 hover:text-slate-300 pb-1">
+              更多 ▼
+            </button>
+            <div className="absolute right-0 mt-2 w-40 rounded-lg border border-slate-700 bg-slate-800 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              <Link
+                href="/dashboards"
+                className="block px-4 py-2 text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-t-lg"
+              >
+                数据大屏
+              </Link>
+              <Link
+                href="/alerts/config"
+                className="block px-4 py-2 text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-700 border-t border-slate-700"
+              >
+                告警配置
+              </Link>
+              <Link
+                href="/im/settings"
+                className="block px-4 py-2 text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-b-lg"
+              >
+                IM 设置
+              </Link>
+            </div>
+          </div>
         </div>
       </nav>
 

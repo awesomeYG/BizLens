@@ -91,3 +91,69 @@ export interface NotificationSendRequest {
   content: string;
   markdown?: boolean;
 }
+
+/**
+ * 告警条件类型
+ */
+export type AlertConditionType = "greater" | "less" | "equals" | "change" | "custom";
+
+/**
+ * 告警事件配置（与后端 model 对齐）
+ */
+export interface AlertEvent {
+  id: string;
+  tenantId: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  metric: string;
+  conditionType: AlertConditionType;
+  threshold: number;
+  message: string;
+  platformIds: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * 创建告警事件请求体
+ */
+export interface AlertEventCreateRequest {
+  name: string;
+  description?: string;
+  metric: string;
+  conditionType: AlertConditionType;
+  threshold: number;
+  message: string;
+  platformIds: string;
+  enabled?: boolean;
+}
+
+/**
+ * 告警触发记录
+ */
+export interface AlertTriggerLog {
+  id: string;
+  tenantId: string;
+  eventId: string;
+  eventName: string;
+  metric: string;
+  actualValue: number;
+  threshold: number;
+  message: string;
+  status: string;
+  error?: string;
+  triggeredAt: string;
+  createdAt: string;
+}
+
+/**
+ * 告警条件选项（UI 展示用）
+ */
+export const ALERT_CONDITION_OPTIONS: { value: AlertConditionType; label: string; symbol: string }[] = [
+  { value: "greater", label: "大于", symbol: ">" },
+  { value: "less", label: "小于", symbol: "<" },
+  { value: "equals", label: "等于", symbol: "=" },
+  { value: "change", label: "变化幅度", symbol: "~" },
+  { value: "custom", label: "自定义", symbol: "?" },
+];

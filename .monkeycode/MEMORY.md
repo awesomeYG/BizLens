@@ -71,3 +71,25 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 每个平台实现 Adapter 接口 (Send + Test 方法)
   - 新增平台只需: 1) 在 im/ 下新增适配器文件 2) 在 factory.go 注册 3) 前端 registry.ts 添加元信息
   - 前端 lib/im/ 只保留类型定义和 UI 展示用的平台元信息，不含业务逻辑
+
+### 产品定位调整
+- Date: 2026-03-20
+- Context: 用户明确产品核心是 AI 对话 + 商业分析，大屏为辅助功能
+- Instructions:
+  - 产品核心功能是 AI 对话分析，大屏功能降低存在感（放到"更多"菜单中）
+  - 智能告警是重要功能：支持用户在 AI 对话中用自然语言配置告警规则
+  - 告警规则管理页面放在 /alerts/config，不要太显眼
+  - AI 回复中包含 ```alert_config JSON 块时，ChatPanel 自动调用后端 API 创建告警
+  - 首页主入口只保留"AI 对话"和"智能告警"两个大卡片
+
+### 告警事件架构
+- Date: 2026-03-20
+- Context: Agent 在执行智能告警功能开发时发现
+- Category: 代码结构
+- Instructions:
+  - 后端模型：AlertEvent（告警规则）+ AlertTriggerLog（触发记录）在 server/internal/model/model.go
+  - 后端服务：server/internal/service/alert_service.go，支持 CRUD + 触发 + 通知发送
+  - 后端路由：/api/tenants/{id}/alerts[/{eventId}[/trigger]] 和 /alerts/logs
+  - 前端页面：/alerts（概览）、/alerts/config（规则管理）
+  - AI 对话中的告警配置通过 chat API system prompt 引导 AI 输出 alert_config JSON
+  - ChatPanel 自动解析 alert_config 块并调用后端创建告警

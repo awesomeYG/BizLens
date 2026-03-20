@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { saveDashboard } from "@/lib/dashboard-store";
 import { DASHBOARD_TEMPLATES } from "@/lib/templates";
 import { DEFAULT_DASHBOARD_DATA, mapSampleToDashboard } from "@/lib/data-mapper";
+import { getCurrentUser } from "@/lib/user-store";
 import type {
   ChatMessage,
   CompanyProfile,
@@ -129,6 +130,48 @@ export default function ChatPanel({
       });
       const data = await res.json();
       const content = data.content || data.error || "无回复";
+
+      // 检测 AI 回复中的告警配置
+      const alertMatch = content.match(/```alert_config\s*\n([\s\S]*?)\n```/);
+      if (alertMatch) {
+        try {
+          const alertConfig = JSON.parse(alertMatch[1]);
+          const user = getCurrentUser();
+          const tenantId = user?.id || "demo-tenant";
+          const alertRes = await fetch(`/api/tenants/${tenantId}/alerts`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(alertConfig),
+          });
+          if (alertRes.ok) {
+            const created = await alertRes.json();
+            // 在回复后追加创建成功的提示
+            const cleanContent = content.replace(/```alert_config\s*\n[\s\S]*?\n```/, "").trim();
+            setMessages((prev) => [
+              ...prev,
+              ...(appendUser
+                ? [{
+                    id: crypto.randomUUID(),
+                    role: "user" as const,
+                    content: input,
+                    timestamp: Date.now(),
+                  }]
+                : []),
+              {
+                id: crypto.randomUUID(),
+                role: "assistant" as const,
+                content: cleanContent + `\n\n✅ 告警规则「${created.name}」已自动创建，可在[智能告警](/alerts)页面查看和管理。`,
+                timestamp: Date.now(),
+              },
+            ]);
+            setInput("");
+            return;
+          }
+        } catch {
+          // JSON 解析失败，按普通消息处理
+        }
+      }
+
       setMessages((prev) => [
         ...prev,
         ...(appendUser
