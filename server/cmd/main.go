@@ -60,6 +60,8 @@ func main() {
 	imHandler := handler.NewIMHandler(imService)
 	alertService := service.NewAlertService(db, imService)
 	alertHandler := handler.NewAlertHandler(alertService)
+	dataSourceService := service.NewDataSourceService(db)
+	dataSourceHandler := handler.NewDataSourceHandler(dataSourceService)
 
 	// 路由
 	mux := http.NewServeMux()
@@ -160,6 +162,47 @@ func main() {
 					alertHandler.ListAlertEvents(w, r)
 				case http.MethodPost:
 					alertHandler.CreateAlertEvent(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+			}
+		}
+
+		// /api/tenants/{tenantId}/data-sources[/{dsId}[/{action}]]
+		if len(parts) >= 2 && parts[1] == "data-sources" {
+			switch {
+			// GET /api/tenants/{id}/data-sources/{dsId}/schema
+			case len(parts) == 4 && parts[2] != "" && parts[3] == "schema" && r.Method == http.MethodGet:
+				dataSourceHandler.GetDataSourceSchema(w, r)
+				return
+
+			// POST /api/tenants/{id}/data-sources/{dsId}/test
+			case len(parts) == 4 && parts[3] == "test" && r.Method == http.MethodPost:
+				dataSourceHandler.TestDataSourceConnection(w, r)
+				return
+
+			// GET/PUT/DELETE /api/tenants/{id}/data-sources/{dsId}
+			case len(parts) == 3 && parts[2] != "":
+				switch r.Method {
+				case http.MethodGet:
+					dataSourceHandler.GetDataSource(w, r)
+				case http.MethodPut:
+					dataSourceHandler.UpdateDataSource(w, r)
+				case http.MethodDelete:
+					dataSourceHandler.DeleteDataSource(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+
+			// GET/POST /api/tenants/{id}/data-sources
+			case len(parts) == 2:
+				switch r.Method {
+				case http.MethodGet:
+					dataSourceHandler.ListDataSources(w, r)
+				case http.MethodPost:
+					dataSourceHandler.CreateDataSource(w, r)
 				default:
 					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				}

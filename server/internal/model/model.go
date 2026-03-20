@@ -141,6 +141,63 @@ type AlertTriggerLog struct {
 	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
 }
 
+// DataSourceType 数据源类型
+type DataSourceType string
+
+const (
+	DataSourceMySQL      DataSourceType = "mysql"
+	DataSourcePostgreSQL DataSourceType = "postgresql"
+	DataSourceCSV        DataSourceType = "csv"
+	DataSourceExcel      DataSourceType = "excel"
+	DataSourceAPI        DataSourceType = "api"
+	DataSourceOther      DataSourceType = "other"
+)
+
+// DataSourceStatus 数据源状态
+type DataSourceStatus string
+
+const (
+	DSStatusConnected    DataSourceStatus = "connected"
+	DSStatusDisconnected DataSourceStatus = "disconnected"
+	DSStatusError        DataSourceStatus = "error"
+)
+
+// DataSource 数据源配置
+type DataSource struct {
+	ID          string         `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID    string         `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	Type        DataSourceType `gorm:"size:50;not null" json:"type"`
+	Name        string         `gorm:"size:200;not null" json:"name"`
+	Description string         `gorm:"size:500" json:"description"`
+	// 数据库连接配置（加密存储）
+	Host     string `gorm:"size:200" json:"host,omitempty"`
+	Port     int    `json:"port,omitempty"`
+	Database string `gorm:"size:200" json:"database,omitempty"`
+	Username string `gorm:"size:200" json:"username,omitempty"`
+	Password string `gorm:"size:500" json:"password,omitempty"`
+	SSL      bool   `gorm:"default:false" json:"ssl,omitempty"`
+	// API 数据源配置
+	APIURL     string `gorm:"size:500" json:"apiUrl,omitempty"`
+	APIMethod  string `gorm:"size:20;default:'GET'" json:"apiMethod,omitempty"`
+	APIHeaders string `gorm:"type:text" json:"apiHeaders,omitempty"` // JSON 字符串
+	APIToken   string `gorm:"size:500" json:"apiToken,omitempty"`
+	// 文件数据源
+	FileName  string `gorm:"size:200" json:"fileName,omitempty"`
+	FileSize  int64  `json:"fileSize,omitempty"`
+	FilePath  string `gorm:"size:500" json:"filePath,omitempty"`
+	TableInfo string `gorm:"type:text" json:"tableInfo,omitempty"` // JSON 字符串，存储表结构
+	// 状态
+	Status      DataSourceStatus `gorm:"size:50;default:'disconnected'" json:"status"`
+	LastSyncAt  *time.Time       `json:"lastSyncAt,omitempty"`
+	SyncMessage string           `gorm:"type:text" json:"syncMessage,omitempty"`
+	CreatedAt   time.Time        `json:"createdAt"`
+	UpdatedAt   time.Time        `json:"updatedAt"`
+	DeletedAt   gorm.DeletedAt   `gorm:"index" json:"-"`
+	SchemaInfo  string           `gorm:"type:text" json:"schemaInfo,omitempty"` // JSON 字符串，存储 schema 信息
+
+	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
+}
+
 // AutoMigrate 自动迁移所有表
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
@@ -150,5 +207,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&NotificationRecord{},
 		&AlertEvent{},
 		&AlertTriggerLog{},
+		&DataSource{},
 	)
 }

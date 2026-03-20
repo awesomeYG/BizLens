@@ -1,38 +1,186 @@
-# AI BI 智能数据分析平台
+# BizLens - AI 智能数据分析平台
 
-与 AI 对话分析数据，一键生成数据大屏。
+> **让数据说话，让决策更智能**
 
-## 功能
+BizLens 是一个 AI 驱动的商业智能 (BI) 数据分析平台，通过自然语言对话分析企业数据，自动监控关键指标并推送告警。
 
-- **登录与新用户引导**：首次登录后需填写公司信息并配置数据源（SQL/NoSQL/文件/API/流式等），系统会生成企业画像
-- **AI 对话**：上传公司数据（CSV/JSON 等），AI 自动解析字段&示例行，支持基于解析结果继续提问
-- **数据注入**：对话侧栏会生成「大屏草稿」数据，KPI 可手动微调并选择模板/标题
-- **数据大屏**：多套模板（销售分析、运营监控、财务概览、自定义），支持多屏 Tab + 缩略图快速切换
-- **导出**：大屏配置可导出为 JSON，路由 `?id=` 可直达指定大屏
+![Version](https://img.shields.io/badge/version-0.2.0-blue)
 
-## 路由
+---
 
-- `/` - 首页
-- `/chat` - AI 对话
-- `/dashboards` - 数据大屏（支持 `?id=xxx` 定位到指定大屏）
+## ✨ 核心功能
 
-## 开发
+### 🤖 AI 对话分析
+上传数据文件，与 AI 对话获取商业洞察和决策建议。支持多种 AI 模型（OpenAI GPT-4、Claude、通义千问、文心一言）。
 
+### 📊 数据源管理 🆕
+直接连接 MySQL/PostgreSQL 数据库，或上传 CSV/Excel 文件。自动获取表结构，支持连接测试。
+
+### 📈 智能告警
+用自然语言配置数据监控规则，异常实时推送到钉钉/飞书/企业微信。
+
+### 🖥️ 数据大屏
+一键生成可视化大屏，支持多套模板和多 Tab 切换。
+
+---
+
+## 🚀 快速开始
+
+### 环境要求
+- Node.js 18+
+- Go 1.21+
+- PostgreSQL 16+ (或 SQLite 用于开发)
+
+### 1. 安装依赖
+
+**前端**:
 ```bash
-cd /Users/yanggang/work/allcw/allmonkey/ai-bi
 npm install
+```
+
+**后端**:
+```bash
+cd server
+go mod tidy
+```
+
+### 2. 配置环境变量
+
+创建 `.env.local` 文件：
+```bash
+# AI 服务配置（可选，也可在前端界面配置）
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+
+# 数据库配置
+DATABASE_URL=postgresql://user:password@localhost:5432/bizlens
+# 或使用 SQLite（开发环境）
+USE_SQLITE=true
+```
+
+### 3. 启动服务
+
+**方式 1: 使用启动脚本**
+```bash
+./start.sh
+```
+
+**方式 2: 手动启动**
+
+启动 PostgreSQL（Docker）:
+```bash
+docker-compose up -d
+```
+
+启动后端（端口 3001）:
+```bash
+cd server
+go run ./cmd/main.go
+```
+
+启动前端（端口 3000）:
+```bash
 npm run dev
 ```
 
-访问 http://localhost:3000
+### 4. 访问应用
 
-## 环境变量
+打开浏览器访问：http://localhost:3000
 
-复制 `.env.example` 为 `.env.local`，填入 `OPENAI_API_KEY` 以启用真实 AI 分析。未配置时以演示模式运行。
+---
 
-## 使用流程
+## 📖 使用指南
 
-1. 进入 `/chat`，上传 CSV/JSON 数据，右侧会显示解析摘要并填充大屏草稿数据（销售趋势/渠道占比等）
-2. 首次使用请在 `/` 完成登录和新用户初始化：填写公司信息、选择数据源，AI 会生成企业画像
-3. 可在对话侧栏或底部选择模板、修改大屏标题与 KPI，点击「生成大屏」跳转到 `/dashboards?id=...`
-4. 在 `/dashboards` 页面可通过 Tab 或缩略图在多个大屏间切换，并导出 JSON 配置
+### 快速上手
+1. **登录**: 输入姓名和邮箱
+2. **配置 AI** (推荐): 访问 `/settings/ai` 配置 API Key
+3. **连接数据源**: 访问 `/data-sources` 连接数据库或上传 CSV
+4. **开始分析**: 访问 `/chat` 与 AI 对话分析数据
+
+### 示例对话
+- "帮我分析销售趋势"
+- "哪个产品利润率最高？"
+- "生成一个数据大屏"
+- "当库存低于 50 时通知我"
+
+---
+
+## 🏗️ 技术架构
+
+### 前端
+- **框架**: Next.js 15 (App Router)
+- **语言**: TypeScript
+- **样式**: Tailwind CSS
+- **图表**: ECharts
+
+### 后端
+- **语言**: Go 1.21+
+- **框架**: net/http
+- **ORM**: GORM
+- **数据库**: PostgreSQL / SQLite
+
+---
+
+## 📁 项目结构
+
+```
+bizlens/
+├── app/                      # Next.js 页面
+│   ├── api/                  # API Routes
+│   ├── chat/                 # AI 对话
+│   ├── dashboards/           # 数据大屏
+│   ├── data-sources/         # 数据源管理 🆕
+│   ├── alerts/               # 告警管理
+│   └── settings/             # 设置页面 🆕
+├── components/               # React 组件
+├── lib/                      # 工具库
+├── server/                   # Go 后端
+│   ├── cmd/                  # 入口
+│   └── internal/             # 内部模块
+└── .monkeycode/              # 项目文档
+```
+
+---
+
+## 🔧 开发
+
+```bash
+# 前端
+npm install
+npm run dev
+
+# 后端
+cd server
+go mod tidy
+go run ./cmd/main.go
+```
+
+---
+
+## 📚 文档
+
+- [v0.2.0 发布说明](./.monkeycode/docs/v0.2.0-release.md)
+
+---
+
+## 🛣️ 路线图
+
+### v0.2.0 (当前) ✅
+- [x] 数据源连接器
+- [x] AI 多模型支持
+- [x] 数据源管理页面
+
+### v0.3.0 (计划)
+- [ ] SQL 查询编辑器
+- [ ] 大屏拖拽编辑器
+- [ ] 更多数据源类型
+
+---
+
+## 📄 许可证
+
+MIT License
+
+---
+
+**BizLens - 让数据说话，让决策更智能**

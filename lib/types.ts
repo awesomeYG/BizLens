@@ -30,11 +30,41 @@ export type DataSourceType =
   | "kafka"
   | "other";
 
+export interface DatabaseConnectionConfig {
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  password: string;
+  ssl?: boolean;
+}
+
 export interface DataSourceConfig {
   id: string;
   type: DataSourceType;
   name: string;
   description?: string;
+  // 数据库连接配置（仅当 type 为 mysql/postgresql 等时使用）
+  connection?: DatabaseConnectionConfig;
+  // API 数据源配置
+  apiConfig?: {
+    url: string;
+    method: "GET" | "POST";
+    headers?: Record<string, string>;
+    authType?: "none" | "bearer" | "basic" | "apikey";
+    authToken?: string;
+  };
+  // 文件数据源
+  fileConfig?: {
+    fileName: string;
+    fileSize: number;
+    uploadedAt: number;
+  };
+  // 连接状态
+  status?: "connected" | "disconnected" | "error";
+  lastSyncAt?: number;
+  // 数据表/集合信息（连接后自动获取）
+  tables?: string[];
 }
 
 export interface CompanyInfo {

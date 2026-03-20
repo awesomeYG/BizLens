@@ -1,57 +1,111 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
-import type { CompanyProfile, DashboardData } from "@/lib/types";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "",
+  baseURL: process.env.OPENAI_BASE_URL || undefined, // 支持自定义 API 端点
 });
 
-const SYSTEM_PROMPT = `你是一个专业的商业智能(BI)数据分析助手。用户可以上传公司的数据文件(CSV/Excel等)，你需要：
-1. 理解并分析用户上传的数据
-2. 根据用户问题给出数据洞察和建议
-3. 当用户要求生成数据大屏时，你可以建议合适的图表类型、指标和布局
-4. 用简洁专业的中文回答，必要时用表格或列表呈现
-5. 当用户想要配置数据告警/通知时，你需要理解用户的自然语言描述，提取出告警规则并生成结构化配置
+const SYSTEM_PROMPT = `你是 BizLens AI 数据分析专家。你需要：
 
-如果用户上传了数据，请先简要总结数据结构，再回答具体问题。
+## 核心能力
+1. **数据分析**：理解用户上传的数据，分析结构、趋势、异常
+2. **商业洞察**：基于数据提供可执行的业务建议
+3. **可视化建议**：推荐合适的图表类型和展示方式
+4. **告警配置**：识别用户想要监控的指标，生成结构化告警配置
 
-## 告警配置能力
+## 对话风格
+- 用简洁专业的中文回答
+- 优先使用表格、列表呈现数据
+- 关键洞察用**加粗**标注
+- 避免过度技术性术语，让业务人员能理解
 
-当用户表达了类似以下意图时，你需要生成告警配置：
-- "当日销售额超过1000时通知我"
-- "库存低于50件时发钉钉告警"
-- "利润率下降超过10%时提醒"
+## 数据大屏生成
+当用户要求生成大屏时，请：
+1. 理解用户想要展示的核心指标
+2. 推荐 3-5 个相关图表
+3. 说明每个图表的类型和用途
+4. 用 JSON 格式输出大屏配置（如果用户明确要求）
 
-请在回复中包含一个 JSON 代码块，格式如下：
+## 告警配置提取
+当用户表达了监控意图时（例如"超过 X 时通知我"），生成告警配置：
+
 \`\`\`alert_config
 {
-  "name": "告警规则名称",
-  "description": "规则描述",
-  "metric": "监控指标英文标识，如 daily_sales",
-  "conditionType": "greater|less|equals|change|custom",
-  "threshold": 数值阈值,
-  "message": "告警触发时的通知消息内容，支持 Markdown",
-  "enabled": true
+  "name": "规则名称",
+  "metric": "指标英文名",
+  "conditionType": "greater|less|change",
+  "threshold": 数值,
+  "message": "触发消息"
 }
 \`\`\`
 
-conditionType 说明：
-- greater: 大于阈值时触发
-- less: 小于阈值时触发
-- equals: 等于阈值时触发
-- change: 变化幅度超过阈值时触发（百分比）
-- custom: 自定义复杂条件
+## 智能推荐
+主动识别数据中的：
+- 异常值或波动
+- 趋势变化
+- 相关性洞察
+- 优化机会`;
 
-在 JSON 之外，用自然语言向用户确认你理解的告警规则，并说明用户可以在"智能告警"页面管理这些规则。`;
+interface AIModelConfig {
+  model: string;
+  maxTokens: number;
+  temperature: number;
+}
+
+function getModelConfig(): AIModelConfig {
+  const modelType = process.env.AI_MODEL_TYPE || "openai";
+  
+  switch (modelType) {
+    case "claude":
+      return {
+        model: "claude-3-sonnet-20240229",
+        maxTokens: 2000,
+        temperature: 0.7,
+      };
+    case "qwen": // 通义千问
+      return {
+        model: "qwen-plus",
+        maxTokens: 2000,
+        temperature: 0.7,
+      };
+    case "ernie": // 文心一言
+      return {
+        model: "ernie-bot-4",
+        maxTokens: 2000,
+        temperature: 0.7,
+      };
+    default: // OpenAI
+      return {
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        maxTokens: 2000,
+        temperature: 0.7,
+      };
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { messages, dataSummary, dashboardData, companyProfile } = body as {
+    const { 
+      messages, 
+      dataSummary, 
+      dataSchema,
+      companyProfile,
+      conversationContext,
+      aiConfig: clientAiConfig
+    } = body as {
       messages: { role: string; content: string }[];
       dataSummary?: string;
-      dashboardData?: DashboardData;
-      companyProfile?: CompanyProfile;
+      dataSchema?: any;
+      companyProfile?: any;
+      conversationContext?: any;
+      aiConfig?: {
+        apiKey?: string;
+        baseUrl?: string;
+        modelType?: string;
+        model?: string;
+      };
     };
 
     if (!messages?.length) {
@@ -61,58 +115,97 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    // 优先使用客户端传来的配置
+    const apiKey = clientAiConfig?.apiKey || process.env.OPENAI_API_KEY || process.env.AI_API_KEY;
+    
+    // 演示模式
     if (!apiKey) {
       const demoContent = dataSummary
-        ? `根据你上传的数据摘要：\n${dataSummary}\n\n建议：1) 配置 API Key 后获得真实分析 2) 可尝试「生成销售数据大屏」等指令`
-        : "请先上传数据文件，然后我可以帮你分析并生成大屏。";
+        ? `根据你上传的数据：\n${dataSummary}\n\n**建议：**
+1. 配置 API Key 启用真实 AI 分析
+2. 尝试提问"帮我分析销售趋势"
+3. 说"生成数据大屏"创建可视化`
+        : "请先上传数据文件，然后我可以帮你分析。";
+      
       return NextResponse.json(
         {
-          content:
-            "未配置 OPENAI_API_KEY。请在 .env.local 中设置。当前为演示模式，我会模拟分析结果。\n\n" +
-            demoContent,
+          content: "⚠️ 演示模式：未配置 AI API Key\n\n" + demoContent,
+          demoMode: true,
         },
         { status: 200 }
       );
     }
 
-    const formatted = messages.map((m) => ({
+    const modelConfig = getModelConfig();
+    
+    // 如果客户端指定了模型，使用客户端的
+    let finalModel = modelConfig.model;
+    if (clientAiConfig?.model) {
+      finalModel = clientAiConfig.model;
+    }
+    
+    // 构建增强版系统提示
+    let systemContent = SYSTEM_PROMPT;
+    
+    if (companyProfile) {
+      systemContent += `\n\n## 企业画像\n${JSON.stringify(companyProfile, null, 2)}`;
+    }
+    
+    if (dataSchema) {
+      systemContent += `\n\n## 数据结构\n${JSON.stringify(dataSchema, null, 2)}`;
+    }
+    
+    if (dataSummary) {
+      systemContent += `\n\n## 数据摘要\n${dataSummary}`;
+    }
+
+    if (conversationContext) {
+      systemContent += `\n\n## 对话上下文\n${JSON.stringify(conversationContext, null, 2)}`;
+    }
+
+    const formattedMessages = messages.map((m) => ({
       role: m.role as "user" | "assistant" | "system",
       content: m.content,
     }));
 
-    const structuredDataText = dashboardData
-      ? `\n\n用户当前的大屏数据草稿（JSON）：\n${JSON.stringify(
-          dashboardData,
-          null,
-          2
-        )}`
-      : "";
-
-    const systemContent =
-      SYSTEM_PROMPT +
-      (companyProfile
-        ? `\n\n用户企业画像（后续分析请优先结合）：\n${JSON.stringify(companyProfile, null, 2)}`
-        : "") +
-      (dataSummary ? `\n\n用户已上传的数据摘要：\n${dataSummary}` : "") +
-      structuredDataText;
-
+    // 调用 AI API
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: finalModel,
       messages: [
         { role: "system", content: systemContent },
-        ...formatted,
+        ...formattedMessages,
       ],
-      max_tokens: 2000,
+      max_tokens: modelConfig.maxTokens,
+      temperature: modelConfig.temperature,
     });
 
-    const content =
-      response.choices[0]?.message?.content || "抱歉，未能生成回复。";
-    return NextResponse.json({ content });
-  } catch (err) {
+    const content = response.choices[0]?.message?.content || "抱歉，未能生成回复。";
+    
+    return NextResponse.json({ 
+      content,
+      usage: response.usage,
+      model: finalModel,
+    });
+  } catch (err: any) {
     console.error("Chat API error:", err);
+    
+    // 错误分类处理
+    if (err.status === 401) {
+      return NextResponse.json(
+        { error: "AI API Key 无效，请检查配置" },
+        { status: 401 }
+      );
+    }
+    
+    if (err.status === 429) {
+      return NextResponse.json(
+        { error: "请求频率超限，请稍后重试" },
+        { status: 429 }
+      );
+    }
+    
     return NextResponse.json(
-      { error: "对话服务异常，请稍后重试" },
+      { error: "AI 服务异常：" + err.message },
       { status: 500 }
     );
   }
