@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getCurrentUser } from "@/lib/user-store";
-import { IM_PLATFORM_REGISTRY, type AlertEvent, type AlertTriggerLog } from "@/lib/im";
+import type { AlertEvent, AlertTriggerLog } from "@/lib/im";
 
 export default function AlertsPage() {
   const router = useRouter();
-  const [tenantId, setTenantId] = useState("demo-tenant");
+  const [tenantId, setTenantId] = useState("");
   const [events, setEvents] = useState<AlertEvent[]>([]);
   const [logs, setLogs] = useState<AlertTriggerLog[]>([]);
   const [tab, setTab] = useState<"active" | "history">("active");
@@ -32,84 +32,86 @@ export default function AlertsPage() {
 
   const enabledEvents = events.filter(e => e.enabled);
   const recentLogs = logs.slice(0, 20);
-
   const condLabel = (t: string) => {
     const map: Record<string, string> = { greater: ">", less: "<", equals: "=", change: "~", custom: "?" };
     return map[t] || t;
   };
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      <nav className="flex items-center justify-between px-6 py-3 border-b border-slate-700/50 bg-slate-800/80">
-        <Link href="/" className="text-cyan-400 hover:text-cyan-300 font-medium">← AI BI</Link>
-        <div className="flex gap-4 items-center">
-          <Link href="/chat" className="text-slate-400 hover:text-slate-300">AI 对话</Link>
-          <Link href="/alerts" className="text-cyan-400 font-medium border-b-2 border-cyan-400 pb-1">智能告警</Link>
-          <Link href="/alerts/config" className="text-slate-400 hover:text-slate-300 text-sm">告警配置</Link>
+    <div className="min-h-screen bg-zinc-950 bg-grid">
+      <nav className="flex items-center justify-between px-6 py-3 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-md sticky top-0 z-40">
+        <Link href="/" className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 transition-colors">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+          </svg>
+          <span className="font-medium text-sm bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">BizLens</span>
+        </Link>
+        <div className="flex gap-1 items-center">
+          <Link href="/chat" className="btn-ghost text-sm">AI 对话</Link>
+          <Link href="/alerts" className="px-3 py-1.5 rounded-lg text-sm font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">智能告警</Link>
+          <Link href="/alerts/config" className="btn-ghost text-sm">告警配置</Link>
         </div>
       </nav>
 
       <main className="p-6 max-w-4xl mx-auto">
         {/* 概览卡片 */}
         <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4 text-center">
-            <div className="text-2xl font-bold text-cyan-400">{events.length}</div>
-            <div className="text-xs text-slate-400 mt-1">告警规则</div>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4 text-center">
-            <div className="text-2xl font-bold text-emerald-400">{enabledEvents.length}</div>
-            <div className="text-xs text-slate-400 mt-1">已启用</div>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4 text-center">
-            <div className="text-2xl font-bold text-orange-400">{logs.length}</div>
-            <div className="text-xs text-slate-400 mt-1">触发次数</div>
-          </div>
+          {[
+            { value: events.length, label: "告警规则", color: "text-indigo-400" },
+            { value: enabledEvents.length, label: "已启用", color: "text-emerald-400" },
+            { value: logs.length, label: "触发次数", color: "text-amber-400" },
+          ].map((item) => (
+            <div key={item.label} className="glass-card rounded-xl p-5 text-center">
+              <div className={`text-3xl font-bold ${item.color} tracking-tight`}>{item.value}</div>
+              <div className="text-xs text-zinc-500 mt-1">{item.label}</div>
+            </div>
+          ))}
         </div>
 
         {/* 提示 */}
-        <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4 mb-6">
-          <p className="text-sm text-cyan-300">
-            你可以在 <Link href="/chat" className="underline font-medium">AI 对话</Link> 中用自然语言创建告警，例如：
+        <div className="glass-card rounded-xl p-4 mb-6 border-indigo-500/20">
+          <p className="text-sm text-zinc-400">
+            在 <Link href="/chat" className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2">AI 对话</Link> 中用自然语言创建告警，例如：
           </p>
-          <p className="text-xs text-cyan-400/70 mt-1">
+          <p className="text-xs text-zinc-500 mt-1 font-mono">
             "当日销售额超过 1000 时，发钉钉通知" / "库存低于 50 件时告警"
           </p>
         </div>
 
         {/* Tab */}
-        <div className="flex gap-1 bg-slate-800/60 rounded-lg p-1 w-fit mb-4">
-          <button onClick={() => setTab("active")} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${tab === "active" ? "bg-cyan-600 text-white" : "text-slate-400 hover:text-slate-200"}`}>
-            活跃规则
-          </button>
-          <button onClick={() => setTab("history")} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${tab === "history" ? "bg-cyan-600 text-white" : "text-slate-400 hover:text-slate-200"}`}>
-            触发历史
-          </button>
+        <div className="flex gap-1 bg-zinc-900/80 rounded-xl p-1 w-fit mb-5 border border-zinc-800/50">
+          {(["active", "history"] as const).map((t) => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                tab === t ? "bg-zinc-800 text-zinc-100 shadow-sm" : "text-zinc-500 hover:text-zinc-300"
+              }`}>
+              {t === "active" ? "活跃规则" : "触发历史"}
+            </button>
+          ))}
         </div>
 
         {tab === "active" && (
           <div className="space-y-3">
             {enabledEvents.length === 0 && (
-              <div className="text-center py-12 text-slate-400">
+              <div className="text-center py-16 text-zinc-500">
                 暂无活跃告警规则，
-                <Link href="/alerts/config" className="text-cyan-400 hover:underline ml-1">去配置</Link>
-                或在 <Link href="/chat" className="text-cyan-400 hover:underline ml-1">AI 对话</Link> 中创建
+                <Link href="/alerts/config" className="text-indigo-400 hover:underline ml-1">去配置</Link>
+                或在 <Link href="/chat" className="text-indigo-400 hover:underline ml-1">AI 对话</Link> 中创建
               </div>
             )}
             {enabledEvents.map(event => (
-              <div key={event.id} className="rounded-xl border border-slate-700 bg-slate-800/60 p-4 flex items-center justify-between">
+              <div key={event.id} className="glass-card rounded-xl p-4 flex items-center justify-between animate-fade-in">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-slate-100">{event.name}</span>
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">启用</span>
+                    <span className="text-sm font-medium text-zinc-200">{event.name}</span>
+                    <span className="badge-success">启用</span>
                   </div>
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-zinc-500 mt-1 font-mono">
                     {event.metric} {condLabel(event.conditionType)} {event.threshold}
                   </p>
-                  {event.description && <p className="text-xs text-slate-500 mt-0.5">{event.description}</p>}
+                  {event.description && <p className="text-xs text-zinc-600 mt-0.5">{event.description}</p>}
                 </div>
-                <Link href="/alerts/config" className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300">
-                  管理
-                </Link>
+                <Link href="/alerts/config" className="btn-ghost text-xs">管理</Link>
               </div>
             ))}
           </div>
@@ -118,21 +120,21 @@ export default function AlertsPage() {
         {tab === "history" && (
           <div className="space-y-3">
             {recentLogs.length === 0 && (
-              <p className="text-center py-12 text-slate-400">暂无触发记录</p>
+              <p className="text-center py-16 text-zinc-500">暂无触发记录</p>
             )}
             {recentLogs.map(log => (
-              <div key={log.id} className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+              <div key={log.id} className="glass-card rounded-xl p-4 animate-fade-in">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-slate-200">{log.eventName}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${log.status === "sent" ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}>
+                  <span className="text-sm font-medium text-zinc-200">{log.eventName}</span>
+                  <span className={log.status === "sent" ? "badge-success" : "badge-error"}>
                     {log.status === "sent" ? "已通知" : "失败"}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400">
-                  {log.metric}: 实际值 {log.actualValue}（阈值 {log.threshold}）
+                <p className="text-xs text-zinc-500 font-mono">
+                  {log.metric}: {log.actualValue} (阈值 {log.threshold})
                 </p>
-                {log.error && <p className="text-xs text-red-400 mt-1">{log.error}</p>}
-                <p className="text-xs text-slate-500 mt-1">{new Date(log.triggeredAt).toLocaleString("zh-CN")}</p>
+                {log.error && <p className="text-xs text-red-400/80 mt-1">{log.error}</p>}
+                <p className="text-xs text-zinc-600 mt-1">{new Date(log.triggeredAt).toLocaleString("zh-CN")}</p>
               </div>
             ))}
           </div>

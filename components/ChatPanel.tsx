@@ -246,191 +246,126 @@ export default function ChatPanel({
 
   return (
     <div className="flex flex-col h-full">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-slate-700/50 bg-slate-800/50">
-        <h1 className="text-xl font-semibold text-cyan-400">AI 对话</h1>
-        <div className="flex items-center gap-4">
+      {/* 顶部信息栏 */}
+      <header className="flex items-center justify-between px-6 py-3 border-b border-zinc-800/80 bg-zinc-900/50">
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse-soft" />
+          <h1 className="text-sm font-medium text-zinc-300">AI 分析助手</h1>
+        </div>
+        <div className="flex items-center gap-3">
           {uploadedFiles.length > 0 && (
-            <span className="text-sm text-slate-400">
-              已上传 {uploadedFiles.length} 个文件
-            </span>
+            <span className="badge-info">{uploadedFiles.length} 个数据文件</span>
           )}
-          <Link
-            href="/dashboards"
-            className="text-sm text-cyan-400 hover:text-cyan-300"
-          >
-            查看大屏 →
-          </Link>
         </div>
       </header>
 
       <div className="flex flex-1 min-h-0">
+        {/* 消息区域 */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {messages.map((m) => (
-            <div
-              key={m.id}
-              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                  m.role === "user"
-                    ? "bg-cyan-500/20 text-cyan-100"
-                    : "bg-slate-700/50 text-slate-200"
-                }`}
-              >
+            <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}>
+              <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                m.role === "user"
+                  ? "bg-indigo-500/15 border border-indigo-500/20 text-zinc-200"
+                  : "bg-zinc-800/60 border border-zinc-700/40 text-zinc-300"
+              }`}>
                 {m.files?.length ? (
-                  <div className="mb-2 text-xs text-slate-400">
-                    📎 {m.files.map((f) => f.name).join(", ")}
+                  <div className="mb-2 text-xs text-zinc-500 flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
+                    </svg>
+                    {m.files.map((f) => f.name).join(", ")}
                   </div>
                 ) : null}
-                <pre className="whitespace-pre-wrap font-sans text-sm">
-                  {m.content}
-                </pre>
+                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{m.content}</pre>
               </div>
             </div>
           ))}
           {loading && (
-            <div className="flex justify-start">
-              <div className="bg-slate-700/50 rounded-2xl px-4 py-3 text-slate-400">
-                思考中...
+            <div className="flex justify-start animate-fade-in">
+              <div className="bg-zinc-800/60 border border-zinc-700/40 rounded-2xl px-4 py-3 text-zinc-500 flex items-center gap-2">
+                <div className="flex gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-bounce" style={{animationDelay: "0ms"}} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-bounce" style={{animationDelay: "150ms"}} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-bounce" style={{animationDelay: "300ms"}} />
+                </div>
+                分析中...
               </div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        <aside className="hidden lg:block w-80 border-l border-slate-700/50 bg-slate-800/30 p-4 overflow-y-auto space-y-4">
+        {/* 侧边栏 - 大屏草稿（降低存在感） */}
+        <aside className="hidden lg:block w-72 border-l border-zinc-800/80 bg-zinc-900/30 p-4 overflow-y-auto space-y-4">
           <div>
-            <h3 className="text-sm font-medium text-slate-300 mb-2">已学习数据</h3>
-            {dataSourceLabel ? (
-              <div className="text-xs text-slate-400 mb-2">来源：{dataSourceLabel}</div>
-            ) : null}
-            <pre className="text-xs text-slate-500 whitespace-pre-wrap break-words">
+            <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">已学习数据</h3>
+            {dataSourceLabel && <div className="text-xs text-zinc-600 mb-2">来源：{dataSourceLabel}</div>}
+            <pre className="text-xs text-zinc-600 whitespace-pre-wrap break-words leading-relaxed">
               {dataSummary.slice(0, 500) || "等待上传数据或输入指令"}
               {dataSummary.length > 500 && "..."}
             </pre>
           </div>
 
-          <div className="border-t border-slate-700/60 pt-3">
+          <div className="border-t border-zinc-800/60 pt-3">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-slate-300">大屏草稿</h3>
-              <button
-                onClick={handleGenerateDashboard}
-                className="text-xs px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white"
-              >
+              <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider">大屏草稿</h3>
+              <button onClick={handleGenerateDashboard}
+                className="text-xs px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 border border-zinc-700/50 transition-all">
                 生成
               </button>
             </div>
-            <label htmlFor="template-select-side" className="block text-xs text-slate-400 mb-1">
-              模板
-            </label>
-            <select
-              id="template-select-side"
-              value={selectedTemplate}
+            <label htmlFor="template-select-side" className="block text-xs text-zinc-500 mb-1">模板</label>
+            <select id="template-select-side" value={selectedTemplate}
               onChange={(e) => setSelectedTemplate(e.target.value as DashboardTemplateId)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-xs px-2 py-1"
-            >
-              {DASHBOARD_TEMPLATES.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
+              className="w-full bg-zinc-900 border border-zinc-700/50 rounded-lg text-zinc-300 text-xs px-2 py-1.5">
+              {DASHBOARD_TEMPLATES.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}
             </select>
-            <label htmlFor="dashboard-title-side" className="block text-xs text-slate-400 mt-3 mb-1">
-              标题
-            </label>
-            <input
-              id="dashboard-title-side"
-              value={dashboardTitle}
-              onChange={(e) => setDashboardTitle(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-xs px-2 py-1"
-            />
+            <label htmlFor="dashboard-title-side" className="block text-xs text-zinc-500 mt-3 mb-1">标题</label>
+            <input id="dashboard-title-side" value={dashboardTitle} onChange={(e) => setDashboardTitle(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-700/50 rounded-lg text-zinc-300 text-xs px-2 py-1.5" />
             <div className="grid grid-cols-2 gap-2 mt-3">
               <div>
-                <div className="text-[11px] text-slate-400 mb-1">总销售额</div>
-                <input
-                  type="number"
-                  value={draftData.totalSales}
-                  onChange={(e) => handleKpiChange("totalSales", e.target.value)}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-xs px-2 py-1"
-                />
+                <div className="text-[11px] text-zinc-500 mb-1">总销售额</div>
+                <input type="number" value={draftData.totalSales} onChange={(e) => handleKpiChange("totalSales", e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-700/50 rounded-lg text-zinc-300 text-xs px-2 py-1.5" />
               </div>
               <div>
-                <div className="text-[11px] text-slate-400 mb-1">同比增长%</div>
-                <input
-                  type="number"
-                  value={draftData.growth}
-                  onChange={(e) => handleKpiChange("growth", e.target.value)}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-xs px-2 py-1"
-                />
+                <div className="text-[11px] text-zinc-500 mb-1">同比增长%</div>
+                <input type="number" value={draftData.growth} onChange={(e) => handleKpiChange("growth", e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-700/50 rounded-lg text-zinc-300 text-xs px-2 py-1.5" />
               </div>
               <div>
-                <div className="text-[11px] text-slate-400 mb-1">客户数</div>
-                <input
-                  type="number"
-                  value={draftData.customers}
-                  onChange={(e) => handleKpiChange("customers", e.target.value)}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-xs px-2 py-1"
-                />
+                <div className="text-[11px] text-zinc-500 mb-1">客户数</div>
+                <input type="number" value={draftData.customers} onChange={(e) => handleKpiChange("customers", e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-700/50 rounded-lg text-zinc-300 text-xs px-2 py-1.5" />
               </div>
-              <div className="text-[11px] text-slate-500 col-span-2">
-                上传数据后会自动填充，可手动微调。
-              </div>
+              <div className="text-[11px] text-zinc-600 col-span-2">上传数据后自动填充</div>
             </div>
           </div>
         </aside>
       </div>
 
-      <div className="p-4 border-t border-slate-700/50 bg-slate-800/30">
-        <div className="flex flex-wrap gap-2 items-center">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,.txt,.json"
-            className="hidden"
-            onChange={handleUpload}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="px-4 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-slate-300 text-sm"
-          >
-            📎 上传数据
+      {/* 底部输入栏 */}
+      <div className="p-4 border-t border-zinc-800/80 bg-zinc-900/50">
+        <div className="flex gap-2 items-center max-w-4xl mx-auto">
+          <input ref={fileInputRef} type="file" accept=".csv,.txt,.json" className="hidden" onChange={handleUpload} />
+          <button onClick={() => fileInputRef.current?.click()}
+            className="shrink-0 p-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 border border-zinc-700/50 transition-all"
+            title="上传数据">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
+            </svg>
           </button>
-          <select
-            value={selectedTemplate}
-            onChange={(e) => setSelectedTemplate(e.target.value as DashboardTemplateId)}
-            className="px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-slate-200 text-sm"
-          >
-            {DASHBOARD_TEMPLATES.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          <input
-            value={dashboardTitle}
-            onChange={(e) => setDashboardTitle(e.target.value)}
-            className="w-40 sm:w-56 px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-slate-200 text-sm"
-            placeholder="大屏标题"
-          />
-          <button
-            onClick={handleGenerateDashboard}
-            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm"
-          >
-            📊 生成大屏
-          </button>
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
+          <input value={input} onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-            placeholder="输入问题或说「生成数据大屏」..."
-            className="flex-1 min-w-[180px] px-4 py-2 rounded-lg bg-slate-700 border border-slate-600 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-          />
-          <button
-            onClick={handleSend}
-            disabled={loading || !input.trim()}
-            className="px-6 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium"
-          >
-            发送
+            placeholder="输入问题，或描述告警规则..."
+            className="flex-1 input-base !rounded-xl" />
+          <button onClick={handleSend} disabled={loading || !input.trim()}
+            className="shrink-0 btn-primary disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+            </svg>
           </button>
         </div>
       </div>

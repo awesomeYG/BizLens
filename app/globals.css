@@ -3,13 +3,18 @@
 @tailwind utilities;
 
 :root {
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-card: #334155;
-  --accent: #38bdf8;
-  --accent-dim: #0ea5e9;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
+  --bg-primary: #09090b;
+  --bg-secondary: #18181b;
+  --bg-card: rgba(24, 24, 27, 0.8);
+  --bg-elevated: rgba(39, 39, 42, 0.6);
+  --border-subtle: rgba(63, 63, 70, 0.5);
+  --border-hover: rgba(113, 113, 122, 0.5);
+  --accent: #6366f1;
+  --accent-light: #818cf8;
+  --accent-glow: rgba(99, 102, 241, 0.15);
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
 }
 
 body {
@@ -17,8 +22,104 @@ body {
   color: var(--text-primary);
 }
 
+/* 微妙的网格背景 */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+/* 顶部光晕 */
+.bg-glow-top {
+  background: radial-gradient(ellipse 60% 40% at 50% 0%, rgba(99,102,241,0.12) 0%, transparent 70%);
+}
+
+/* 玻璃态卡片 */
+.glass-card {
+  background: rgba(24, 24, 27, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+}
+
+.glass-card:hover {
+  border-color: var(--border-hover);
+}
+
+/* 渐变边框 */
+.gradient-border {
+  position: relative;
+}
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(99,102,241,0.4), rgba(168,85,247,0.2), transparent);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* 输入框统一样式 */
+.input-base {
+  @apply w-full rounded-xl bg-zinc-900/80 border border-zinc-700/50 px-4 py-2.5 text-zinc-100 placeholder-zinc-500 transition-all;
+  @apply focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50;
+}
+
+/* 按钮统一样式 */
+.btn-primary {
+  @apply px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-all;
+  @apply shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30;
+}
+
+.btn-secondary {
+  @apply px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/50 transition-all;
+}
+
+.btn-ghost {
+  @apply px-4 py-2 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-all;
+}
+
+/* 状态标签 */
+.badge {
+  @apply text-xs px-2 py-0.5 rounded-full font-medium;
+}
+.badge-success {
+  @apply badge bg-emerald-500/15 text-emerald-400 border border-emerald-500/20;
+}
+.badge-warning {
+  @apply badge bg-amber-500/15 text-amber-400 border border-amber-500/20;
+}
+.badge-error {
+  @apply badge bg-red-500/15 text-red-400 border border-red-500/20;
+}
+.badge-info {
+  @apply badge bg-indigo-500/15 text-indigo-400 border border-indigo-500/20;
+}
+.badge-neutral {
+  @apply badge bg-zinc-500/15 text-zinc-400 border border-zinc-500/20;
+}
+
 /* 数据大屏深色主题 */
 .dashboard-screen {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+  background: linear-gradient(135deg, #09090b 0%, #18181b 50%, #09090b 100%);
   min-height: 100vh;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(113, 113, 122, 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(113, 113, 122, 0.5);
 }
