@@ -169,8 +169,6 @@ case "${1:-}" in
         echo ""
         echo "=== 服务已启动 ==="
         echo "前端：http://localhost:3000"
-        echo "  - Notebook: http://localhost:3000/notebook"
-        echo "  - Explore: http://localhost:3000/explore"
         echo "后端：http://localhost:3001"
         echo "数据库：localhost:5432 (postgres/postgres)"
         echo ""
