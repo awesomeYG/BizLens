@@ -109,6 +109,15 @@ export interface ChatMessage {
   content: string;
   files?: { name: string; summary?: string }[];
   timestamp: number;
+  // SQL 相关
+  sqlQuery?: {
+    sql: string;
+    executed?: boolean;
+    error?: string;
+    result?: any[];
+  };
+  // Schema 上下文
+  schemaContext?: string;
 }
 
 export type DashboardTemplateId = "sales" | "operations" | "finance" | "custom";

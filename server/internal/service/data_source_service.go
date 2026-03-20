@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"ai-bi-server/internal/model"
@@ -258,12 +259,182 @@ func (s *DataSourceService) fetchPostgreSQLSchema(ds *model.DataSource) (map[str
 // ExecuteQuery 执行 SQL 查询（只读）
 func (s *DataSourceService) ExecuteQuery(ds *model.DataSource, query string) ([]map[string]interface{}, error) {
 	// 安全检查：只允许 SELECT 查询
-	queryTrim := query
-	if len(queryTrim) > 6 {
-		queryTrim = queryTrim[:6]
+	queryTrim := strings.TrimSpace(query)
+	queryUpper := strings.ToUpper(queryTrim)
+
+	// 禁止危险操作
+	dangerous := []string{"INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE"}
+	for _, op := range dangerous {
+		if strings.Contains(queryUpper, op) {
+			return nil, fmt.Errorf("禁止执行 %s 操作，仅支持 SELECT 查询", op)
+		}
 	}
 
-	return nil, fmt.Errorf("查询功能开发中")
+	var dbConn *sql.DB
+	var err error
+
+	switch ds.Type {
+	case model.DataSourceMySQL:
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+			ds.Username, ds.Password, ds.Host, ds.Port, ds.Database)
+		dbConn, err = sql.Open("mysql", dsn)
+	case model.DataSourcePostgreSQL:
+		dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+			ds.Host, ds.Port, ds.Username, ds.Password, ds.Database)
+		dbConn, err = sql.Open("postgres", dsn)
+	default:
+		return nil, fmt.Errorf("不支持的数据源类型：%s", ds.Type)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("连接数据库失败：%w", err)
+	}
+	defer dbConn.Close()
+
+	// 设置超时
+	dbConn.SetConnMaxLifetime(time.Second * 30)
+	dbConn.SetMaxOpenConns(5)
+	dbConn.SetMaxIdleConns(2)
+
+	// 执行查询
+	rows, err := dbConn.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("执行查询失败：%w", err)
+	}
+	defer rows.Close()
+
+	// 获取列名
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	// 解析结果
+	results := make([]map[string]interface{}, 0)
+	for rows.Next() {
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range values {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			continue
+		}
+
+		row := make(map[string]interface{})
+		for i, col := range columns {
+			val := values[i]
+			if b, ok := val.([]byte); ok {
+				row[col] = string(b)
+			} else {
+				row[col] = val
+			}
+		}
+		results = append(results, row)
+	}
+
+	return results, nil
+}
+
+// GetSampleData 获取表样本数据（前 100 行）
+func (s *DataSourceService) GetSampleData(ds *model.DataSource, tableName string, limit int) ([]map[string]interface{}, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	var query string
+	switch ds.Type {
+	case model.DataSourceMySQL:
+		query = fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableName, limit)
+	case model.DataSourcePostgreSQL:
+		query = fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableName, limit)
+	}
+
+	return s.ExecuteQuery(ds, query)
+}
+
+// GetTableCount 获取表记录数
+func (s *DataSourceService) GetTableCount(ds *model.DataSource, tableName string) (int64, error) {
+	query := fmt.Sprintf("SELECT COUNT(*) as count FROM %s", tableName)
+	results, err := s.ExecuteQuery(ds, query)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(results) > 0 {
+		if count, ok := results[0]["count"].(int64); ok {
+			return count, nil
+		}
+		if count, ok := results[0]["count"].(float64); ok {
+			return int64(count), nil
+		}
+	}
+
+	return 0, nil
+}
+
+// GenerateSchemaContext 生成用于 AI 上下文的 Schema 描述
+func (s *DataSourceService) GenerateSchemaContext(ds *model.DataSource) (string, error) {
+	if ds.SchemaInfo == "" {
+		return "", fmt.Errorf("暂无 Schema 信息")
+	}
+
+	schema, err := DeserializeSchemaInfo(ds.SchemaInfo)
+	if err != nil {
+		return "", err
+	}
+
+	tables, _ := schema["tables"].([]interface{})
+	structure, _ := schema["structure"].(map[string]interface{})
+
+	var ctx strings.Builder
+	ctx.WriteString("## 数据库 Schema 信息\n\n")
+
+	for _, t := range tables {
+		tableName := t.(string)
+		ctx.WriteString(fmt.Sprintf("### 表：%s\n", tableName))
+
+		// 获取记录数
+		count, _ := s.GetTableCount(ds, tableName)
+		ctx.WriteString(fmt.Sprintf("记录数：%d\n\n", count))
+
+		// 获取表结构
+		if cols, ok := structure[tableName].([]interface{}); ok {
+			ctx.WriteString("| 字段 | 类型 | 可空 | 说明 |\n")
+			ctx.WriteString("|------|------|------|------|\n")
+
+			for _, col := range cols {
+				if colMap, ok := col.(map[string]interface{}); ok {
+					field := getString(colMap, "field")
+					dataType := getString(colMap, "type")
+					nullable := ""
+					if getBool(colMap, "nullable") {
+						nullable = "是"
+					}
+					ctx.WriteString(fmt.Sprintf("| %s | %s | %s | |\n", field, dataType, nullable))
+				}
+			}
+			ctx.WriteString("\n")
+		}
+	}
+
+	return ctx.String(), nil
+}
+
+// 辅助函数
+func getString(m map[string]interface{}, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+func getBool(m map[string]interface{}, key string) bool {
+	if v, ok := m[key].(bool); ok {
+		return v
+	}
+	return false
 }
 
 // SerializeSchemaInfo 序列化 schema 信息为 JSON

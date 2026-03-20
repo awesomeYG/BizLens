@@ -62,6 +62,7 @@ func main() {
 	alertHandler := handler.NewAlertHandler(alertService)
 	dataSourceService := service.NewDataSourceService(db)
 	dataSourceHandler := handler.NewDataSourceHandler(dataSourceService)
+	schemaHandler := handler.NewSchemaHandler(dataSourceService)
 
 	// 路由
 	mux := http.NewServeMux()
@@ -172,6 +173,26 @@ func main() {
 		// /api/tenants/{tenantId}/data-sources[/{dsId}[/{action}]]
 		if len(parts) >= 2 && parts[1] == "data-sources" {
 			switch {
+			// GET /api/tenants/{id}/data-sources/{dsId}/schema/context
+			case len(parts) == 5 && parts[3] == "schema" && parts[4] == "context" && r.Method == http.MethodGet:
+				schemaHandler.GetSchemaContext(w, r)
+				return
+
+			// POST /api/tenants/{id}/data-sources/{dsId}/query/repair
+			case len(parts) == 5 && parts[3] == "query" && parts[4] == "repair" && r.Method == http.MethodPost:
+				schemaHandler.RepairSQL(w, r)
+				return
+
+			// POST /api/tenants/{id}/data-sources/{dsId}/query
+			case len(parts) == 4 && parts[3] == "query" && r.Method == http.MethodPost:
+				schemaHandler.ExecuteSQL(w, r)
+				return
+
+			// POST /api/tenants/{id}/data-sources/{dsId}/sample
+			case len(parts) == 4 && parts[3] == "sample" && r.Method == http.MethodPost:
+				schemaHandler.GetSampleData(w, r)
+				return
+
 			// GET /api/tenants/{id}/data-sources/{dsId}/schema
 			case len(parts) == 4 && parts[2] != "" && parts[3] == "schema" && r.Method == http.MethodGet:
 				dataSourceHandler.GetDataSourceSchema(w, r)
