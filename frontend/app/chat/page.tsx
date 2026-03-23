@@ -21,7 +21,7 @@ export default function ChatPage() {
   if (!ready) return <div className="min-h-screen bg-zinc-950" />;
 
   return (
-    <div className="h-screen flex flex-col bg-zinc-950 relative overflow-hidden">
+    <div className="h-screen flex flex-col bg-zinc-950 relative overflow-auto">
       {/* 背景装饰 */}
       <div className="pointer-events-none absolute inset-0">
         {/* 左上光晕 */}

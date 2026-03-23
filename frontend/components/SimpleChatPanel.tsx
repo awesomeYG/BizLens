@@ -385,7 +385,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       </header>
 
       {/* ===== 消息区域 ===== */}
-      <div className="flex-1 min-h-0 overflow-y-auto pt-4">
+      <div className="flex-1 min-h-0 overflow-y-auto pt-6">
         <div className="max-w-3xl mx-auto px-4 py-6">
           {/* 欢迎页 */}
           {showWelcome && (
