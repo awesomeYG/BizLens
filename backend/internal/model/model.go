@@ -597,5 +597,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&DatasetAccessLog{},
 		// AI 问答分析
 		&AnalysisQueryLog{},
+		// 手动上传数据集
+		&UploadedDataset{},
+		&DatasetVersion{},
+		&DataQualityIssue{},
+		&DatasetAccessLog{},
 	)
 }

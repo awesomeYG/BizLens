@@ -506,7 +506,6 @@ func main() {
 					datasetHandler.GetQualityIssues(w, r, datasetID)
 				}
 				return
-
 			case len(parts) == 3 && parts[1] == "clean":
 				if parts[2] == "operations" && r.Method == http.MethodGet {
 					datasetHandler.GetCleanOperations(w, r, datasetID)
