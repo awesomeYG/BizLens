@@ -113,3 +113,10 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
 - Context: 用户在登录页错误提示优化时明确说明
 - Instructions:
   - 登录页中“用户不存在”和“密码错误”应统一为更安全的通用提示，避免暴露账号是否存在
+
+### 数据源入口偏好
+- Date: 2026-03-23
+- Context: 用户在统一 onboarding 与 data source 页面职责时明确说明
+- Instructions:
+  - 数据源填写应集中在 `frontend/app/data-sources/page.tsx`
+  - onboarding 页面保留初始化流程，不再承载数据源填写表单

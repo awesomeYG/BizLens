@@ -25,3 +25,5 @@ backend/ai_bi.db
 .vscode/
 .idea/
 
+# Runtime PID files
+*.pid

@@ -118,6 +118,25 @@ export function completeOnboarding(
   return next;
 }
 
+export function saveOnboardingDraft(draft: {
+  companyInfo?: CompanyInfo;
+  dataSources?: DataSourceConfig[];
+  companyProfile?: CompanyProfile;
+}): UserSession | null {
+  const current = getCurrentUser();
+  if (!current) return null;
+
+  const next: UserSession = {
+    ...current,
+    companyInfo: draft.companyInfo ?? current.companyInfo,
+    dataSources: draft.dataSources ?? current.dataSources,
+    companyProfile: draft.companyProfile ?? current.companyProfile,
+  };
+
+  saveCurrentUser(next);
+  return next;
+}
+
 export function logoutUser(): void {
   if (globalThis.window === undefined) return;
   
