@@ -54,12 +54,14 @@ BizLens 开发环境启动脚本
   --clean         清理缓存并重新启动
   --stop          停止所有服务
   --restart       重启所有服务
+  --free-ports    释放被占用的端口（3000 和 3001）
   --help          显示此帮助信息
 
 快速命令:
   ./dev.sh                    # 默认启动（SQLite 模式）
   ./dev.sh --postgres         # 使用 PostgreSQL
   ./dev.sh --stop             # 停止所有服务
+  ./dev.sh --free-ports       # 仅释放被占用的端口
   Ctrl+C                      # 停止当前会话的所有服务
 
 环境变量:
@@ -176,6 +178,22 @@ stop_postgres() {
     log_success "PostgreSQL 已停止"
 }
 
+# 检查端口是否被占用并清理
+check_and_free_port() {
+    local port=$1
+    local service_name=$2
+    
+    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1 ; then
+        log_warning "$service_name 端口 $port 被占用，正在清理..."
+        local pid=$(lsof -ti:$port 2>/dev/null | head -1)
+        if [ -n "$pid" ]; then
+            kill -9 $pid 2>/dev/null || true
+            sleep 1
+            log_success "已清理占用端口 $port 的进程 (PID: $pid)"
+        fi
+    fi
+}
+
 # 启动 Go 后端
 start_backend() {
     log_info "启动 Go 后端..."
@@ -203,6 +221,9 @@ start_backend() {
         export DB_NAME="${DB_NAME:-ai_bi}"
         export DB_SSLMODE="${DB_SSLMODE:-disable}"
     fi
+    
+    # 检查并释放端口
+    check_and_free_port $SERVER_PORT "后端服务"
     
     # 启动后端服务
     log_info "后端服务启动中..."
@@ -234,6 +255,8 @@ stop_backend() {
         pkill -f "go run cmd/main.go" 2>/dev/null || true
         log_success "Go 后端已停止"
     fi
+    # 确保端口被释放
+    sleep 1
 }
 
 # 启动 Next.js 前端
@@ -247,6 +270,9 @@ start_frontend() {
         log_info "安装前端依赖（这可能需要几分钟）..."
         npm install
     fi
+    
+    # 检查并释放端口
+    check_and_free_port 3000 "前端服务"
     
     # 启动前端服务
     log_info "前端服务启动中..."
@@ -278,6 +304,8 @@ stop_frontend() {
         pkill -f "next dev" 2>/dev/null || true
         log_success "Next.js 前端已停止"
     fi
+    # 确保端口被释放
+    sleep 1
 }
 
 # 停止所有服务
@@ -294,6 +322,13 @@ stop_all() {
     # 清理 PID 文件
     rm -f "$PROJECT_ROOT/.backend.pid" "$PROJECT_ROOT/.frontend.pid"
     
+    # 额外清理：杀掉可能残留的进程
+    pkill -f "go run cmd/main.go" 2>/dev/null || true
+    pkill -f "next dev" 2>/dev/null || true
+    
+    # 等待端口释放
+    sleep 2
+    
     log_success "所有服务已停止"
 }
 
@@ -304,6 +339,9 @@ start_all() {
     echo "  BizLens 开发环境"
     echo "=========================================="
     echo ""
+    
+    # 先检查依赖
+    check_dependencies
     
     # 选择数据库模式
     if [ "$USE_POSTGRES" = true ]; then
@@ -355,13 +393,11 @@ case "${1:-}" in
         ;;
     
     --stop)
-        check_dependencies
         stop_all
         exit 0
         ;;
     
     --clean)
-        check_dependencies
         clean_cache
         stop_all
         start_all
@@ -369,9 +405,16 @@ case "${1:-}" in
         ;;
     
     --restart)
-        check_dependencies
         stop_all
         start_all
+        exit 0
+        ;;
+    
+    --free-ports)
+        log_info "释放被占用的端口..."
+        check_and_free_port 3000 "前端服务"
+        check_and_free_port 3001 "后端服务"
+        log_success "端口已释放"
         exit 0
         ;;
     
@@ -395,5 +438,4 @@ case "${1:-}" in
 esac
 
 # 启动服务
-check_dependencies
 start_all
