@@ -3,6 +3,7 @@ package main
 import (
 	"ai-bi-server/internal/config"
 	"ai-bi-server/internal/handler"
+	"ai-bi-server/internal/middleware"
 	"ai-bi-server/internal/model"
 	"ai-bi-server/internal/service"
 	"fmt"
@@ -39,7 +40,7 @@ func main() {
 
 	if cfg.UseSQLite {
 		log.Println("使用 SQLite 数据库...")
-		db, err = gorm.Open(sqlite.Open("/workspace/server/ai_bi.db"), &gorm.Config{})
+		db, err = gorm.Open(sqlite.Open("file:/tmp/ai_bi.db?cache=shared"), &gorm.Config{})
 	} else {
 		log.Println("使用 PostgreSQL 数据库...")
 		db, err = gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
@@ -86,6 +87,24 @@ func main() {
 	// semanticQueryService := service.NewSemanticQueryService(db, metricService, dimensionService, relationshipService)
 	metricHandler := handler.NewMetricHandler(metricService, dimensionService, relationshipService)
 
+	// 大屏模板服务
+	dashboardTemplateService := service.NewDashboardTemplateService(db)
+	dashboardTemplateHandler := handler.NewDashboardTemplateHandler(dashboardTemplateService)
+
+	// 初始化系统预置模板
+	if err := dashboardTemplateService.InitSystemTemplates(); err != nil {
+		log.Printf("警告：系统模板初始化失败：%v", err)
+	} else {
+		log.Println("系统模板初始化完成")
+	}
+
+	// 认证服务
+	authService, err := service.NewAuthService(db, cfg)
+	if err != nil {
+		log.Fatalf("创建认证服务失败：%v", err)
+	}
+	authHandler := handler.NewAuthHandler(authService)
+
 	// 路由
 	mux := http.NewServeMux()
 
@@ -94,6 +113,51 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	// 认证路由：/api/auth/[register|login|logout|refresh|me|change-password]
+	mux.HandleFunc("/api/auth/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/auth/")
+
+		switch {
+		// POST /api/auth/register
+		case path == "register" && r.Method == http.MethodPost:
+			authHandler.Register(w, r)
+			return
+
+		// POST /api/auth/login
+		case path == "login" && r.Method == http.MethodPost:
+			authHandler.Login(w, r)
+			return
+
+		// POST /api/auth/logout (需要认证)
+		case path == "logout" && r.Method == http.MethodPost:
+			middleware.Auth(authService)(http.HandlerFunc(authHandler.Logout)).ServeHTTP(w, r)
+			return
+
+		// POST /api/auth/refresh
+		case path == "refresh" && r.Method == http.MethodPost:
+			authHandler.RefreshToken(w, r)
+			return
+
+		// GET /api/auth/me (需要认证)
+		case path == "me" && r.Method == http.MethodGet:
+			middleware.Auth(authService)(http.HandlerFunc(authHandler.GetCurrentUser)).ServeHTTP(w, r)
+			return
+
+		// PUT /api/auth/me (需要认证)
+		case path == "me" && r.Method == http.MethodPut:
+			middleware.Auth(authService)(http.HandlerFunc(authHandler.UpdateUser)).ServeHTTP(w, r)
+			return
+
+		// POST /api/auth/change-password (需要认证)
+		case path == "change-password" && r.Method == http.MethodPost:
+			middleware.Auth(authService)(http.HandlerFunc(authHandler.ChangePassword)).ServeHTTP(w, r)
+			return
+
+		default:
+			http.NotFound(w, r)
+		}
 	})
 
 	// IM 配置路由：/api/tenants/{tenantId}/im-configs[/{configId}[/test]]
@@ -359,6 +423,18 @@ func main() {
 				metricHandler.AutoDiscoverRelationships(w, r)
 				return
 			}
+		}
+
+		// /api/tenants/{tenantId}/dashboards/templates[/{id}[/generate]]
+		if len(parts) >= 3 && parts[1] == "dashboards" && parts[2] == "templates" {
+			dashboardTemplateHandler.HandleTemplates(w, r)
+			return
+		}
+
+		// /api/tenants/{tenantId}/dashboards/instances[/{id}[/sections[/{sectionId}]]]
+		if len(parts) >= 3 && parts[1] == "dashboards" && parts[2] == "instances" {
+			dashboardTemplateHandler.HandleInstances(w, r)
+			return
 		}
 
 		http.NotFound(w, r)

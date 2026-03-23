@@ -18,14 +18,18 @@ type Tenant struct {
 
 // User 用户
 type User struct {
-	ID        string         `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
-	TenantID  string         `gorm:"type:varchar(50);not null;index" json:"tenantId"`
-	Name      string         `gorm:"size:100;not null" json:"name"`
-	Email     string         `gorm:"size:200;not null;uniqueIndex" json:"email"`
-	Role      string         `gorm:"size:50;default:'member'" json:"role"` // owner / admin / member
-	CreatedAt time.Time      `json:"createdAt"`
-	UpdatedAt time.Time      `json:"updatedAt"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	ID            string         `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID      string         `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	Name          string         `gorm:"size:100;not null" json:"name"`
+	Email         string         `gorm:"size:200;not null;uniqueIndex" json:"email"`
+	PasswordHash  string         `gorm:"size:500;not null" json:"-"`           // 密码哈希
+	Role          string         `gorm:"size:50;default:'member'" json:"role"` // owner / admin / member
+	LastLoginAt   *time.Time     `json:"lastLoginAt,omitempty"`                // 最后登录时间
+	LoginAttempts int            `gorm:"default:0" json:"-"`                   // 登录失败次数
+	LockedUntil   *time.Time     `json:"lockedUntil,omitempty"`                // 锁定截止时间
+	CreatedAt     time.Time      `json:"createdAt"`
+	UpdatedAt     time.Time      `json:"updatedAt"`
+	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
 }
@@ -403,6 +407,146 @@ type Relationship struct {
 	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
 }
 
+// DashboardSectionType 大屏区块类型
+type DashboardSectionType string
+
+const (
+	SectionTypeKPI     DashboardSectionType = "kpi"     // KPI 指标卡
+	SectionTypeTrend   DashboardSectionType = "trend"   // 趋势图
+	SectionTypeRanking DashboardSectionType = "ranking" // 排行榜
+	SectionTypeMap     DashboardSectionType = "map"     // 地图
+	SectionTypePie     DashboardSectionType = "pie"     // 饼图
+	SectionTypeBar     DashboardSectionType = "bar"     // 柱状图
+	SectionTypeLine    DashboardSectionType = "line"    // 折线图
+	SectionTypeArea    DashboardSectionType = "area"    // 面积图
+	SectionTypeFunnel  DashboardSectionType = "funnel"  // 漏斗图
+	SectionTypeTable   DashboardSectionType = "table"   // 明细表
+	SectionTypeInsight DashboardSectionType = "insight" // AI 洞察
+	SectionTypeAlert   DashboardSectionType = "alert"   // 告警
+	SectionTypeCustom  DashboardSectionType = "custom"  // 自定义
+)
+
+// DashboardSection 大屏区块配置
+type DashboardSection struct {
+	ID          string               `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID    string               `gorm:"type:varchar(50);index" json:"tenantId"`   // 可为空，系统模板的区块无 tenantID
+	TemplateID  string               `gorm:"type:varchar(50);index" json:"templateId"` // 关联的模板 ID
+	InstanceID  string               `gorm:"type:varchar(50);index" json:"instanceId"` // 关联的实例 ID
+	Type        DashboardSectionType `gorm:"size:50;not null" json:"type"`             // kpi/trend/ranking/map/pie/bar/line/area/funnel/table/insight/alert/custom
+	Title       string               `gorm:"size:200" json:"title"`                    // 区块标题
+	Metrics     string               `gorm:"type:text" json:"metrics"`                 // 关联的指标（JSON 数组）
+	Dimensions  string               `gorm:"type:text" json:"dimensions"`              // 关联的维度（JSON 数组）
+	ChartConfig string               `gorm:"type:text" json:"chartConfig"`             // 图表配置（JSON 对象）
+	// 布局配置
+	Row      int `gorm:"default:0" json:"row"`      // 所在行（从 0 开始）
+	Col      int `gorm:"default:0" json:"col"`      // 所在列（从 0 开始）
+	Width    int `gorm:"default:1" json:"width"`    // 宽度（占几列，默认 1）
+	Height   int `gorm:"default:1" json:"height"`   // 高度（占几行，默认 1）
+	Priority int `gorm:"default:0" json:"priority"` // 优先级（数字越小越优先）
+	// 数据配置
+	TimeGrain  string `gorm:"size:50" json:"timeGrain"`    // 时间粒度（hour/day/week/month）
+	TopN       int    `json:"topN"`                        // 排行 TopN
+	Comparison string `gorm:"size:50" json:"comparison"`   // 对比维度（yesterday/lastWeek/lastMonth）
+	SplitBy    string `gorm:"size:100" json:"splitBy"`     // 拆分维度
+	FilterExpr string `gorm:"type:text" json:"filterExpr"` // 过滤条件表达式
+	// AI 配置
+	AutoGenerate bool `gorm:"default:false" json:"autoGenerate"` // 是否 AI 自动生成
+	// 元数据
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// DashboardTemplate 大屏模板（故事模板）
+type DashboardTemplate struct {
+	ID          string `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID    string `gorm:"type:varchar(50);index" json:"tenantId"` // 为空表示系统预置模板
+	Name        string `gorm:"size:200;not null" json:"name"`          // 模板名称（如"大促作战大屏"）
+	Description string `gorm:"type:text" json:"description"`           // 模板描述
+	Category    string `gorm:"size:100;not null" json:"category"`      // 分类（如"sales"/"operations"/"finance"）
+	Icon        string `gorm:"size:100" json:"icon"`                   // 图标
+	IsSystem    bool   `gorm:"default:false" json:"isSystem"`          // 是否系统预置
+	IsPublic    bool   `gorm:"default:false" json:"isPublic"`          // 是否公开
+	Tags        string `gorm:"size:500" json:"tags"`                   // 标签（JSON 数组）
+	// 布局配置
+	LayoutConfig string `gorm:"type:text" json:"layoutConfig"` // 整体布局配置（JSON）
+	// 配色配置
+	ColorPalette string `gorm:"type:text" json:"colorPalette"` // 配色方案（JSON）
+	BrandColor   string `gorm:"size:50" json:"brandColor"`     // 品牌主色
+	Industry     string `gorm:"size:100" json:"industry"`      // 适用行业
+	ColorTone    string `gorm:"size:50" json:"colorTone"`      // 色调（professional/vibrant/minimal）
+	// 使用统计
+	UsageCount int `gorm:"default:0" json:"usageCount"` // 使用次数
+	// 元数据
+	CreatedBy string         `gorm:"type:varchar(50)" json:"createdBy"`
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+
+	Tenant   Tenant             `gorm:"foreignKey:TenantID" json:"-"`
+	Sections []DashboardSection `gorm:"foreignKey:TemplateID" json:"sections,omitempty"`
+}
+
+// DashboardInstance 大屏实例（用户基于模板创建的实例）
+type DashboardInstance struct {
+	ID           string `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID     string `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	TemplateID   string `gorm:"type:varchar(50);index" json:"templateId"` // 关联的模板 ID
+	Name         string `gorm:"size:200;not null" json:"name"`            // 实例名称
+	Description  string `gorm:"size:500" json:"description"`
+	IsPublic     bool   `gorm:"default:false" json:"isPublic"`        // 是否公开
+	LayoutConfig string `gorm:"type:text" json:"layoutConfig"`        // 自定义布局配置
+	ColorPalette string `gorm:"type:text" json:"colorPalette"`        // 自定义配色
+	DataSourceID string `gorm:"type:varchar(50)" json:"dataSourceId"` // 数据源 ID
+	// 刷新配置
+	RefreshInterval int        `gorm:"default:300" json:"refreshInterval"` // 刷新间隔（秒）
+	AutoRefresh     bool       `gorm:"default:true" json:"autoRefresh"`    // 是否自动刷新
+	LastRefreshedAt *time.Time `json:"lastRefreshedAt"`
+	// 使用统计
+	ViewCount int `gorm:"default:0" json:"viewCount"` // 查看次数
+	// 元数据
+	CreatedBy string         `gorm:"type:varchar(50)" json:"createdBy"`
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+
+	Tenant   Tenant             `gorm:"foreignKey:TenantID" json:"-"`
+	Template DashboardTemplate  `gorm:"foreignKey:TemplateID" json:"template,omitempty"`
+	Sections []DashboardSection `gorm:"foreignKey:InstanceID" json:"sections,omitempty"`
+}
+
+// RefreshToken 刷新令牌
+type RefreshToken struct {
+	ID        string     `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	UserID    string     `gorm:"type:varchar(50);not null;index" json:"userId"`
+	Token     string     `gorm:"size:500;not null;uniqueIndex" json:"-"` // 刷新令牌
+	ExpiresAt time.Time  `json:"expiresAt"`                              // 过期时间
+	Revoked   bool       `gorm:"default:false" json:"-"`                 // 是否已吊销
+	RevokedAt *time.Time `json:"revokedAt,omitempty"`                    // 吊销时间
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+
+	User User `gorm:"foreignKey:UserID" json:"-"`
+}
+
+// AuthProvider 第三方认证提供商（预留）
+type AuthProvider struct {
+	ID           string         `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID     string         `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	UserID       string         `gorm:"type:varchar(50);not null;index" json:"userId"`
+	ProviderType string         `gorm:"size:50;not null" json:"providerType"`            // google / github / wechat / dingtalk
+	ProviderID   string         `gorm:"size:200;not null;uniqueIndex" json:"providerId"` // 第三方平台的用户 ID
+	AccessToken  string         `gorm:"size:1000" json:"-"`                              // 第三方访问令牌
+	RefreshToken string         `gorm:"size:1000" json:"-"`                              // 第三方刷新令牌
+	ExpiresAt    *time.Time     `json:"expiresAt,omitempty"`                             // 令牌过期时间
+	CreatedAt    time.Time      `json:"createdAt"`
+	UpdatedAt    time.Time      `json:"updatedAt"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+
+	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
+	User   User   `gorm:"foreignKey:UserID" json:"-"`
+}
+
 // AutoMigrate 自动迁移所有表
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
@@ -419,5 +563,12 @@ func AutoMigrate(db *gorm.DB) error {
 		&MetricLineage{},
 		&Dimension{},
 		&Relationship{},
+		// 大屏模板和实例
+		&DashboardTemplate{},
+		&DashboardSection{},
+		&DashboardInstance{},
+		// 认证相关
+		&RefreshToken{},
+		&AuthProvider{},
 	)
 }

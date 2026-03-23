@@ -1,3 +1,7 @@
+"use client";
+
+import FloatingSettingsButton from "@/components/FloatingSettingsButton";
+
 export default function MainLayout({
   children,
 }: {
@@ -6,6 +10,7 @@ export default function MainLayout({
   return (
     <div className="min-h-screen bg-gray-50">
       {children}
+      <FloatingSettingsButton />
     </div>
   )
 }

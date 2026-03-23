@@ -5,40 +5,91 @@ import type {
   CompanyProfile,
   DataSourceConfig,
   UserSession,
+  UserSessionWithAuth,
+  User,
 } from "./types";
+import {
+  getAccessToken,
+  getRefreshToken,
+  isTokenExpired,
+  clearTokens,
+  getCurrentUser as fetchCurrentUser,
+} from "./auth/api";
 
 const USER_STORAGE_KEY = "ai-bi-user-session";
 
-export function getCurrentUser(): UserSession | null {
+export function getCurrentUser(): UserSessionWithAuth | null {
   if (globalThis.window === undefined) return null;
-  try {
-    const raw = localStorage.getItem(USER_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as UserSession) : null;
-  } catch {
-    return null;
+  
+  // 首先检查是否有有效的 Token
+  const accessToken = getAccessToken();
+  const refreshToken = getRefreshToken();
+  const tokenExpired = isTokenExpired();
+  
+  if (accessToken && refreshToken && !tokenExpired) {
+    // 有有效 Token，尝试从 localStorage 加载用户信息
+    try {
+      const raw = localStorage.getItem(USER_STORAGE_KEY);
+      const session = raw ? (JSON.parse(raw) as UserSessionWithAuth) : null;
+      
+      // 更新 Token 信息
+      if (session) {
+        session.accessToken = accessToken;
+        session.refreshToken = refreshToken;
+        session.tokenExpiresAt = parseInt(localStorage.getItem("auth_token_expires_at") || "0", 10);
+      }
+      
+      return session;
+    } catch {
+      return null;
+    }
+  }
+  
+  // Token 无效或过期
+  return null;
+}
+
+export function saveCurrentUser(user: UserSessionWithAuth): void {
+  if (globalThis.window === undefined) return;
+  
+  // 如果用户带有 Token 信息，保存到 auth storage
+  if (user.accessToken || user.refreshToken) {
+    // Token 已经由 api.ts 管理，这里只保存用户基本信息
+    const session: UserSession = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      createdAt: user.createdAt,
+      isOnboarded: user.isOnboarded,
+      companyInfo: user.companyInfo,
+      dataSources: user.dataSources,
+      companyProfile: user.companyProfile,
+    };
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(session));
+  } else {
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
   }
 }
 
-export function saveCurrentUser(user: UserSession): void {
-  if (globalThis.window === undefined) return;
-  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-}
-
-export function loginUser(name: string, email: string): UserSession {
-  const existing = getCurrentUser();
-  const now = Date.now();
-  const user: UserSession = {
-    id: existing?.id ?? crypto.randomUUID(),
-    name,
-    email,
-    createdAt: existing?.createdAt ?? now,
-    isOnboarded: existing?.isOnboarded ?? false,
-    companyInfo: existing?.companyInfo,
-    dataSources: existing?.dataSources,
-    companyProfile: existing?.companyProfile,
-  };
-  saveCurrentUser(user);
-  return user;
+export async function loginUser(email: string, password: string): Promise<UserSessionWithAuth | null> {
+  try {
+    const { login } = await import("./auth/api");
+    const response = await login({ email, password });
+    
+    const user: UserSessionWithAuth = {
+      id: response.user.id,
+      name: response.user.name,
+      email: response.user.email,
+      createdAt: new Date(response.user.createdAt).getTime(),
+      isOnboarded: false, // 默认未 onboarding
+    };
+    
+    saveCurrentUser(user);
+    return user;
+  } catch (error) {
+    console.error("登录失败:", error);
+    return null;
+  }
 }
 
 export function completeOnboarding(
@@ -61,7 +112,49 @@ export function completeOnboarding(
 
 export function logoutUser(): void {
   if (globalThis.window === undefined) return;
+  
+  // 清除 Token
+  clearTokens();
+  
+  // 清除用户会话
   localStorage.removeItem(USER_STORAGE_KEY);
+}
+
+/**
+ * 检查用户是否已认证
+ */
+export function isAuthenticated(): boolean {
+  const user = getCurrentUser();
+  return user !== null && !isTokenExpired();
+}
+
+/**
+ * 从服务器同步当前用户信息
+ */
+export async function syncCurrentUser(): Promise<UserSessionWithAuth | null> {
+  if (!isAuthenticated()) {
+    return null;
+  }
+  
+  try {
+    const user = await fetchCurrentUser();
+    const session: UserSessionWithAuth = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      createdAt: new Date(user.createdAt).getTime(),
+      isOnboarded: false,
+      accessToken: getAccessToken() || undefined,
+      refreshToken: getRefreshToken() || undefined,
+    };
+    
+    saveCurrentUser(session);
+    return session;
+  } catch (error) {
+    console.error("同步用户信息失败:", error);
+    logoutUser();
+    return null;
+  }
 }
 
 /**

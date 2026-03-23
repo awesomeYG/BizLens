@@ -120,11 +120,140 @@ export interface ChatMessage {
   schemaContext?: string;
 }
 
-export type DashboardTemplateId = "sales" | "operations" | "finance" | "custom";
+export type DashboardTemplateId = "sales" | "operations" | "finance" | "promotion" | "custom";
 
 export interface DashboardTemplate {
   id: DashboardTemplateId;
   name: string;
   description: string;
   layout: string;
+  category: string;
+  icon?: string;
+  isSystem?: boolean;
+  tags?: string[];
+  usageCount?: number;
+}
+
+// 大屏区块类型
+export type DashboardSectionType =
+  | "kpi"
+  | "trend"
+  | "ranking"
+  | "map"
+  | "pie"
+  | "bar"
+  | "line"
+  | "area"
+  | "funnel"
+  | "table"
+  | "insight"
+  | "alert"
+  | "custom";
+
+// 大屏区块配置
+export interface DashboardSection {
+  id: string;
+  type: DashboardSectionType;
+  title?: string;
+  metrics?: string[];
+  dimensions?: string[];
+  chartConfig?: any;
+  // 布局配置
+  row?: number;
+  col?: number;
+  width?: number;
+  height?: number;
+  priority?: number;
+  // 数据配置
+  timeGrain?: string;
+  topN?: number;
+  comparison?: string;
+  splitBy?: string;
+  filterExpr?: string;
+  // AI 配置
+  autoGenerate?: boolean;
+}
+
+// 布局配置
+export interface LayoutConfig {
+  columns: number;
+  rows: "auto" | number;
+  highlight?: string;
+  responsive: boolean;
+}
+
+// 配色方案
+export interface ColorPalette {
+  primary: string;
+  secondary: string;
+  alert: {
+    up: string;
+    down: string;
+  };
+}
+
+// 模板配置（用于自动生成）
+export interface StoryTemplate {
+  title: string;
+  sections: Array<{
+    type: DashboardSectionType;
+    metrics?: string[];
+    layout?: string;
+    timeGrain?: string;
+    chart?: string;
+    topN?: number;
+    stages?: string[];
+    threshold?: string;
+  }[]>;
+}
+
+// ==================== 认证相关类型 ====================
+
+export interface User {
+  id: string;
+  tenantId: string;
+  name: string;
+  email: string;
+  role: "owner" | "admin" | "member";
+  lastLoginAt?: string;
+  createdAt: string;
+}
+
+export interface Tokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number; // 秒
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  tenantId: string;
+  email: string;
+  password: string;
+  name: string;
+}
+
+export interface RefreshTokenRequest {
+  refreshToken: string;
+}
+
+export interface AuthResponse {
+  user: User;
+  tokens: Tokens;
+}
+
+export interface AuthError {
+  code: string;
+  message: string;
+}
+
+// 更新 UserSession 以支持 Token
+export interface UserSessionWithAuth extends UserSession {
+  accessToken?: string;
+  refreshToken?: string;
+  tokenExpiresAt?: number;
 }

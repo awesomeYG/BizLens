@@ -14,6 +14,11 @@ type Config struct {
 	DBName     string
 	DBSSLMode  string
 	UseSQLite  bool
+	// 认证相关
+	JWTSecret          string
+	Env                string // development / production
+	AccessTokenExpire  int    // Access Token 过期时间（分钟）
+	RefreshTokenExpire int    // Refresh Token 过期时间（天）
 }
 
 func Load() *Config {
@@ -26,6 +31,11 @@ func Load() *Config {
 		DBName:     getEnv("DB_NAME", "ai_bi"),
 		DBSSLMode:  getEnv("DB_SSLMODE", "disable"),
 		UseSQLite:  getEnv("USE_SQLITE", "true") == "true",
+		// 认证相关
+		JWTSecret:          getEnv("JWT_SECRET", "change-this-secret-in-production"),
+		Env:                getEnv("ENV", "development"),
+		AccessTokenExpire:  getEnvInt("ACCESS_TOKEN_EXPIRE", 30), // 默认 30 分钟
+		RefreshTokenExpire: getEnvInt("REFRESH_TOKEN_EXPIRE", 7), // 默认 7 天
 	}
 }
 
@@ -42,6 +52,17 @@ func (c *Config) DSN() string {
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+// getEnvInt 获取整数环境变量
+func getEnvInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		var val int
+		if _, err := fmt.Sscanf(v, "%d", &val); err == nil {
+			return val
+		}
 	}
 	return fallback
 }
