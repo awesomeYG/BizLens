@@ -73,6 +73,12 @@ export default function HomePage() {
           >
             登录
           </button>
+          <button
+            onClick={() => router.push("/auth/register")}
+            className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors"
+          >
+            注册
+          </button>
         </div>
       </nav>
 
@@ -208,14 +214,27 @@ export default function HomePage() {
             </button>
           </form>
 
-          <div className="mt-4 text-center">
+          <div className="mt-4 text-center space-y-2">
             <button
               type="button"
               onClick={handleQuickStart}
-              className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+              className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors block w-full"
             >
               🚀 快速测试（使用演示数据）
             </button>
+            <div className="text-sm text-zinc-600">
+              还没有账号？
+              <button
+                type="button"
+                onClick={() => {
+                  (document.getElementById("login-modal") as HTMLDialogElement)?.close();
+                  router.push("/auth/register");
+                }}
+                className="text-indigo-400 hover:text-indigo-300 ml-1"
+              >
+                立即注册
+              </button>
+            </div>
           </div>
         </div>
       </dialog>
