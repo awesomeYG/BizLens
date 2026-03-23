@@ -18,11 +18,16 @@ export default function HomePage() {
     setHydrated(true);
   }, [router]);
 
-  const handleQuickStart = () => {
-    // 快速登录，使用 mock 数据
-    loginUser("演示用户", "demo@example.com");
-    localStorage.setItem("mock_user", "true");
-    router.push("/chat");
+  const handleQuickStart = async () => {
+    try {
+      // 快速登录，使用测试账号
+      await loginUser("test@example.com", "password123");
+      localStorage.setItem("mock_user", "true");
+      router.push("/chat");
+    } catch {
+      // 登录失败时跳转到登录页
+      router.push("/auth/login");
+    }
   };
 
   if (!hydrated) {

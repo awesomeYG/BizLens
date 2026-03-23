@@ -309,9 +309,9 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
   const showWelcome = messages.length === 1;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* ===== 顶部导航 ===== */}
-      <header className="relative px-5 py-3 border-b border-zinc-800/40 bg-zinc-900/60 backdrop-blur-xl">
+      <header className="relative sticky top-0 z-20 shrink-0 px-5 py-3 border-b border-zinc-800/40 bg-zinc-900/60 backdrop-blur-xl">
         {/* 顶栏底部微光线 */}
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent" />
 
@@ -385,7 +385,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       </header>
 
       {/* ===== 消息区域 ===== */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto pt-4">
         <div className="max-w-3xl mx-auto px-4 py-6">
           {/* 欢迎页 */}
           {showWelcome && (
