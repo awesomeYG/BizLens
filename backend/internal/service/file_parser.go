@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/xuri/excelize/v2"
 )
 
 // ParseResult 解析结果
@@ -94,9 +96,61 @@ func (p *FileParser) Preview(filePath, fileFormat string, limit, offset int) (*P
 
 // parseExcel 解析 Excel 文件
 func (p *FileParser) parseExcel(filePath string) (*ParseResult, error) {
-	// TODO: 实现 Excel 解析，需要安装 excelize 库
-	// 暂时返回错误提示
-	return nil, fmt.Errorf("Excel 解析功能需要安装依赖，请先运行：go get github.com/xuri/excelize/v2")
+	f, err := excelize.OpenFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("打开 Excel 文件失败：%w", err)
+	}
+	defer f.Close()
+
+	// 获取第一个工作表
+	sheetName := f.GetSheetName(0)
+	if sheetName == "" {
+		return nil, fmt.Errorf("Excel 文件没有工作表")
+	}
+
+	rows, err := f.GetRows(sheetName)
+	if err != nil {
+		return nil, fmt.Errorf("读取工作表失败：%w", err)
+	}
+
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("Excel 文件为空")
+	}
+
+	// 解析表头
+	headers := rows[0]
+
+	// 解析数据
+	data := make([][]interface{}, 0)
+	columnValues := make(map[int][]string)
+
+	for i := 1; i < len(rows); i++ {
+		row := rows[i]
+		rowData := make([]interface{}, len(headers))
+		for j := 0; j < len(headers); j++ {
+			if j < len(row) {
+				rowData[j] = row[j]
+				columnValues[j] = append(columnValues[j], row[j])
+			} else {
+				rowData[j] = ""
+				columnValues[j] = append(columnValues[j], "")
+			}
+		}
+		data = append(data, rowData)
+	}
+
+	// 推断字段类型
+	fields := make([]FieldSchema, len(headers))
+	for i, header := range headers {
+		fields[i] = p.inferField(header, columnValues[i])
+	}
+
+	return &ParseResult{
+		RowCount:    len(data),
+		ColumnCount: len(headers),
+		Schema:      &DataSchema{Fields: fields},
+		Data:        data,
+	}, nil
 }
 
 // parseCSV 解析 CSV 文件

@@ -492,6 +492,28 @@ func main() {
 					datasetHandler.GetQualityIssues(w, r, datasetID)
 				}
 				return
+
+			case len(parts) == 3 && parts[1] == "clean":
+				if parts[2] == "operations" && r.Method == http.MethodGet {
+					datasetHandler.GetCleanOperations(w, r, datasetID)
+					return
+				}
+				if r.Method == http.MethodPost {
+					datasetHandler.ExecuteClean(w, r, datasetID)
+					return
+				}
+
+			case len(parts) == 2 && parts[1] == "sensitive":
+				if r.Method == http.MethodGet {
+					datasetHandler.DetectSensitiveData(w, r, datasetID)
+					return
+				}
+
+			case len(parts) == 2 && parts[1] == "mask":
+				if r.Method == http.MethodPost {
+					datasetHandler.MaskSensitiveData(w, r, datasetID)
+					return
+				}
 			}
 		}
 

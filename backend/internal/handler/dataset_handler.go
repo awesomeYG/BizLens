@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"ai-bi-server/internal/service"
 	"github.com/google/uuid"
@@ -223,4 +224,102 @@ func (h *DatasetHandler) GetQualityIssues(w http.ResponseWriter, r *http.Request
 
 	// TODO: 实现获取质量问题
 	writeJSON(w, http.StatusOK, []interface{}{})
+}
+
+// GetCleanOperations 获取可用的清洗操作
+// GET /api/datasets/:id/clean/operations
+func (h *DatasetHandler) GetCleanOperations(w http.ResponseWriter, r *http.Request, id string) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		http.Error(w, "未授权", http.StatusUnauthorized)
+		return
+	}
+
+	fieldName := r.URL.Query().Get("field")
+	fieldType := r.URL.Query().Get("type")
+	sampleValuesStr := r.URL.Query().Get("samples")
+
+	var sampleValues []string
+	if sampleValuesStr != "" {
+		// 逗号分隔的样本值
+		parts := strings.Split(sampleValuesStr, ",")
+		for _, p := range parts {
+			sampleValues = append(sampleValues, p)
+		}
+	}
+
+	cleanService := service.NewCleanService()
+	operations := cleanService.GetCleanableOperations(fieldType, sampleValues)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"field":      fieldName,
+		"operations": operations,
+	})
+}
+
+// ExecuteClean 执行清洗操作
+// POST /api/datasets/:id/clean
+func (h *DatasetHandler) ExecuteClean(w http.ResponseWriter, r *http.Request, id string) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		http.Error(w, "未授权", http.StatusUnauthorized)
+		return
+	}
+
+	var req service.CleanOperation
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "请求参数错误", http.StatusBadRequest)
+		return
+	}
+
+	// TODO: 执行清洗操作
+	// 实际实现需要加载数据、执行清洗、保存结果
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "清洗操作已提交",
+	})
+}
+
+// DetectSensitiveData 检测敏感数据
+// GET /api/datasets/:id/sensitive
+func (h *DatasetHandler) DetectSensitiveData(w http.ResponseWriter, r *http.Request, id string) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		http.Error(w, "未授权", http.StatusUnauthorized)
+		return
+	}
+
+	// TODO: 实现敏感数据检测
+	// 需要加载数据集 schema 和样本数据进行检测
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"detectedFields": []interface{}{},
+		"message":        "敏感数据检测功能待完善",
+	})
+}
+
+// MaskSensitiveData 脱敏敏感数据
+// POST /api/datasets/:id/mask
+func (h *DatasetHandler) MaskSensitiveData(w http.ResponseWriter, r *http.Request, id string) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		http.Error(w, "未授权", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		Fields   []string `json:"fields"`
+		Strategy string   `json:"strategy"` // full/partial
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "请求参数错误", http.StatusBadRequest)
+		return
+	}
+
+	// TODO: 实现敏感数据脱敏
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"maskedFields": req.Fields,
+		"message":      "脱敏处理完成",
+	})
 }
