@@ -13,6 +13,7 @@ import {
   getRefreshToken,
   isTokenExpired,
   clearTokens,
+  saveTokens,
   getCurrentUser as fetchCurrentUser,
 } from "./auth/api";
 
@@ -75,6 +76,7 @@ export async function loginUser(email: string, password: string): Promise<UserSe
   try {
     const { login } = await import("./auth/api");
     const response = await login({ email, password });
+    saveTokens(response.tokens);
     
     const user: UserSessionWithAuth = {
       id: response.user.id,
@@ -82,13 +84,19 @@ export async function loginUser(email: string, password: string): Promise<UserSe
       email: response.user.email,
       createdAt: new Date(response.user.createdAt).getTime(),
       isOnboarded: false, // 默认未 onboarding
+      accessToken: response.tokens.accessToken,
+      refreshToken: response.tokens.refreshToken,
+      tokenExpiresAt: Date.now() + response.tokens.expiresIn * 1000,
     };
     
     saveCurrentUser(user);
     return user;
   } catch (error) {
     console.error("登录失败:", error);
-    return null;
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error("登录失败，请稍后重试");
   }
 }
 

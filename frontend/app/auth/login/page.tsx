@@ -22,11 +22,17 @@ export default function LoginPage() {
       if (user) {
         saveCurrentUser(user);
         router.push("/dashboard");
-      } else {
-        setError("登录失败，请检查邮箱和密码");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "登录失败");
+      const message = err instanceof Error ? err.message : "登录失败";
+
+      if (message.includes("用户不存在") || message.includes("密码错误")) {
+        setError("登录失败，请检查邮箱和密码");
+      } else if (message.includes("账户已被锁定")) {
+        setError(message);
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }

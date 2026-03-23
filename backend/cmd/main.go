@@ -103,6 +103,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("创建认证服务失败：%v", err)
 	}
+	if err := authService.EnsureDemoAccount(); err != nil {
+		log.Fatalf("初始化演示账号失败：%v", err)
+	}
+	log.Println("演示账号初始化完成：test@example.com")
 	authHandler := handler.NewAuthHandler(authService)
 
 	// 路由

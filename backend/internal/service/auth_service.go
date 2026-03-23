@@ -54,6 +54,66 @@ func NewAuthService(db *gorm.DB, cfg *config.Config) (*AuthService, error) {
 	}, nil
 }
 
+// EnsureDemoAccount 确保开发环境存在可用的演示账号
+func (s *AuthService) EnsureDemoAccount() error {
+	if s.cfg.Env == "production" {
+		return nil
+	}
+
+	const (
+		demoTenantID   = "demo"
+		demoTenantName = "Demo Tenant"
+		demoUserName   = "测试用户"
+		demoEmail      = "test@example.com"
+		demoPassword   = "password123"
+	)
+
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var tenant model.Tenant
+		if err := tx.Where("id = ?", demoTenantID).First(&tenant).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("查询演示租户失败：%w", err)
+			}
+
+			tenant = model.Tenant{
+				ID:   demoTenantID,
+				Name: demoTenantName,
+				Plan: "free",
+			}
+			if err := tx.Create(&tenant).Error; err != nil {
+				return fmt.Errorf("创建演示租户失败：%w", err)
+			}
+		}
+
+		var user model.User
+		if err := tx.Where("email = ?", demoEmail).First(&user).Error; err == nil {
+			return nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("查询演示账号失败：%w", err)
+		}
+
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(demoPassword), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("演示账号密码加密失败：%w", err)
+		}
+
+		user = model.User{
+			ID:           uuid.New().String(),
+			TenantID:     demoTenantID,
+			Name:         demoUserName,
+			Email:        demoEmail,
+			PasswordHash: string(hashedPassword),
+			Role:         "owner",
+		}
+
+		if err := tx.Create(&user).Error; err != nil {
+			return fmt.Errorf("创建演示账号失败：%w", err)
+		}
+
+		return nil
+	})
+}
+
 // Register 用户注册
 func (s *AuthService) Register(req *dto.RegisterRequest) (*model.User, *dto.Tokens, error) {
 	// 检查邮箱是否已存在（使用正确的 SQL 语法）

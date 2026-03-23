@@ -93,3 +93,23 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 前端页面：/alerts（概览）、/alerts/config（规则管理）
   - AI 对话中的告警配置通过 chat API system prompt 引导 AI 输出 alert_config JSON
   - ChatPanel 自动解析 alert_config 块并调用后端创建告警
+
+### 认证测试账号约定
+- Date: 2026-03-23
+- Context: Agent 在执行登录失败排查时发现
+- Category: 测试方法
+- Instructions:
+  - 开发环境后端启动时会自动确保 `demo` 租户和测试账号 `test@example.com` 存在，默认密码为 `password123`
+  - 前端登录流程必须先保存后端返回的 access token 和 refresh token，否则 `AuthGuard` 会将用户视为未登录
+
+### 提交行为偏好
+- Date: 2026-03-23
+- Context: 用户在登录问题修复的后续要求中明确说明
+- Instructions:
+  - 不要自动帮用户提交代码，只有在用户明确要求提交时才执行 commit
+
+### 认证提示偏好
+- Date: 2026-03-23
+- Context: 用户在登录页错误提示优化时明确说明
+- Instructions:
+  - 登录页中“用户不存在”和“密码错误”应统一为更安全的通用提示，避免暴露账号是否存在
