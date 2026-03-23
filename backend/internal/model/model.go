@@ -201,6 +201,74 @@ type DataSource struct {
 	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
 }
 
+// NotificationRuleType 通知规则类型
+type NotificationRuleType string
+
+const (
+	// RuleTypeDataThreshold 数据阈值触发（如销售额>1000）
+	RuleTypeDataThreshold NotificationRuleType = "data_threshold"
+	// RuleTypeDataChange 数据变化触发（如环比增长>20%）
+	RuleTypeDataChange NotificationRuleType = "data_change"
+	// RuleTypeScheduled 定时触发（如每日 9 点发送日报）
+	RuleTypeScheduled NotificationRuleType = "scheduled"
+	// RuleTypeCustom 自定义 SQL 条件触发
+	RuleTypeCustom NotificationRuleType = "custom"
+)
+
+// NotificationFrequency 通知频率
+type NotificationFrequency string
+
+const (
+	FreqOnce     NotificationFrequency = "once"     // 仅触发一次
+	FreqHourly   NotificationFrequency = "hourly"   // 每小时
+	FreqDaily    NotificationFrequency = "daily"    // 每天
+	FreqWeekly   NotificationFrequency = "weekly"   // 每周
+	FreqMonthly  NotificationFrequency = "monthly"  // 每月
+	FreqRealtime NotificationFrequency = "realtime" // 实时（每次满足条件都触发）
+)
+
+// NotificationRule 通知规则配置（支持自然语言配置）
+type NotificationRule struct {
+	ID          string                `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID    string                `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	Name        string                `gorm:"size:200;not null" json:"name"`           // 规则名称（如"销售额破千通知"）
+	Description string                `gorm:"size:500" json:"description"`             // 规则描述
+	Enabled     bool                  `gorm:"default:true" json:"enabled"`             // 是否启用
+	RuleType    NotificationRuleType  `gorm:"size:50;not null" json:"ruleType"`        // 规则类型
+	Frequency   NotificationFrequency `gorm:"size:50;default:'once'" json:"frequency"` // 通知频率
+
+	// 数据源配置
+	DataSourceID   string `gorm:"type:varchar(50)" json:"dataSourceId,omitempty"` // 数据源 ID
+	TableName      string `gorm:"size:200" json:"tableName,omitempty"`            // 表名
+	MetricField    string `gorm:"size:100" json:"metricField,omitempty"`          // 指标字段名（如"sales_amount"）
+	DimensionField string `gorm:"size:100" json:"dimensionField,omitempty"`       // 维度字段名（如"date"）
+
+	// 触发条件
+	ConditionType AlertConditionType `gorm:"size:50" json:"conditionType"`             // 条件类型
+	Threshold     float64            `json:"threshold,omitempty"`                      // 阈值
+	ConditionExpr string             `gorm:"type:text" json:"conditionExpr,omitempty"` // 自定义条件表达式（SQL WHERE 子句）
+
+	// 时间配置
+	ScheduleTime string `gorm:"size:50" json:"scheduleTime,omitempty"` // 定时时间（如"09:00"或"MON 09:00"）
+	TimeRange    string `gorm:"size:100" json:"timeRange,omitempty"`   // 时间范围（如"today"、"yesterday"、"last_7_days"）
+
+	// 通知内容
+	MessageTemplate string `gorm:"type:text" json:"messageTemplate,omitempty"` // 消息模板（支持变量占位符）
+	MessageTitle    string `gorm:"size:500" json:"messageTitle,omitempty"`     // 消息标题
+
+	// 通知目标
+	PlatformIDs string `gorm:"size:500" json:"platformIds,omitempty"` // IM 平台 IDs（逗号分隔）
+	WebhookURL  string `gorm:"size:500" json:"webhookUrl,omitempty"`  // 自定义 Webhook URL
+
+	// 元数据
+	NLQuery   string         `gorm:"type:text" json:"nlQuery,omitempty"` // 原始自然语言查询（用户输入）
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+
+	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
+}
+
 // AutoMigrate 自动迁移所有表
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
@@ -211,5 +279,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&AlertEvent{},
 		&AlertTriggerLog{},
 		&DataSource{},
+		&NotificationRule{},
 	)
 }

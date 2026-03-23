@@ -13,8 +13,6 @@
 
 启动后访问:
 - **前端**: http://localhost:3000
-  - Notebook: http://localhost:3000/notebook
-  - Explore: http://localhost:3000/explore
 - **后端**: http://localhost:3001
 - **数据库**: localhost:5432 (postgres/postgres)
 
@@ -257,22 +255,10 @@ curl http://localhost:3000
 ### 2. 访问页面
 
 - **前端首页**: http://localhost:3000
-- **Notebook 页面**: http://localhost:3000/notebook
-- **Explore 页面**: http://localhost:3000/explore
 
 ### 3. 测试功能
 
-**测试 Notebook**:
-1. 访问 http://localhost:3000/notebook
-2. 点击 "+ SQL" 添加单元格
-3. 输入 `SELECT 1` 并运行
-4. 应该看到输出结果
-
-**测试 Explore**:
-1. 访问 http://localhost:3000/explore
-2. 输入问题 "本月 GMV 是多少？"
-3. 点击 "提问"
-4. 应该看到 AI 生成的 SQL 和结果
+访问前端首页，测试各项功能。
 
 ---
 
@@ -329,8 +315,6 @@ Next.js 前端已启动 (PID: 67890)
 
 === 服务已启动 ===
 前端：http://localhost:3000
-  - Notebook: http://localhost:3000/notebook
-  - Explore: http://localhost:3000/explore
 后端：http://localhost:3001
 数据库：localhost:5432 (postgres/postgres)
 
