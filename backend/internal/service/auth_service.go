@@ -214,7 +214,7 @@ func (s *AuthService) RefreshToken(refreshToken string) (*dto.Tokens, error) {
 // GetUserByID 根据 ID 获取用户
 func (s *AuthService) GetUserByID(userID string) (*model.User, error) {
 	var user model.User
-	if err := s.db.First(&user, userID).Error; err != nil {
+	if err := s.db.Where("id = ?", userID).Limit(1).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("用户不存在")
 		}

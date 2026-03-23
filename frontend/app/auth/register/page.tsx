@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { saveCurrentUser } from "@/lib/user-store";
-import { request } from "@/lib/auth/api";
+import { register, saveTokens } from "@/lib/auth/api";
 import type { AuthResponse } from "@/lib/types";
 
 export default function RegisterPage() {
@@ -46,28 +46,26 @@ export default function RegisterPage() {
       return;
     }
 
+    // 邮箱格式验证
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError("请输入有效的邮箱地址");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          tenantId: formData.tenantId,
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-        }),
+      // 使用统一的 API 函数
+      const data: AuthResponse = await register({
+        tenantId: formData.tenantId,
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "注册失败");
-      }
-
-      const data: AuthResponse = await response.json();
+      
+      // 保存 Token
+      saveTokens(data.tokens);
       
       // 保存用户信息
       const user = {
@@ -80,7 +78,7 @@ export default function RegisterPage() {
       
       saveCurrentUser(user);
       
-      // 跳转到登录页或首页
+      // 跳转到首页
       router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "注册失败");
@@ -117,6 +115,7 @@ export default function RegisterPage() {
                 value={formData.tenantId}
                 onChange={handleChange}
               />
+              <p className="mt-1 text-xs text-gray-500">租户 ID 用于标识您的组织，注册后不可修改</p>
             </div>
             
             <div>
@@ -166,6 +165,11 @@ export default function RegisterPage() {
                 value={formData.password}
                 onChange={handleChange}
               />
+              {formData.password && (
+                <p className={`mt-1 text-xs ${formData.password.length >= 6 ? 'text-green-600' : 'text-red-600'}`}>
+                  密码强度：{formData.password.length >= 6 ? '符合要求' : '至少 6 位'}
+                </p>
+              )}
             </div>
             
             <div>
@@ -182,6 +186,9 @@ export default function RegisterPage() {
                 value={formData.confirmPassword}
                 onChange={handleChange}
               />
+              {formData.confirmPassword && formData.password === formData.confirmPassword && (
+                <p className="mt-1 text-xs text-green-600">密码一致</p>
+              )}
             </div>
           </div>
 
