@@ -104,9 +104,10 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
 
 ### 提交行为偏好
 - Date: 2026-03-23
-- Context: 用户在登录问题修复的后续要求中明确说明
+- Context: 用户先前要求默认不自动提交，后续在“图标遮挡修复”任务中更新偏好
 - Instructions:
-  - 不要自动帮用户提交代码，只有在用户明确要求提交时才执行 commit
+  - 默认不自动提交代码
+  - 当用户在当前任务中明确要求“写完自动提交”时，任务完成后自动执行 commit
 
 ### 认证提示偏好
 - Date: 2026-03-23
@@ -120,3 +121,12 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
 - Instructions:
   - 数据源填写应集中在 `frontend/app/data-sources/page.tsx`
   - onboarding 页面保留初始化流程，不再承载数据源填写表单
+
+### SimpleChatPanel 布局调整
+- Date: 2026-03-23
+- Context: Agent 在处理聊天页头部粘性与内容遮挡问题时发现
+- Category: 代码结构
+- Instructions:
+  - 聊天页面主容器设置 `overflow-auto` 以配合头部 `sticky` 固定，不影响整体滚动
+  - SimpleChatPanel 的消息区域增加 `padding-top`，避免粘性头部遮挡首条消息
+  - 头部保持 `top: 0` 粘性定位，消息列表滚动不再剪裁头部
