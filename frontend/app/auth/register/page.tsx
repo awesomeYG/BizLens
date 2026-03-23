@@ -80,7 +80,7 @@ export default function RegisterPage() {
       saveCurrentUser(user);
       
       // 跳转到首页
-      router.push("/dashboard");
+      router.push("/dashboards");
     } catch (err) {
       setError(err instanceof Error ? err.message : "注册失败");
     } finally {

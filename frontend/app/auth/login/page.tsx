@@ -21,7 +21,7 @@ export default function LoginPage() {
       const user = await loginUser(email, password);
       if (user) {
         saveCurrentUser(user);
-        router.push("/dashboard");
+        router.push("/dashboards");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "登录失败";

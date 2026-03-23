@@ -17,7 +17,7 @@ export default function DashboardsPage() {
   useEffect(() => {
     const user = getCurrentUser();
     if (!user?.isOnboarded) {
-      router.replace("/");
+      router.replace("/onboarding");
       return;
     }
     setReady(true);

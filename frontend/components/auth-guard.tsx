@@ -80,7 +80,7 @@ export function UnAuthGuard({ children }: { children: React.ReactNode }) {
       
       if (auth) {
         // 已认证，重定向到首页
-        router.replace("/dashboard");
+        router.replace("/dashboards");
         return;
       }
       

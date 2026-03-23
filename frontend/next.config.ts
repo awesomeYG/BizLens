@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
+      allowedOrigins: ["*.monkeycode-ai.online"],
       bodySizeLimit: "10mb",
     },
   },
