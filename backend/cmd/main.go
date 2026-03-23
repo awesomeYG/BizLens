@@ -81,6 +81,8 @@ func main() {
 	notificationRuleHandler := handler.NewNotificationRuleHandler(notificationRuleService)
 	analysisService := service.NewAnalysisService(db)
 	analysisHandler := handler.NewAnalysisHandler(analysisService)
+	aiConfigService := service.NewAIConfigService(db)
+	aiConfigHandler := handler.NewAIConfigHandler(aiConfigService)
 
 	// 语义层服务
 	metricService := service.NewMetricService(db)
@@ -265,6 +267,19 @@ func main() {
 				}
 				return
 			}
+		}
+
+		// /api/tenants/{tenantId}/ai-config
+		if len(parts) == 2 && parts[1] == "ai-config" {
+			switch r.Method {
+			case http.MethodGet:
+				aiConfigHandler.GetAIConfig(w, r)
+			case http.MethodPut:
+				aiConfigHandler.UpsertAIConfig(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
 		}
 
 		// /api/tenants/{tenantId}/data-sources[/{dsId}[/{action}]]

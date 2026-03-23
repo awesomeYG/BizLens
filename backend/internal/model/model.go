@@ -567,6 +567,21 @@ type AnalysisQueryLog struct {
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
+// AIServiceConfig AI 服务配置（按租户存储）
+type AIServiceConfig struct {
+	ID        string         `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID  string         `gorm:"type:varchar(50);not null;uniqueIndex" json:"tenantId"`
+	ModelType string         `gorm:"size:50;not null;default:'openai'" json:"modelType"`
+	Model     string         `gorm:"size:100;not null;default:'gpt-4o-mini'" json:"model"`
+	BaseURL   string         `gorm:"size:500" json:"baseUrl,omitempty"`
+	APIKey    string         `gorm:"size:1000" json:"-"`
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+
+	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
+}
+
 // AutoMigrate 自动迁移所有表
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
@@ -597,6 +612,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&DatasetAccessLog{},
 		// AI 问答分析
 		&AnalysisQueryLog{},
+		// AI 服务配置
+		&AIServiceConfig{},
 		// 手动上传数据集
 		&UploadedDataset{},
 		&DatasetVersion{},

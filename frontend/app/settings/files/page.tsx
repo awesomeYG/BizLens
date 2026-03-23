@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 
 interface UploadedFile {
   id: string;
@@ -21,7 +22,7 @@ function formatFileSize(bytes: number): string {
   const k = 1024;
   const sizes = ["B", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+  return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
 function formatDate(dateString: string): string {
@@ -50,6 +51,49 @@ function getQualityColor(score: number): string {
   if (score >= 80) return "text-emerald-600";
   if (score >= 60) return "text-amber-600";
   return "text-red-600";
+}
+
+function getQualityBarColor(score: number): string {
+  if (score >= 80) return "bg-emerald-500";
+  if (score >= 60) return "bg-amber-500";
+  return "bg-rose-500";
+}
+
+function getFormatTagClass(format: string): string {
+  const formatClassMap: Record<string, string> = {
+    csv: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    xlsx: "border-blue-200 bg-blue-50 text-blue-700",
+    xls: "border-sky-200 bg-sky-50 text-sky-700",
+    json: "border-violet-200 bg-violet-50 text-violet-700",
+    xml: "border-amber-200 bg-amber-50 text-amber-700",
+  };
+  return formatClassMap[format.toLowerCase()] ?? "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+function getStatusTag(status: string): { text: string; className: string } {
+  const normalizedStatus = status.toLowerCase();
+  if (["ready", "active", "completed", "available", "success"].includes(normalizedStatus)) {
+    return {
+      text: "可用",
+      className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    };
+  }
+  if (["processing", "pending", "parsing", "uploading"].includes(normalizedStatus)) {
+    return {
+      text: "处理中",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+    };
+  }
+  if (["failed", "error", "invalid"].includes(normalizedStatus)) {
+    return {
+      text: "异常",
+      className: "border-rose-200 bg-rose-50 text-rose-700",
+    };
+  }
+  return {
+    text: status || "未知",
+    className: "border-slate-200 bg-slate-50 text-slate-600",
+  };
 }
 
 export default function FilesSettingsPage() {
@@ -157,7 +201,7 @@ export default function FilesSettingsPage() {
 
       setFiles((prev) => prev.filter((f) => f.id !== id));
       setMessage({ type: "success", text: "文件已删除" });
-    } catch (err) {
+    } catch {
       setMessage({ type: "error", text: "删除失败，请重试" });
     } finally {
       setDeleteConfirm(null);
@@ -188,22 +232,83 @@ export default function FilesSettingsPage() {
   });
 
   const formats = ["all", ...Array.from(new Set(files.map((f) => f.fileFormat.toLowerCase())))];
+  const totalFileSize = files.reduce((total, file) => total + file.fileSize, 0);
+  const averageQuality = files.filter((file) => file.qualityScore > 0).reduce((sum, file, _, arr) => {
+    return sum + file.qualityScore / arr.length;
+  }, 0);
+  const qualityKnownCount = files.filter((file) => file.qualityScore > 0).length;
+  const processingCount = files.filter((file) => {
+    const normalizedStatus = file.status.toLowerCase();
+    return ["processing", "pending", "parsing", "uploading"].includes(normalizedStatus);
+  }).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div>
+      <main className="mx-auto max-w-6xl py-2">
         {/* 页面标题 */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">上传文件管理</h2>
-          <p className="text-gray-600">管理您之前上传的数据文件，支持上传、预览和删除操作</p>
+        <div className="mb-8 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                文件管理
+              </div>
+              <h2 className="mt-4 text-3xl font-bold text-slate-900">管理你的数据文件资产</h2>
+              <p className="mt-2 text-slate-600">支持上传、检索、质量查看与删除，文件可直接用于后续 AI 分析。</p>
+            </div>
+            <Link
+              href="/settings/ai"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              去配置 AI 服务
+            </Link>
+          </div>
+        </div>
+
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+            <p className="text-xs font-medium tracking-wide text-slate-500">文件总数</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">{files.length}</p>
+            <p className="mt-1 text-xs text-slate-500">当前筛选结果 {filteredFiles.length} 个</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+            <p className="text-xs font-medium tracking-wide text-slate-500">总存储体积</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">{formatFileSize(totalFileSize)}</p>
+            <p className="mt-1 text-xs text-slate-500">单文件上限 100 MB</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+            <p className="text-xs font-medium tracking-wide text-slate-500">平均质量评分</p>
+            <p className={`mt-2 text-2xl font-semibold ${averageQuality ? getQualityColor(averageQuality) : "text-slate-900"}`}>
+              {averageQuality ? `${Math.round(averageQuality)}%` : "-"}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">已分析文件 {qualityKnownCount} 个</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+            <p className="text-xs font-medium tracking-wide text-slate-500">处理中任务</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">{processingCount}</p>
+            <p className="mt-1 text-xs text-slate-500">等待解析或入库的文件</p>
+          </div>
         </div>
 
         {/* 上传区域 */}
-        <div
-          className={`mb-8 border-2 border-dashed rounded-2xl p-8 text-center transition-all ${
+        <button
+          type="button"
+          onClick={() => {
+            if (!uploading) fileInputRef.current?.click();
+          }}
+          onKeyDown={(e) => {
+            if (uploading) return;
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
+          className={`mb-8 rounded-3xl border-2 border-dashed p-8 text-center transition-all ${
             dragActive
-              ? "border-blue-500 bg-blue-50"
-              : "border-gray-300 bg-white hover:border-gray-400"
+              ? "scale-[1.01] border-blue-500 bg-blue-50/70 shadow-md"
+              : "border-slate-300 bg-white/90 hover:border-slate-400 hover:shadow-sm"
           }`}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
@@ -216,49 +321,53 @@ export default function FilesSettingsPage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                <span className="text-gray-700 font-medium">正在上传...</span>
+                <span className="font-medium text-slate-700">正在上传并校验文件...</span>
               </div>
-              <div className="w-full max-w-md mx-auto bg-gray-200 rounded-full h-2">
+              <div className="mx-auto h-2 w-full max-w-md rounded-full bg-slate-200">
                 <div
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${uploadProgress}%` }}
                 ></div>
               </div>
+              <p className="text-sm text-slate-500">{uploadProgress}%</p>
             </div>
           ) : (
             <>
-              <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
-                  <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="mb-4 flex justify-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100">
+                  <svg className="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
                 </div>
               </div>
-              <p className="text-lg font-medium text-gray-700 mb-2">
-                拖拽文件到此处，或<span className="text-blue-600 cursor-pointer" onClick={() => fileInputRef.current?.click()}>点击上传</span>
+              <p className="mb-2 text-lg font-semibold text-slate-800">
+                拖拽文件到此处，或 <span className="text-blue-600">点击上传</span>
               </p>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="mb-4 text-sm text-slate-500">
                 支持 xlsx、xls、csv、json、xml 格式，文件大小不超过 100MB
               </p>
+              <div className="mb-5 flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500">
+                <span className="rounded-full bg-slate-100 px-3 py-1">自动识别列类型</span>
+                <span className="rounded-full bg-slate-100 px-3 py-1">质量评分</span>
+                <span className="rounded-full bg-slate-100 px-3 py-1">结构化入库</span>
+              </div>
               <input
+                id="upload-file-input"
                 ref={fileInputRef}
                 type="file"
                 accept=".xlsx,.xls,.csv,.json,.xml"
                 className="hidden"
                 onChange={(e) => handleFileUpload(e.target.files)}
               />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-blue-800 shadow-sm hover:shadow-md transition-all"
-              >
+              <span className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3 font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:from-blue-700 hover:to-indigo-700 hover:shadow-md">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 选择文件
-              </button>
+              </span>
             </>
           )}
-        </div>
+        </button>
 
         {/* 消息提示 */}
         {message && (
@@ -288,7 +397,24 @@ export default function FilesSettingsPage() {
         )}
 
         {/* 筛选和搜索 */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">文件列表</p>
+              <p className="text-xs text-slate-500">支持按名称检索与格式筛选</p>
+            </div>
+            <button
+              type="button"
+              onClick={fetchFiles}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              刷新列表
+            </button>
+          </div>
+          <div className="flex flex-col gap-4 sm:flex-row">
           <div className="flex-1 relative">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -298,24 +424,25 @@ export default function FilesSettingsPage() {
               placeholder="搜索文件名..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+              className="w-full rounded-xl border border-slate-300 py-3 pl-10 pr-4 transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {formats.map((format) => (
               <button
                 key={format}
                 onClick={() => setSelectedFormat(format)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   selectedFormat === format
-                    ? "bg-blue-600 text-white"
-                    : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                 }`}
               >
                 {format === "all" ? "全部" : format.toUpperCase()}
               </button>
             ))}
           </div>
+        </div>
         </div>
 
         {/* 文件列表 */}
@@ -324,7 +451,7 @@ export default function FilesSettingsPage() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
         ) : filteredFiles.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
+          <div className="rounded-2xl border border-slate-200 bg-white/90 p-12 text-center shadow-sm">
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
               <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -336,23 +463,24 @@ export default function FilesSettingsPage() {
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="border-b border-slate-200 bg-slate-50">
                   <tr>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">文件信息</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">格式</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">大小</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">数据量</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">质量</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">状态</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">上传时间</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">操作</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-slate-200">
                   {filteredFiles.map((file) => (
-                    <tr key={file.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={file.id} className="transition-colors hover:bg-slate-50">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
@@ -367,7 +495,7 @@ export default function FilesSettingsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-800">
+                        <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-semibold ${getFormatTagClass(file.fileFormat)}`}>
                           {file.fileFormat.toUpperCase()}
                         </span>
                       </td>
@@ -383,12 +511,26 @@ export default function FilesSettingsPage() {
                       </td>
                       <td className="px-6 py-4">
                         {file.qualityScore > 0 ? (
-                          <span className={`font-medium ${getQualityColor(file.qualityScore)}`}>
-                            {file.qualityScore}%
-                          </span>
+                          <div className="min-w-[120px]">
+                            <div className="mb-1 flex items-center justify-between text-xs">
+                              <span className={`font-medium ${getQualityColor(file.qualityScore)}`}>{file.qualityScore}%</span>
+                              <span className="text-slate-400">质量</span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-slate-200">
+                              <div
+                                className={`h-1.5 rounded-full ${getQualityBarColor(file.qualityScore)}`}
+                                style={{ width: `${file.qualityScore}%` }}
+                              ></div>
+                            </div>
+                          </div>
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium ${getStatusTag(file.status).className}`}>
+                          {getStatusTag(file.status).text}
+                        </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
                         {formatDate(file.createdAt)}
@@ -397,7 +539,7 @@ export default function FilesSettingsPage() {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => setDeleteConfirm(file.id)}
-                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            className="rounded-lg p-2 text-gray-400 transition-all hover:bg-red-50 hover:text-red-600"
                             title="删除文件"
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -416,8 +558,8 @@ export default function FilesSettingsPage() {
 
         {/* 删除确认弹窗 */}
         {deleteConfirm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="mx-4 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
                   <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

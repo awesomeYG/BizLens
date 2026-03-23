@@ -5,11 +5,6 @@ import {
   getEvaluationSummary,
 } from "@/lib/ai-analysis";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || "",
-  baseURL: process.env.OPENAI_BASE_URL || undefined, // 支持自定义 API 端点
-});
-
 const SYSTEM_PROMPT = `你是 BizLens AI 数据分析专家。你需要：
 
 ## 核心能力
@@ -224,8 +219,14 @@ export async function POST(req: NextRequest) {
       "demo-tenant";
     const analysisPacket = await getAnalysisPacketFromBackend(tenantId, latestUserMessage);
 
-    // 优先使用客户端传来的配置
-    const apiKey = clientAiConfig?.apiKey || process.env.OPENAI_API_KEY || process.env.AI_API_KEY;
+    const serverConfig = await getTenantAIConfigFromBackend(tenantId);
+
+    // 优先使用客户端传来的配置，其次服务端租户配置，最后环境变量
+    const apiKey =
+      clientAiConfig?.apiKey ||
+      serverConfig?.apiKey ||
+      process.env.OPENAI_API_KEY ||
+      process.env.AI_API_KEY;
     
     // 演示模式
     if (!apiKey) {
@@ -251,7 +252,11 @@ export async function POST(req: NextRequest) {
     let finalModel = modelConfig.model;
     if (clientAiConfig?.model) {
       finalModel = clientAiConfig.model;
+    } else if (serverConfig?.model) {
+      finalModel = serverConfig.model;
     }
+
+    const finalBaseURL = clientAiConfig?.baseUrl || serverConfig?.baseUrl || process.env.OPENAI_BASE_URL || undefined;
     
     // 构建增强版系统提示
     let systemContent = SYSTEM_PROMPT;
@@ -277,6 +282,11 @@ export async function POST(req: NextRequest) {
       role: m.role as "user" | "assistant" | "system",
       content: m.content,
     }));
+
+    const openai = new OpenAI({
+      apiKey,
+      baseURL: finalBaseURL,
+    });
 
     // 调用 AI API
     const response = await openai.chat.completions.create({
@@ -350,4 +360,30 @@ async function getAnalysisPacketFromBackend(tenantId: string, question: string) 
     ...analyzeQuestion(question),
     evaluation: getEvaluationSummary(),
   };
+}
+
+async function getTenantAIConfigFromBackend(tenantId: string): Promise<{
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+} | null> {
+  const backendBase = process.env.BACKEND_INTERNAL_URL || "http://localhost:3001";
+  try {
+    const res = await fetch(`${backendBase}/api/tenants/${tenantId}/ai-config`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json", "X-Tenant-ID": tenantId },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      return null;
+    }
+    const payload = await res.json();
+    return {
+      apiKey: payload?.apiKey,
+      baseUrl: payload?.baseUrl,
+      model: payload?.model,
+    };
+  } catch {
+    return null;
+  }
 }

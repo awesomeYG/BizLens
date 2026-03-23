@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { getCurrentUser } from "@/lib/user-store";
 
 const MODEL_OPTIONS = [
@@ -13,6 +14,7 @@ const MODEL_OPTIONS = [
 export default function SettingsPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingConfig, setLoadingConfig] = useState(true);
   
   // AI 配置
   const [aiConfig, setAiConfig] = useState({
@@ -25,28 +27,75 @@ export default function SettingsPage() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [serverHasApiKey, setServerHasApiKey] = useState(false);
+  const [maskedApiKey, setMaskedApiKey] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    setUser(currentUser);
-    
-    // 从 localStorage 加载配置
-    const savedConfig = localStorage.getItem("bizlens-ai-config");
-    if (savedConfig) {
+    const loadConfig = async () => {
+      const currentUser = getCurrentUser();
+      setUser(currentUser);
+      const tenantId = currentUser?.id || "demo-tenant";
+
       try {
-        setAiConfig(JSON.parse(savedConfig));
-      } catch (e) {
-        console.error("加载配置失败", e);
+        const response = await fetch(`/api/tenants/${tenantId}/ai-config`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result?.error || "加载服务端配置失败");
+        }
+
+        setAiConfig((prev) => ({
+          ...prev,
+          apiKey: "",
+          baseUrl: result.baseUrl || "",
+          modelType: result.modelType || prev.modelType,
+          model: result.model || prev.model,
+        }));
+        setServerHasApiKey(Boolean(result.hasApiKey));
+        setMaskedApiKey(result.maskedApiKey || "");
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : "加载服务端配置失败");
+      } finally {
+        setLoadingConfig(false);
+        setLoading(false);
       }
-    }
-    
-    setLoading(false);
+    };
+
+    void loadConfig();
   }, []);
 
-  const handleSave = () => {
-    localStorage.setItem("bizlens-ai-config", JSON.stringify(aiConfig));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  const handleSave = async () => {
+    const tenantId = user?.id || "demo-tenant";
+    setSaveError(null);
+
+    try {
+      const response = await fetch(`/api/tenants/${tenantId}/ai-config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: aiConfig.apiKey.trim(),
+          baseUrl: aiConfig.baseUrl.trim(),
+          modelType: aiConfig.modelType,
+          model: aiConfig.model,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || "保存失败");
+      }
+
+      setServerHasApiKey(Boolean(result.hasApiKey));
+      setMaskedApiKey(result.maskedApiKey || "");
+      setAiConfig((prev) => ({ ...prev, apiKey: "" }));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "保存失败");
+    }
   };
 
   const handleTest = async () => {
@@ -59,6 +108,7 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [{ role: "user", content: "Hello, this is a test." }],
+          tenantId: user?.id || "demo-tenant",
         }),
       });
 
@@ -94,26 +144,62 @@ export default function SettingsPage() {
     });
   };
 
+  const currentProvider = MODEL_OPTIONS.find((option) => option.value === aiConfig.modelType);
+  const setupProgress = Math.round(
+    ([(aiConfig.apiKey || (serverHasApiKey ? "configured" : "")), aiConfig.model].filter((item) => item.trim().length > 0).length / 2) * 100,
+  );
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex min-h-[50vh] items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div>
+      <main className="mx-auto max-w-5xl py-2">
         {/* 页面标题 */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">AI 服务配置</h2>
-          <p className="text-gray-600">配置您的 AI 模型服务商，用于智能数据分析和对话</p>
+        <div className="mb-8 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                AI 服务配置
+              </div>
+              <h2 className="mt-4 text-3xl font-bold text-slate-900">让模型能力稳定可用</h2>
+              <p className="mt-2 text-slate-600">配置 AI 服务商、模型和 API 参数，后续在对话分析里会直接使用。</p>
+            </div>
+            <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-700">
+              <p className="font-semibold">当前用户</p>
+              <p className="mt-1 text-indigo-600">{user?.name || user?.email || "本地会话用户"}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-6 grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+            <p className="text-xs tracking-wide text-slate-500">配置进度</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">{setupProgress}%</p>
+            <div className="mt-2 h-2 rounded-full bg-slate-200">
+              <div className="h-2 rounded-full bg-blue-600 transition-all" style={{ width: `${setupProgress}%` }}></div>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+            <p className="text-xs tracking-wide text-slate-500">当前服务商</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">{currentProvider?.label || "-"}</p>
+            <p className="mt-1 text-xs text-slate-500">可选模型 {currentProvider?.models.length || 0} 个</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+            <p className="text-xs tracking-wide text-slate-500">安全状态</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">{aiConfig.apiKey || serverHasApiKey ? "已配置" : "待配置"}</p>
+            <p className="mt-1 text-xs text-slate-500">API Key 存储在服务器，仅返回脱敏信息</p>
+          </div>
         </div>
 
         <div className="space-y-6">
           {/* 模型服务商选择 */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <div className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-5">
               <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-100 text-blue-600">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -159,7 +245,7 @@ export default function SettingsPage() {
           </div>
 
           {/* API 配置 */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <div className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-5">
               <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-purple-100 text-purple-600">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -172,23 +258,35 @@ export default function SettingsPage() {
             <div className="space-y-5">
               {/* API Key */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="api-key" className="block text-sm font-medium text-gray-700 mb-2">
                   API Key
+                  {" "}
                   <span className="ml-2 text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <input
-                    type="password"
+                    id="api-key"
+                    type={showApiKey ? "text" : "password"}
                     value={aiConfig.apiKey}
                     onChange={(e) => setAiConfig({ ...aiConfig, apiKey: e.target.value })}
-                    className="w-full pl-4 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm"
+                    className="w-full rounded-xl border border-gray-300 py-3 pl-4 pr-20 text-sm transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                     placeholder={aiConfig.modelType === "openai" ? "sk-..." : "输入你的 API Key"}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey((prev) => !prev)}
+                    className="absolute right-8 top-1/2 -translate-y-1/2 text-xs text-slate-500 transition hover:text-slate-800"
+                  >
+                    {showApiKey ? "隐藏" : "显示"}
+                  </button>
                   {aiConfig.apiKey && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-green-500"></div>
                   )}
                 </div>
                 <div className="mt-2 p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  {serverHasApiKey && !aiConfig.apiKey && (
+                    <p className="mb-2 text-xs text-emerald-700">已保存服务端密钥：{maskedApiKey || "********"}</p>
+                  )}
                   <p className="text-xs text-gray-600">
                     {aiConfig.modelType === "openai" && (
                       <span>在 <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">OpenAI 平台</a> 获取 API Key</span>
@@ -208,11 +306,13 @@ export default function SettingsPage() {
 
               {/* 自定义 Base URL */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="api-base-url" className="block text-sm font-medium text-gray-700 mb-2">
                   API Base URL
+                  {" "}
                   <span className="ml-1 text-gray-400 font-normal">(可选)</span>
                 </label>
                 <input
+                  id="api-base-url"
                   type="url"
                   value={aiConfig.baseUrl}
                   onChange={(e) => setAiConfig({ ...aiConfig, baseUrl: e.target.value })}
@@ -226,11 +326,12 @@ export default function SettingsPage() {
 
               {/* 模型选择 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="model-select" className="block text-sm font-medium text-gray-700 mb-2">
                   选择模型
                 </label>
                 <div className="relative">
                   <select
+                    id="model-select"
                     value={aiConfig.model}
                     onChange={(e) => setAiConfig({ ...aiConfig, model: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm appearance-none bg-white cursor-pointer"
@@ -252,11 +353,11 @@ export default function SettingsPage() {
           </div>
 
           {/* 操作按钮 */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <div className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm">
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={handleTest}
-                disabled={testing || !aiConfig.apiKey}
+                disabled={testing || (!aiConfig.apiKey && !serverHasApiKey)}
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white border-2 border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
               >
                 {testing ? (
@@ -279,12 +380,13 @@ export default function SettingsPage() {
               
               <button
                 onClick={handleSave}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-blue-800 shadow-sm hover:shadow-md transition-all duration-200"
+                disabled={loadingConfig || !aiConfig.model || (!aiConfig.apiKey && !serverHasApiKey)}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-3 font-semibold text-white shadow-sm transition-all duration-200 hover:from-blue-700 hover:to-blue-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                 </svg>
-                保存配置
+                {!aiConfig.apiKey && !serverHasApiKey ? "请先填写 API Key" : "保存配置"}
               </button>
             </div>
 
@@ -318,10 +420,39 @@ export default function SettingsPage() {
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
-                  <span className="font-medium">配置已保存到本地浏览器</span>
+                  <span className="font-medium">配置已保存到服务器</span>
                 </div>
               </div>
             )}
+
+            {saveError && (
+              <div className="mt-4 rounded-xl border-2 border-red-200 bg-red-50 p-4 text-red-800">
+                <p className="text-sm font-medium">{saveError}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <Link
+            href="/settings/files"
+            className="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+              </div>
+              <div>
+                <p className="font-semibold text-slate-900">文件管理</p>
+                <p className="mt-1 text-sm text-slate-600">上传和维护 CSV / Excel / JSON 文件，作为 AI 的分析数据源。</p>
+              </div>
+            </div>
+          </Link>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <p className="text-sm font-semibold text-amber-900">安全提示</p>
+            <p className="mt-1 text-sm text-amber-800">API Key 会保存在服务器并按租户隔离，请仅授予最小权限并定期轮换。</p>
           </div>
         </div>
 
@@ -338,15 +469,15 @@ export default function SettingsPage() {
               <ul className="space-y-2 text-sm text-blue-800">
                 <li className="flex items-start gap-2">
                   <span className="text-blue-500 mt-0.5">•</span>
-                  <span>配置信息仅保存在当前浏览器本地存储 (localStorage)，不会上传到服务器</span>
+                  <span>配置信息会持久化到服务器并按租户隔离，换设备登录后可直接复用</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-blue-500 mt-0.5">•</span>
-                  <span>OpenAI 推荐使用 <strong>gpt-4o-mini</strong> 模型，性价比最高</span>
+                  <span>如果不修改 API Key，保存时会沿用服务器中已有密钥，不会清空</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-blue-500 mt-0.5">•</span>
-                  <span>国内用户建议使用 <strong>通义千问</strong> 或 <strong>文心一言</strong>，访问更稳定</span>
+                  <span>OpenAI 推荐使用 <strong>gpt-4o-mini</strong>，国内网络可优先尝试通义千问或文心一言</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-blue-500 mt-0.5">•</span>
