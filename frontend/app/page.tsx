@@ -8,8 +8,6 @@ export default function HomePage() {
   const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
   const [question, setQuestion] = useState("");
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [loginForm, setLoginForm] = useState({ name: "", email: "" });
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -21,18 +19,9 @@ export default function HomePage() {
   }, [router]);
 
   const handleQuickStart = () => {
-    setIsLoggingIn(true);
     // 快速登录，使用 mock 数据
-    const user = loginUser("演示用户", "demo@example.com");
+    loginUser("演示用户", "demo@example.com");
     localStorage.setItem("mock_user", "true");
-    router.push("/chat");
-  };
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!loginForm.name.trim() || !loginForm.email.trim()) return;
-    setIsLoggingIn(true);
-    loginUser(loginForm.name.trim(), loginForm.email.trim());
     router.push("/chat");
   };
 
@@ -68,7 +57,7 @@ export default function HomePage() {
             <span className="hidden md:inline">设置</span>
           </button>
           <button
-            onClick={() => (document.getElementById("login-modal") as HTMLDialogElement)?.showModal()}
+            onClick={() => router.push("/auth/login")}
             className="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
           >
             登录
@@ -166,78 +155,6 @@ export default function HomePage() {
         </div>
       </main>
 
-      {/* 登录对话框 */}
-      <dialog
-        id="login-modal"
-        className="backdrop:bg-black/50 backdrop:backdrop-blur-sm bg-zinc-900 rounded-2xl p-0 border border-zinc-800 shadow-2xl"
-      >
-        <div className="w-96 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-zinc-100">登录</h2>
-            <button
-              onClick={() => (document.getElementById("login-modal") as HTMLDialogElement)?.close()}
-              className="text-zinc-500 hover:text-zinc-300"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1.5 font-medium">姓名</label>
-              <input
-                value={loginForm.name}
-                onChange={(e) => setLoginForm((p) => ({ ...p, name: e.target.value }))}
-                placeholder="输入姓名"
-                className="input-base"
-                autoFocus
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1.5 font-medium">邮箱</label>
-              <input
-                type="email"
-                value={loginForm.email}
-                onChange={(e) => setLoginForm((p) => ({ ...p, email: e.target.value }))}
-                placeholder="name@company.com"
-                className="input-base"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={isLoggingIn}
-              className="btn-primary w-full mt-2"
-            >
-              {isLoggingIn ? "登录中..." : "进入平台"}
-            </button>
-          </form>
-
-          <div className="mt-4 text-center space-y-2">
-            <button
-              type="button"
-              onClick={handleQuickStart}
-              className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors block w-full"
-            >
-              🚀 快速测试（使用演示数据）
-            </button>
-            <div className="text-sm text-zinc-600">
-              还没有账号？
-              <button
-                type="button"
-                onClick={() => {
-                  (document.getElementById("login-modal") as HTMLDialogElement)?.close();
-                  router.push("/auth/register");
-                }}
-                className="text-indigo-400 hover:text-indigo-300 ml-1"
-              >
-                立即注册
-              </button>
-            </div>
-          </div>
-        </div>
-      </dialog>
     </div>
   );
 }

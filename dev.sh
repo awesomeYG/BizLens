@@ -179,18 +179,52 @@ stop_postgres() {
 }
 
 # 检查端口是否被占用并清理
+get_listening_pid() {
+    local port=$1
+
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -ti:"$port" 2>/dev/null | head -1
+        return 0
+    fi
+
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltnp "( sport = :$port )" 2>/dev/null | grep -o 'pid=[0-9]\+' | head -1 | cut -d= -f2
+        return 0
+    fi
+
+    return 1
+}
+
+kill_process_tree() {
+    local pid=$1
+
+    if [ -z "$pid" ]; then
+        return 0
+    fi
+
+    for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+        kill_process_tree "$child"
+    done
+
+    kill "$pid" 2>/dev/null || true
+    sleep 1
+
+    if kill -0 "$pid" 2>/dev/null; then
+        kill -9 "$pid" 2>/dev/null || true
+    fi
+}
+
 check_and_free_port() {
     local port=$1
     local service_name=$2
-    
-    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1 ; then
+
+    local pid
+    pid=$(get_listening_pid "$port")
+
+    if [ -n "$pid" ]; then
         log_warning "$service_name 端口 $port 被占用，正在清理..."
-        local pid=$(lsof -ti:$port 2>/dev/null | head -1)
-        if [ -n "$pid" ]; then
-            kill -9 $pid 2>/dev/null || true
-            sleep 1
-            log_success "已清理占用端口 $port 的进程 (PID: $pid)"
-        fi
+        kill_process_tree "$pid"
+        log_success "已清理占用端口 $port 的进程 (PID: $pid)"
     fi
 }
 
@@ -248,7 +282,7 @@ start_backend() {
 stop_backend() {
     log_info "停止 Go 后端..."
     if [ -f "$PROJECT_ROOT/.backend.pid" ]; then
-        kill $(cat "$PROJECT_ROOT/.backend.pid") 2>/dev/null || true
+        kill_process_tree "$(cat "$PROJECT_ROOT/.backend.pid")"
         rm -f "$PROJECT_ROOT/.backend.pid"
         log_success "Go 后端已停止"
     else
@@ -256,6 +290,7 @@ stop_backend() {
         log_success "Go 后端已停止"
     fi
     # 确保端口被释放
+    check_and_free_port "${SERVER_PORT:-3001}" "后端服务"
     sleep 1
 }
 
@@ -297,7 +332,7 @@ start_frontend() {
 stop_frontend() {
     log_info "停止 Next.js 前端..."
     if [ -f "$PROJECT_ROOT/.frontend.pid" ]; then
-        kill $(cat "$PROJECT_ROOT/.frontend.pid") 2>/dev/null || true
+        kill_process_tree "$(cat "$PROJECT_ROOT/.frontend.pid")"
         rm -f "$PROJECT_ROOT/.frontend.pid"
         log_success "Next.js 前端已停止"
     else
@@ -305,6 +340,7 @@ stop_frontend() {
         log_success "Next.js 前端已停止"
     fi
     # 确保端口被释放
+    check_and_free_port 3000 "前端服务"
     sleep 1
 }
 
