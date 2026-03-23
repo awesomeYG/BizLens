@@ -91,6 +91,10 @@ func main() {
 	dashboardTemplateService := service.NewDashboardTemplateService(db)
 	dashboardTemplateHandler := handler.NewDashboardTemplateHandler(dashboardTemplateService)
 
+	// 数据集服务（手动上传）
+	datasetService := service.NewDatasetService(db, "./uploads", 100*1024*1024) // 100MB
+	datasetHandler := handler.NewDatasetHandler(datasetService, "./uploads")
+
 	// 初始化系统预置模板
 	if err := dashboardTemplateService.InitSystemTemplates(); err != nil {
 		log.Printf("警告：系统模板初始化失败：%v", err)
@@ -439,6 +443,56 @@ func main() {
 		if len(parts) >= 3 && parts[1] == "dashboards" && parts[2] == "instances" {
 			dashboardTemplateHandler.HandleInstances(w, r)
 			return
+		}
+
+		http.NotFound(w, r)
+	})
+
+	// 数据集路由：/api/datasets[/upload/file]
+	mux.HandleFunc("/api/datasets/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/datasets/")
+
+		// POST /api/datasets/upload/file
+		if path == "upload/file" && r.Method == http.MethodPost {
+			datasetHandler.UploadFile(w, r)
+			return
+		}
+
+		// GET /api/datasets - 列出数据集
+		if path == "" && r.Method == http.MethodGet {
+			datasetHandler.ListDatasets(w, r)
+			return
+		}
+
+		// /api/datasets/{id}/...
+		parts := strings.Split(strings.Trim(path, "/"), "/")
+		if len(parts) >= 1 && parts[0] != "" {
+			datasetID := parts[0]
+
+			switch {
+			case len(parts) == 1:
+				switch r.Method {
+				case http.MethodGet:
+					datasetHandler.GetDataset(w, r, datasetID)
+				case http.MethodDelete:
+					datasetHandler.DeleteDataset(w, r, datasetID)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+
+			case len(parts) == 2 && parts[1] == "preview":
+				if r.Method == http.MethodGet {
+					datasetHandler.GetDatasetPreview(w, r, datasetID)
+				}
+				return
+
+			case len(parts) == 2 && parts[1] == "quality":
+				if r.Method == http.MethodGet {
+					datasetHandler.GetQualityIssues(w, r, datasetID)
+				}
+				return
+			}
 		}
 
 		http.NotFound(w, r)

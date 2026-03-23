@@ -570,5 +570,10 @@ func AutoMigrate(db *gorm.DB) error {
 		// 认证相关
 		&RefreshToken{},
 		&AuthProvider{},
+		// 手动上传数据集
+		&UploadedDataset{},
+		&DatasetVersion{},
+		&DataQualityIssue{},
+		&DatasetAccessLog{},
 	)
 }
