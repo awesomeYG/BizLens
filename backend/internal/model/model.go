@@ -269,6 +269,140 @@ type NotificationRule struct {
 	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
 }
 
+// MetricDataType 指标数据类型
+type MetricDataType string
+
+const (
+	MetricTypeCurrency   MetricDataType = "currency"   // 金额
+	MetricTypeNumber     MetricDataType = "number"     // 数字
+	MetricTypePercentage MetricDataType = "percentage" // 百分比
+	MetricTypeDateTime   MetricDataType = "datetime"   // 日期时间
+	MetricTypeString     MetricDataType = "string"     // 字符串
+)
+
+// MetricAggregation 指标聚合方式
+type MetricAggregation string
+
+const (
+	AggSum      MetricAggregation = "sum"
+	AggCount    MetricAggregation = "count"
+	AggAvg      MetricAggregation = "avg"
+	AggMin      MetricAggregation = "min"
+	AggMax      MetricAggregation = "max"
+	AggDistinct MetricAggregation = "distinct_count"
+	AggCustom   MetricAggregation = "custom" // 自定义公式
+)
+
+// Metric 业务指标（语义层核心）
+type Metric struct {
+	ID               string            `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID         string            `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	Name             string            `gorm:"size:100;not null" json:"name"`          // 指标名称（如"GMV"）
+	DisplayName      string            `gorm:"size:200" json:"displayName"`            // 显示名称（如"成交总额"）
+	Description      string            `gorm:"size:500" json:"description"`            // 描述
+	DataType         MetricDataType    `gorm:"size:50;not null" json:"dataType"`       // 数据类型
+	Aggregation      MetricAggregation `gorm:"size:50;not null" json:"aggregation"`    // 聚合方式
+	Formula          string            `gorm:"type:text;not null" json:"formula"`      // 计算公式（如"SUM(orders.amount)"）
+	BaseTable        string            `gorm:"size:200" json:"baseTable"`              // 基础表名
+	BaseField        string            `gorm:"size:200" json:"baseField"`              // 基础字段
+	DependentMetrics string            `gorm:"type:text" json:"dependentMetrics"`      // 依赖的其他指标（JSON 数组）
+	Tags             string            `gorm:"size:500" json:"tags"`                   // 标签（JSON 数组，如["销售","核心指标"]）
+	Category         string            `gorm:"size:100" json:"category"`               // 分类（如"销售"、"用户"）
+	IsAutoDetected   bool              `gorm:"default:false" json:"isAutoDetected"`    // 是否 AI 自动发现
+	ConfidenceScore  float64           `gorm:"default:0.5" json:"confidenceScore"`     // 置信度（自动发现时使用）
+	Status           string            `gorm:"size:50;default:'active'" json:"status"` // active/inactive/draft
+	CreatedBy        string            `gorm:"type:varchar(50)" json:"createdBy"`      // 创建人 ID
+	CreatedAt        time.Time         `json:"createdAt"`
+	UpdatedAt        time.Time         `json:"updatedAt"`
+	DeletedAt        gorm.DeletedAt    `gorm:"index" json:"-"`
+
+	Tenant     Tenant     `gorm:"foreignKey:TenantID" json:"-"`
+	DataSource DataSource `gorm:"foreignKey:BaseTable" json:"-"` // 通过表名关联数据源
+}
+
+// MetricLineage 指标血缘（追踪指标来源和使用）
+type MetricLineage struct {
+	ID           string     `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID     string     `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	MetricID     string     `gorm:"type:varchar(50);not null;index" json:"metricId"`
+	SourceType   string     `gorm:"size:50;not null" json:"sourceType"` // table/column/metric
+	SourceID     string     `gorm:"type:varchar(50)" json:"sourceId"`   // 来源 ID（表名/字段/指标 ID）
+	SourceDetail string     `gorm:"type:text" json:"sourceDetail"`      // 来源详情（JSON）
+	UsageCount   int        `gorm:"default:0" json:"usageCount"`        // 被引用次数
+	LastUsedAt   *time.Time `json:"lastUsedAt"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	UpdatedAt    time.Time  `json:"updatedAt"`
+
+	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
+	Metric Metric `gorm:"foreignKey:MetricID" json:"-"`
+}
+
+// DimensionType 维度类型
+type DimensionType string
+
+const (
+	DimTypeTime     DimensionType = "time"     // 时间维度
+	DimTypeCategory DimensionType = "category" // 分类维度
+	DimTypeGeo      DimensionType = "geo"      // 地理维度
+	DimTypeCustom   DimensionType = "custom"   // 自定义维度
+)
+
+// Dimension 业务维度
+type Dimension struct {
+	ID             string         `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID       string         `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	Name           string         `gorm:"size:100;not null" json:"name"`          // 维度名称（如"province"）
+	DisplayName    string         `gorm:"size:200" json:"displayName"`            // 显示名称（如"省份"）
+	Description    string         `gorm:"size:500" json:"description"`            // 描述
+	DataType       DimensionType  `gorm:"size:50;not null" json:"dataType"`       // 维度类型
+	BaseTable      string         `gorm:"size:200;not null" json:"baseTable"`     // 基础表名
+	BaseField      string         `gorm:"size:200;not null" json:"baseField"`     // 基础字段
+	PreValues      string         `gorm:"type:text" json:"preValues"`             // 预估值（JSON 数组，用于快速筛选）
+	IsAutoDetected bool           `gorm:"default:false" json:"isAutoDetected"`    // 是否 AI 自动发现
+	Tags           string         `gorm:"size:500" json:"tags"`                   // 标签
+	Category       string         `gorm:"size:100" json:"category"`               // 分类
+	Status         string         `gorm:"size:50;default:'active'" json:"status"` // active/inactive
+	CreatedBy      string         `gorm:"type:varchar(50)" json:"createdBy"`
+	CreatedAt      time.Time      `json:"createdAt"`
+	UpdatedAt      time.Time      `json:"updatedAt"`
+	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
+
+	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
+}
+
+// RelationshipType 关系类型
+type RelationshipType string
+
+const (
+	RelOneToOne   RelationshipType = "one_to_one"
+	RelOneToMany  RelationshipType = "one_to_many"
+	RelManyToOne  RelationshipType = "many_to_one"
+	RelManyToMany RelationshipType = "many_to_many"
+)
+
+// Relationship 表关系（用于跨表查询）
+type Relationship struct {
+	ID              string           `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID        string           `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	Name            string           `gorm:"size:200;not null" json:"name"`          // 关系名称（如"订单 - 用户"）
+	Description     string           `gorm:"size:500" json:"description"`            // 描述
+	SourceType      string           `gorm:"size:50;not null" json:"sourceType"`     // 源表类型（table/metric）
+	SourceTable     string           `gorm:"size:200;not null" json:"sourceTable"`   // 源表名
+	TargetTable     string           `gorm:"size:200;not null" json:"targetTable"`   // 目标表名
+	Relationship    RelationshipType `gorm:"size:50;not null" json:"relationship"`   // 关系类型
+	JoinKey         string           `gorm:"size:200;not null" json:"joinKey"`       // 连接键（如"user_id"）
+	TargetKey       string           `gorm:"size:200;not null" json:"targetKey"`     // 目标连接键（如"id"）
+	IsAutoDetected  bool             `gorm:"default:false" json:"isAutoDetected"`    // 是否 AI 自动发现
+	ConfidenceScore float64          `gorm:"default:0.5" json:"confidenceScore"`     // 置信度
+	Status          string           `gorm:"size:50;default:'active'" json:"status"` // active/inactive
+	CreatedBy       string           `gorm:"type:varchar(50)" json:"createdBy"`
+	CreatedAt       time.Time        `json:"createdAt"`
+	UpdatedAt       time.Time        `json:"updatedAt"`
+	DeletedAt       gorm.DeletedAt   `gorm:"index" json:"-"`
+
+	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
+}
+
 // AutoMigrate 自动迁移所有表
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
@@ -280,5 +414,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&AlertTriggerLog{},
 		&DataSource{},
 		&NotificationRule{},
+		// 语义层模型
+		&Metric{},
+		&MetricLineage{},
+		&Dimension{},
+		&Relationship{},
 	)
 }

@@ -79,6 +79,13 @@ func main() {
 	notificationRuleService := service.NewNotificationRuleService(db, imService)
 	notificationRuleHandler := handler.NewNotificationRuleHandler(notificationRuleService)
 
+	// 语义层服务
+	metricService := service.NewMetricService(db)
+	dimensionService := service.NewDimensionService(db)
+	relationshipService := service.NewRelationshipService(db)
+	// semanticQueryService := service.NewSemanticQueryService(db, metricService, dimensionService, relationshipService)
+	metricHandler := handler.NewMetricHandler(metricService, dimensionService, relationshipService)
+
 	// 路由
 	mux := http.NewServeMux()
 
@@ -289,6 +296,67 @@ func main() {
 				default:
 					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				}
+				return
+			}
+		}
+
+		// /api/tenants/{tenantId}/metrics[/{metricId}[/{action}]]
+		if len(parts) >= 2 && parts[1] == "metrics" {
+			switch {
+			// POST /api/tenants/{id}/metrics/auto-discover
+			case len(parts) == 4 && parts[2] != "" && parts[3] == "auto-discover" && r.Method == http.MethodPost:
+				metricHandler.AutoDiscoverMetrics(w, r)
+				return
+
+			// POST /api/tenants/{id}/metrics/confirm
+			case len(parts) == 4 && parts[2] != "" && parts[3] == "confirm" && r.Method == http.MethodPost:
+				metricHandler.ConfirmMetrics(w, r)
+				return
+
+			// GET/POST /api/tenants/{id}/metrics
+			case len(parts) == 2:
+				switch r.Method {
+				case http.MethodGet:
+					metricHandler.ListMetrics(w, r)
+				case http.MethodPost:
+					metricHandler.CreateMetric(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+
+			// GET/PUT/DELETE /api/tenants/{id}/metrics/{metricId}
+			case len(parts) == 3 && parts[2] != "":
+				switch r.Method {
+				case http.MethodGet:
+					metricHandler.GetMetric(w, r)
+				case http.MethodPut:
+					metricHandler.UpdateMetric(w, r)
+				case http.MethodDelete:
+					metricHandler.DeleteMetric(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+			}
+		}
+
+		// /api/tenants/{tenantId}/dimensions/auto-discover
+		if len(parts) >= 2 && parts[1] == "dimensions" {
+			switch {
+			// POST /api/tenants/{id}/dimensions/auto-discover
+			case len(parts) == 4 && parts[2] != "" && parts[3] == "auto-discover" && r.Method == http.MethodPost:
+				metricHandler.AutoDiscoverDimensions(w, r)
+				return
+			}
+		}
+
+		// /api/tenants/{tenantId}/relationships/auto-discover
+		if len(parts) >= 2 && parts[1] == "relationships" {
+			switch {
+			// POST /api/tenants/{id}/relationships/auto-discover
+			case len(parts) == 4 && parts[2] != "" && parts[3] == "auto-discover" && r.Method == http.MethodPost:
+				metricHandler.AutoDiscoverRelationships(w, r)
 				return
 			}
 		}
