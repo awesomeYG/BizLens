@@ -109,12 +109,17 @@ export default function IMSettingsPage() {
           </svg>
           <span className="font-medium text-sm bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">BizLens</span>
         </Link>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-3 items-center">
           <Link href="/im/notifications" className="btn-ghost text-sm">通知中心</Link>
-          <button onClick={() => setShowForm(true)} className="btn-primary text-sm">
-            <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+          <button
+            onClick={() => setShowForm(true)}
+            className="group relative inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-zinc-100 transition-all duration-200 bg-zinc-900/80 border border-zinc-700/60 hover:border-indigo-500/50 hover:bg-zinc-800/90 hover:shadow-lg hover:shadow-indigo-500/10 active:scale-[0.97]"
+          >
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-indigo-500/15 text-indigo-400 transition-colors group-hover:bg-indigo-500/25">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            </span>
             添加平台
           </button>
         </div>
@@ -177,7 +182,15 @@ export default function IMSettingsPage() {
             </div>
             <h3 className="text-lg font-semibold text-zinc-200 mb-2">暂无 IM 平台配置</h3>
             <p className="text-zinc-500 text-sm mb-6">添加您的第一个即时通讯平台，开始接收智能通知</p>
-            <button onClick={() => setShowForm(true)} className="btn-primary">
+            <button
+              onClick={() => setShowForm(true)}
+              className="group relative inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-zinc-100 transition-all duration-200 bg-zinc-900/80 border border-zinc-700/60 hover:border-indigo-500/50 hover:bg-zinc-800/90 hover:shadow-lg hover:shadow-indigo-500/10 active:scale-[0.97]"
+            >
+              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-indigo-500/15 text-indigo-400 transition-colors group-hover:bg-indigo-500/25">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+              </span>
               添加平台
             </button>
           </div>
