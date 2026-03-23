@@ -236,3 +236,240 @@ body {
 .hover-glow-sweep:hover::before {
   left: 100%;
 }
+
+/* ========== Chat Premium Effects ========== */
+
+/* AI 头像呼吸光圈 */
+@keyframes breathe {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(99, 102, 241, 0);
+  }
+}
+
+.animate-breathe {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+/* 打字机光标闪烁 */
+@keyframes blink-caret {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.animate-caret {
+  animation: blink-caret 1s step-end infinite;
+}
+
+/* 消息入场 - 左侧滑入 */
+@keyframes msgSlideLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* 消息入场 - 右侧滑入 */
+@keyframes msgSlideRight {
+  from {
+    opacity: 0;
+    transform: translateX(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.animate-msg-left {
+  animation: msgSlideLeft 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.animate-msg-right {
+  animation: msgSlideRight 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* AI 思考骨架屏 */
+@keyframes thinking-shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+.thinking-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(99, 102, 241, 0.06) 0%,
+    rgba(99, 102, 241, 0.15) 40%,
+    rgba(168, 85, 247, 0.15) 60%,
+    rgba(99, 102, 241, 0.06) 100%
+  );
+  background-size: 800px 100%;
+  animation: thinking-shimmer 1.8s infinite ease-in-out;
+}
+
+/* 渐变文字 */
+.text-gradient {
+  background: linear-gradient(135deg, #818cf8 0%, #a78bfa 50%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 微光边框卡片 */
+.card-shimmer-border {
+  position: relative;
+}
+
+.card-shimmer-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.3) 0%,
+    rgba(168, 85, 247, 0.15) 30%,
+    transparent 50%,
+    rgba(168, 85, 247, 0.15) 70%,
+    rgba(99, 102, 241, 0.3) 100%
+  );
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  padding: 1px;
+  pointer-events: none;
+}
+
+/* 欢迎页面渐变球 */
+@keyframes float-orb {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(10px, -15px) scale(1.05);
+  }
+  66% {
+    transform: translate(-8px, 8px) scale(0.95);
+  }
+}
+
+.animate-float-orb {
+  animation: float-orb 8s ease-in-out infinite;
+}
+
+/* 输入框焦点发光 */
+.input-glow:focus-within {
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.3),
+              0 0 20px -5px rgba(99, 102, 241, 0.15);
+}
+
+/* 发送按钮涟漪 */
+@keyframes ripple-out {
+  0% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(99, 102, 241, 0);
+  }
+}
+
+.btn-ripple:active {
+  animation: ripple-out 0.4s ease-out;
+}
+
+/* 悬浮卡片内光效果 */
+.card-inner-glow {
+  background: radial-gradient(
+    ellipse at 50% 0%,
+    rgba(99, 102, 241, 0.08) 0%,
+    transparent 60%
+  );
+}
+
+/* 时间戳渐显 */
+@keyframes fadeInDelayed {
+  0%, 60% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.animate-fade-delayed {
+  animation: fadeInDelayed 0.8s ease-out forwards;
+}
+
+/* Markdown 样式 - AI 消息内容 */
+.prose-chat {
+  line-height: 1.75;
+}
+
+.prose-chat p {
+  margin-bottom: 0.75em;
+}
+
+.prose-chat p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-chat code {
+  background: rgba(99, 102, 241, 0.12);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: #c4b5fd;
+}
+
+.prose-chat pre {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(63, 63, 70, 0.5);
+  border-radius: 8px;
+  padding: 1em;
+  margin: 0.75em 0;
+  overflow-x: auto;
+}
+
+.prose-chat pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.85em;
+  color: #e4e4e7;
+}
+
+.prose-chat ul, .prose-chat ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.prose-chat li {
+  margin: 0.25em 0;
+}
+
+.prose-chat strong {
+  color: #fafafa;
+  font-weight: 600;
+}
+
+.prose-chat h1, .prose-chat h2, .prose-chat h3 {
+  color: #fafafa;
+  font-weight: 600;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.prose-chat h1 { font-size: 1.25em; }
+.prose-chat h2 { font-size: 1.1em; }
+.prose-chat h3 { font-size: 1em; }
+
+.prose-chat blockquote {
+  border-left: 3px solid rgba(99, 102, 241, 0.4);
+  padding-left: 1em;
+  color: #a1a1aa;
+  margin: 0.75em 0;
+}
