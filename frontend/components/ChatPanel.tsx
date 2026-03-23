@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { saveDashboard } from "@/lib/dashboard-store";
 import { DASHBOARD_TEMPLATES } from "@/lib/templates";
@@ -17,6 +16,88 @@ import type {
 interface ChatPanelProps {
   onDataSummaryChange?: (summary: string) => void;
   companyProfile?: CompanyProfile;
+}
+
+interface AnalysisEvaluation {
+  totalQueries: number;
+  querySuccessRate: number;
+  clarificationRate: number;
+  avgResponseMs: number;
+  confidenceDistribution: {
+    high: number;
+    medium: number;
+    low: number;
+  };
+  recentTrend?: Array<{
+    timestamp: number;
+    success: boolean;
+    hadClarification: boolean;
+    confidence: "high" | "medium" | "low";
+    durationMs: number;
+  }>;
+}
+
+function buildSparklinePoints(values: number[], width = 240, height = 56): string {
+  if (values.length === 0) return "";
+  if (values.length === 1) return `0,${height / 2}`;
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(max - min, 1);
+  return values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * width;
+      const y = height - ((v - min) / range) * height;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+}
+
+function buildRollingRate(values: boolean[], windowSize = 5): number[] {
+  if (values.length === 0) return [];
+  return values.map((_, idx) => {
+    const start = Math.max(0, idx - windowSize + 1);
+    const window = values.slice(start, idx + 1);
+    const hit = window.filter(Boolean).length;
+    return (hit / window.length) * 100;
+  });
+}
+
+function formatCondition(type?: string): string {
+  if (!type) return "";
+  const map: Record<string, string> = {
+    greater: "大于",
+    less: "小于",
+    equals: "等于",
+    change: "变化率",
+    custom: "自定义",
+  };
+  return map[type] || type;
+}
+
+function formatTimeRange(range?: string): string {
+  if (!range) return "";
+  const map: Record<string, string> = {
+    today: "今日",
+    yesterday: "昨日",
+    last_7_days: "近 7 天",
+    last_30_days: "近 30 天",
+    this_month: "本月",
+  };
+  return map[range] || range;
+}
+
+function formatFrequency(freq?: string): string {
+  if (!freq) return "";
+  const map: Record<string, string> = {
+    once: "仅一次",
+    hourly: "每小时",
+    daily: "每天",
+    weekly: "每周",
+    monthly: "每月",
+    realtime: "实时",
+  };
+  return map[freq] || freq;
 }
 
 export default function ChatPanel({
@@ -44,6 +125,7 @@ export default function ChatPanel({
   const [dashboardTitle, setDashboardTitle] = useState("AI 数据大屏");
   const [dataSourceLabel, setDataSourceLabel] = useState<string | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; summary?: string }[]>([]);
+  const [analysisEvaluation, setAnalysisEvaluation] = useState<AnalysisEvaluation | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -54,6 +136,24 @@ export default function ChatPanel({
   useEffect(() => {
     onDataSummaryChange?.(dataSummary);
   }, [dataSummary, onDataSummaryChange]);
+
+  useEffect(() => {
+    fetchAnalysisEvaluation();
+  }, []);
+
+  const fetchAnalysisEvaluation = async () => {
+    try {
+      const user = getCurrentUser();
+      const tenantId = user?.id || "demo-tenant";
+      const res = await fetch(`/api/tenants/${tenantId}/analysis/evaluation`);
+      const data = await res.json();
+      if (res.ok && data?.evaluation) {
+        setAnalysisEvaluation(data.evaluation as AnalysisEvaluation);
+      }
+    } catch {
+      // 评估指标拉取失败不阻塞主流程
+    }
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -116,104 +216,7 @@ export default function ChatPanel({
     msgList: { role: string; content: string }[],
     appendUser = true
   ) => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: msgList,
-          dataSummary: dataSummary || undefined,
-          dashboardData: draftData,
-          companyProfile,
-        }),
-      });
-      const data = await res.json();
-      const content = data.content || data.error || "无回复";
-
-      // 检测 AI 回复中的告警配置
-      const alertMatch = content.match(/```alert_config\s*\n([\s\S]*?)\n```/);
-      if (alertMatch) {
-        try {
-          const alertConfig = JSON.parse(alertMatch[1]);
-          const user = getCurrentUser();
-          const tenantId = user?.id || "demo-tenant";
-          const alertRes = await fetch(`/api/tenants/${tenantId}/alerts`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(alertConfig),
-          });
-          if (alertRes.ok) {
-            const created = await alertRes.json();
-            // 在回复后追加创建成功的提示
-            const cleanContent = content.replace(/```alert_config\s*\n[\s\S]*?\n```/, "").trim();
-            setMessages((prev) => [
-              ...prev,
-              ...(appendUser
-                ? [{
-                    id: crypto.randomUUID(),
-                    role: "user" as const,
-                    content: input,
-                    timestamp: Date.now(),
-                  }]
-                : []),
-              {
-                id: crypto.randomUUID(),
-                role: "assistant" as const,
-                content: cleanContent + `\n\n✅ 告警规则「${created.name}」已自动创建，可在 [智能告警](/alerts) 页面查看和管理。`,
-                timestamp: Date.now(),
-              },
-            ]);
-            setInput("");
-            return;
-          }
-        } catch {
-          // JSON 解析失败，按普通消息处理
-        }
-      }
-
-      // 检测 AI 回复中的通知规则配置
-      const notificationMatch = content.match(/```notification_rule\s*\n([\s\S]*?)\n```/);
-      if (notificationMatch) {
-        try {
-          const ruleConfig = JSON.parse(notificationMatch[1]);
-          const user = getCurrentUser();
-          const tenantId = user?.id || "demo-tenant";
-          const ruleRes = await fetch(`/api/tenants/${tenantId}/notification-rules`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(ruleConfig),
-          });
-          if (ruleRes.ok) {
-            const created = await ruleRes.json();
-            // 在回复后追加创建成功的提示
-            const cleanContent = content.replace(/```notification_rule\s*\n[\s\S]*?\n```/, "").trim();
-            setMessages((prev) => [
-              ...prev,
-              ...(appendUser
-                ? [{
-                    id: crypto.randomUUID(),
-                    role: "user" as const,
-                    content: input,
-                    timestamp: Date.now(),
-                  }]
-                : []),
-              {
-                id: crypto.randomUUID(),
-                role: "assistant" as const,
-                content: cleanContent + `\n\n✅ 智能通知规则「${created.name}」已自动创建！\n\n**配置详情**：\n- 触发条件：${formatCondition(created.conditionType)} ${created.threshold}\n- 时间范围：${formatTimeRange(created.timeRange)}\n- 通知频率：${formatFrequency(created.frequency)}\n\n你可以在对话中继续调整规则，或说"查看通知规则"来管理。`,
-                timestamp: Date.now(),
-              },
-            ]);
-            setInput("");
-            return;
-          }
-        } catch (err) {
-          // JSON 解析失败，按普通消息处理
-          console.error("创建通知规则失败:", err);
-        }
-      }
-
+    const appendMessages = (assistantContent: string) => {
       setMessages((prev) => [
         ...prev,
         ...(appendUser
@@ -229,11 +232,107 @@ export default function ChatPanel({
         {
           id: crypto.randomUUID(),
           role: "assistant" as const,
-          content,
+          content: assistantContent,
           timestamp: Date.now(),
         },
       ]);
       setInput("");
+    };
+
+    const createAlertFromResponse = async (rawContent: string, renderContent: string) => {
+      const alertRegex = /```alert_config\s*\n([\s\S]*?)\n```/;
+      const alertMatch = alertRegex.exec(rawContent);
+      if (!alertMatch) return false;
+
+      try {
+        const alertConfig = JSON.parse(alertMatch[1]);
+        const user = getCurrentUser();
+        const tenantId = user?.id || "demo-tenant";
+        const alertRes = await fetch(`/api/tenants/${tenantId}/alerts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(alertConfig),
+        });
+        if (!alertRes.ok) return false;
+
+        const created = await alertRes.json();
+        const cleanContent = renderContent.replace(alertRegex, "").trim();
+        appendMessages(cleanContent + `\n\n✅ 告警规则「${created.name}」已自动创建，可在 [智能告警](/alerts) 页面查看和管理。`);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    const createNotificationRuleFromResponse = async (rawContent: string, renderContent: string) => {
+      const notificationRegex = /```notification_rule\s*\n([\s\S]*?)\n```/;
+      const notificationMatch = notificationRegex.exec(rawContent);
+      if (!notificationMatch) return false;
+
+      try {
+        const ruleConfig = JSON.parse(notificationMatch[1]);
+        const user = getCurrentUser();
+        const tenantId = user?.id || "demo-tenant";
+        const ruleRes = await fetch(`/api/tenants/${tenantId}/notification-rules`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(ruleConfig),
+        });
+        if (!ruleRes.ok) return false;
+
+        const created = await ruleRes.json();
+        const cleanContent = renderContent.replace(notificationRegex, "").trim();
+        appendMessages(
+          cleanContent +
+            `\n\n✅ 智能通知规则「${created.name}」已自动创建！\n\n**配置详情**：\n- 触发条件：${formatCondition(created.conditionType)} ${created.threshold}\n- 时间范围：${formatTimeRange(created.timeRange)}\n- 通知频率：${formatFrequency(created.frequency)}\n\n你可以在对话中继续调整规则，或说"查看通知规则"来管理。`
+        );
+        return true;
+      } catch (err) {
+        console.error("创建通知规则失败:", err);
+        return false;
+      }
+    };
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: msgList,
+          dataSummary: dataSummary || undefined,
+          dashboardData: draftData,
+          companyProfile,
+        }),
+      });
+      const data = await res.json();
+      const content = data.content || data.error || "无回复";
+      const analysis = data.analysis as
+        | {
+            clarificationQuestion?: string;
+            quality?: { confidence?: string; issues?: string[] };
+            insight?: { chartRecommendation?: string };
+          }
+        | undefined;
+      const analysisHint = analysis
+        ? [
+            analysis.clarificationQuestion ? `补充信息：${analysis.clarificationQuestion}` : "",
+            analysis.quality?.confidence ? `结果可信度：${analysis.quality.confidence}` : "",
+            analysis.insight?.chartRecommendation ? `建议图表：${analysis.insight.chartRecommendation}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n")
+        : "";
+      const finalContent = analysisHint ? `${content}\n\n---\n${analysisHint}` : content;
+      if (data?.analysis?.evaluation) {
+        setAnalysisEvaluation(data.analysis.evaluation as AnalysisEvaluation);
+      } else {
+        await fetchAnalysisEvaluation();
+      }
+
+      if (await createAlertFromResponse(content, finalContent)) return;
+      if (await createNotificationRuleFromResponse(content, finalContent)) return;
+      appendMessages(finalContent);
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -285,46 +384,11 @@ export default function ChatPanel({
       [key]: Number.isFinite(num) ? num : prev[key],
     }));
   };
-
-  // 辅助函数：格式化条件类型
-  function formatCondition(type?: string): string {
-    if (!type) return "";
-    const map: Record<string, string> = {
-      greater: "大于",
-      less: "小于",
-      equals: "等于",
-      change: "变化率",
-      custom: "自定义",
-    };
-    return map[type] || type;
-  }
-
-  // 辅助函数：格式化时间范围
-  function formatTimeRange(range?: string): string {
-    if (!range) return "";
-    const map: Record<string, string> = {
-      today: "今日",
-      yesterday: "昨日",
-      last_7_days: "近 7 天",
-      last_30_days: "近 30 天",
-      this_month: "本月",
-    };
-    return map[range] || range;
-  }
-
-  // 辅助函数：格式化频率
-  function formatFrequency(freq?: string): string {
-    if (!freq) return "";
-    const map: Record<string, string> = {
-      once: "仅一次",
-      hourly: "每小时",
-      daily: "每天",
-      weekly: "每周",
-      monthly: "每月",
-      realtime: "实时",
-    };
-    return map[freq] || freq;
-  }
+  const trendItems = analysisEvaluation?.recentTrend || [];
+  const successWindow = buildRollingRate(trendItems.map((item) => item.success), 5);
+  const clarificationWindow = buildRollingRate(trendItems.map((item) => item.hadClarification), 5);
+  const successPolyline = buildSparklinePoints(successWindow);
+  const clarificationPolyline = buildSparklinePoints(clarificationWindow);
 
   return (
     <div className="flex flex-col h-full">
@@ -380,6 +444,63 @@ export default function ChatPanel({
 
         {/* 侧边栏 - 大屏草稿（降低存在感） */}
         <aside className="hidden lg:block w-72 border-l border-zinc-800/80 bg-zinc-900/30 p-4 overflow-y-auto space-y-4">
+          {analysisEvaluation && (
+            <div>
+              <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">分析质量</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg border border-zinc-800/70 p-2 bg-zinc-900/40">
+                  <div className="text-[11px] text-zinc-500">查询成功率</div>
+                  <div className="text-sm text-zinc-300">{analysisEvaluation.querySuccessRate}%</div>
+                </div>
+                <div className="rounded-lg border border-zinc-800/70 p-2 bg-zinc-900/40">
+                  <div className="text-[11px] text-zinc-500">澄清率</div>
+                  <div className="text-sm text-zinc-300">{analysisEvaluation.clarificationRate}%</div>
+                </div>
+                <div className="rounded-lg border border-zinc-800/70 p-2 bg-zinc-900/40">
+                  <div className="text-[11px] text-zinc-500">平均响应</div>
+                  <div className="text-sm text-zinc-300">{analysisEvaluation.avgResponseMs}ms</div>
+                </div>
+                <div className="rounded-lg border border-zinc-800/70 p-2 bg-zinc-900/40">
+                  <div className="text-[11px] text-zinc-500">总查询数</div>
+                  <div className="text-sm text-zinc-300">{analysisEvaluation.totalQueries}</div>
+                </div>
+              </div>
+              <div className="mt-2 text-[11px] text-zinc-500">
+                置信度分布：高 {analysisEvaluation.confidenceDistribution.high} / 中 {analysisEvaluation.confidenceDistribution.medium} / 低 {analysisEvaluation.confidenceDistribution.low}
+              </div>
+              {trendItems.length > 0 && (
+                <div className="mt-3 rounded-lg border border-zinc-800/70 p-2 bg-zinc-900/40">
+                  <div className="text-[11px] text-zinc-500 mb-1">最近 {trendItems.length} 次趋势</div>
+                  <svg viewBox="0 0 240 56" className="w-full h-14">
+                    <polyline
+                      points={successPolyline}
+                      fill="none"
+                      stroke="rgb(16,185,129)"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                    <polyline
+                      points={clarificationPolyline}
+                      fill="none"
+                      stroke="rgb(99,102,241)"
+                      strokeWidth="2"
+                      strokeDasharray="4 3"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <div className="mt-1 flex items-center gap-3 text-[10px] text-zinc-500">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="w-2 h-0.5 bg-emerald-500 inline-block" />成功率(5次窗口)
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="w-2 h-0.5 bg-indigo-500 inline-block" />澄清率(5次窗口)
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
             <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">已学习数据</h3>
             {dataSourceLabel && <div className="text-xs text-zinc-600 mb-2">来源：{dataSourceLabel}</div>}

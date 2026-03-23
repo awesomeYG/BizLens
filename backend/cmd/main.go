@@ -79,6 +79,8 @@ func main() {
 	schemaHandler := handler.NewSchemaHandler(dataSourceService)
 	notificationRuleService := service.NewNotificationRuleService(db, imService)
 	notificationRuleHandler := handler.NewNotificationRuleHandler(notificationRuleService)
+	analysisService := service.NewAnalysisService(db)
+	analysisHandler := handler.NewAnalysisHandler(analysisService)
 
 	// 语义层服务
 	metricService := service.NewMetricService(db)
@@ -443,6 +445,18 @@ func main() {
 		if len(parts) >= 3 && parts[1] == "dashboards" && parts[2] == "instances" {
 			dashboardTemplateHandler.HandleInstances(w, r)
 			return
+		}
+
+		// /api/tenants/{tenantId}/analysis/[query|evaluation]
+		if len(parts) >= 3 && parts[1] == "analysis" {
+			switch {
+			case len(parts) == 3 && parts[2] == "query" && r.Method == http.MethodPost:
+				analysisHandler.AnalyzeQuestion(w, r)
+				return
+			case len(parts) == 3 && parts[2] == "evaluation" && r.Method == http.MethodGet:
+				analysisHandler.GetAnalysisEvaluation(w, r)
+				return
+			}
 		}
 
 		http.NotFound(w, r)

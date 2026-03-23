@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import {
+  analyzeQuestion,
+  getEvaluationSummary,
+} from "@/lib/ai-analysis";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "",
@@ -189,6 +193,7 @@ export async function POST(req: NextRequest) {
       dataSchema,
       companyProfile,
       conversationContext,
+      tenantId: clientTenantId,
       aiConfig: clientAiConfig
     } = body as {
       messages: { role: string; content: string }[];
@@ -196,6 +201,7 @@ export async function POST(req: NextRequest) {
       dataSchema?: any;
       companyProfile?: any;
       conversationContext?: any;
+      tenantId?: string;
       aiConfig?: {
         apiKey?: string;
         baseUrl?: string;
@@ -210,6 +216,13 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    const latestUserMessage = [...messages].reverse().find((m) => m.role === "user")?.content || "";
+    const tenantId =
+      clientTenantId ||
+      conversationContext?.tenantId ||
+      companyProfile?.tenantId ||
+      "demo-tenant";
+    const analysisPacket = await getAnalysisPacketFromBackend(tenantId, latestUserMessage);
 
     // 优先使用客户端传来的配置
     const apiKey = clientAiConfig?.apiKey || process.env.OPENAI_API_KEY || process.env.AI_API_KEY;
@@ -258,6 +271,7 @@ export async function POST(req: NextRequest) {
     if (conversationContext) {
       systemContent += `\n\n## 对话上下文\n${JSON.stringify(conversationContext, null, 2)}`;
     }
+    systemContent += `\n\n## AI分析引擎上下文（用于提高回答稳定性）\n${JSON.stringify(analysisPacket, null, 2)}`;
 
     const formattedMessages = messages.map((m) => ({
       role: m.role as "user" | "assistant" | "system",
@@ -276,11 +290,13 @@ export async function POST(req: NextRequest) {
     });
 
     const content = response.choices[0]?.message?.content || "抱歉，未能生成回复。";
-    
     return NextResponse.json({ 
       content,
       usage: response.usage,
       model: finalModel,
+      analysis: {
+        ...analysisPacket,
+      },
     });
   } catch (err: any) {
     console.error("Chat API error:", err);
@@ -301,8 +317,37 @@ export async function POST(req: NextRequest) {
     }
     
     return NextResponse.json(
-      { error: "AI 服务异常：" + err.message },
+      {
+        error: "AI 服务异常：" + err.message,
+        analysisEvaluation: getEvaluationSummary(),
+      },
       { status: 500 }
     );
   }
+}
+
+async function getAnalysisPacketFromBackend(tenantId: string, question: string) {
+  const backendBase = process.env.BACKEND_INTERNAL_URL || "http://localhost:3001";
+  try {
+    const res = await fetch(`${backendBase}/api/tenants/${tenantId}/analysis/query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Tenant-ID": tenantId },
+      body: JSON.stringify({ question }),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      throw new Error(`backend analysis failed: ${res.status}`);
+    }
+    const payload = await res.json();
+    if (payload?.analysis) {
+      return payload.analysis;
+    }
+  } catch {
+    // ignore and fallback
+  }
+
+  return {
+    ...analyzeQuestion(question),
+    evaluation: getEvaluationSummary(),
+  };
 }

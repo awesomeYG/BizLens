@@ -547,6 +547,26 @@ type AuthProvider struct {
 	User   User   `gorm:"foreignKey:UserID" json:"-"`
 }
 
+// AnalysisQueryLog AI 问答分析日志（用于评估与持续优化）
+type AnalysisQueryLog struct {
+	ID               string         `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID         string         `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	Question         string         `gorm:"type:text;not null" json:"question"`
+	IntentType       string         `gorm:"size:50;not null" json:"intentType"`
+	Metrics          string         `gorm:"type:text" json:"metrics"`    // JSON 数组
+	Dimensions       string         `gorm:"type:text" json:"dimensions"` // JSON 数组
+	TimeRange        string         `gorm:"size:100" json:"timeRange"`
+	SQLText          string         `gorm:"type:text" json:"sqlText"`
+	Confidence       string         `gorm:"size:20" json:"confidence"` // high/medium/low
+	HadClarification bool           `gorm:"default:false" json:"hadClarification"`
+	Success          bool           `gorm:"default:true" json:"success"`
+	DurationMs       int64          `gorm:"default:0" json:"durationMs"`
+	QualityIssues    string         `gorm:"type:text" json:"qualityIssues"` // JSON 数组
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
+	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
 // AutoMigrate 自动迁移所有表
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
@@ -575,5 +595,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&DatasetVersion{},
 		&DataQualityIssue{},
 		&DatasetAccessLog{},
+		// AI 问答分析
+		&AnalysisQueryLog{},
 	)
 }
