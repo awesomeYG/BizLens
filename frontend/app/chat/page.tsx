@@ -8,12 +8,11 @@ import { getCurrentUser } from "@/lib/user-store";
 export default function ChatPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
-  const [dataSummary, setDataSummary] = useState("");
 
   useEffect(() => {
     const user = getCurrentUser();
     if (!user) {
-      router.replace("/");
+      router.replace("/auth/login");
       return;
     }
     setReady(true);
@@ -23,7 +22,7 @@ export default function ChatPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-zinc-950">
-      <SimpleChatPanel onDataSummaryChange={setDataSummary} />
+      <SimpleChatPanel />
     </div>
   );
 }
