@@ -75,11 +75,11 @@ body {
 }
 
 .btn-secondary {
-  @apply px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/50 transition-all;
+  @apply px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-100 border border-white/10 transition-all;
 }
 
 .btn-ghost {
-  @apply px-4 py-2 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-all;
+  @apply px-4 py-2 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-white/5 border border-transparent transition-all;
 }
 
 /* 状态标签 */
