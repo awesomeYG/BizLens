@@ -27,15 +27,22 @@ func NewDatasetHandler(datasetService *service.DatasetService, uploadDir string)
 	}
 }
 
+// getAuthInfo 从请求上下文中获取认证信息（由 JWT 中间件注入）
+func getAuthInfo(r *http.Request) (tenantID string, userID string, ok bool) {
+	tid := r.Context().Value("tenantID")
+	uid := r.Context().Value("userID")
+	if tid == nil || uid == nil {
+		return "", "", false
+	}
+	return tid.(string), uid.(string), true
+}
+
 // UploadInit 初始化上传
 // POST /api/datasets/upload/init
 func (h *DatasetHandler) UploadInit(w http.ResponseWriter, r *http.Request) {
-	// 获取用户信息（从上下文）
-	tenantID := r.Header.Get("X-Tenant-ID")
-	userID := r.Header.Get("X-User-ID")
-
-	if tenantID == "" || userID == "" {
-		http.Error(w, "未授权", http.StatusUnauthorized)
+	tenantID, userID, ok := getAuthInfo(r)
+	if !ok {
+		http.Error(w, `{"error":"未授权"}`, http.StatusUnauthorized)
 		return
 	}
 
@@ -57,11 +64,9 @@ func (h *DatasetHandler) UploadInit(w http.ResponseWriter, r *http.Request) {
 // UploadFile 上传文件
 // POST /api/datasets/upload/file
 func (h *DatasetHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
-	userID := r.Header.Get("X-User-ID")
-
-	if tenantID == "" || userID == "" {
-		http.Error(w, "未授权", http.StatusUnauthorized)
+	tenantID, userID, ok := getAuthInfo(r)
+	if !ok {
+		http.Error(w, `{"error":"未授权"}`, http.StatusUnauthorized)
 		return
 	}
 
@@ -113,15 +118,26 @@ func (h *DatasetHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, completeResp)
+	// 查询完整的数据集记录返回给前端
+	dataset, _ := h.datasetService.GetDataset(completeResp.DatasetID, tenantID)
+	resp := map[string]interface{}{
+		"datasetId": completeResp.DatasetID,
+		"taskId":    completeResp.TaskID,
+		"status":    completeResp.Status,
+	}
+	if dataset != nil {
+		resp["dataset"] = dataset
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // ListDatasets 列出数据集
 // GET /api/datasets
 func (h *DatasetHandler) ListDatasets(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
-	if tenantID == "" {
-		http.Error(w, "未授权", http.StatusUnauthorized)
+	tenantID, _, ok := getAuthInfo(r)
+	if !ok {
+		http.Error(w, `{"error":"未授权"}`, http.StatusUnauthorized)
 		return
 	}
 
@@ -159,9 +175,9 @@ func (h *DatasetHandler) ListDatasets(w http.ResponseWriter, r *http.Request) {
 // GetDataset 获取数据集详情
 // GET /api/datasets/:id
 func (h *DatasetHandler) GetDataset(w http.ResponseWriter, r *http.Request, id string) {
-	tenantID := r.Header.Get("X-Tenant-ID")
-	if tenantID == "" {
-		http.Error(w, "未授权", http.StatusUnauthorized)
+	tenantID, _, ok := getAuthInfo(r)
+	if !ok {
+		http.Error(w, `{"error":"未授权"}`, http.StatusUnauthorized)
 		return
 	}
 
@@ -177,9 +193,9 @@ func (h *DatasetHandler) GetDataset(w http.ResponseWriter, r *http.Request, id s
 // DeleteDataset 删除数据集
 // DELETE /api/datasets/:id
 func (h *DatasetHandler) DeleteDataset(w http.ResponseWriter, r *http.Request, id string) {
-	tenantID := r.Header.Get("X-Tenant-ID")
-	if tenantID == "" {
-		http.Error(w, "未授权", http.StatusUnauthorized)
+	tenantID, _, ok := getAuthInfo(r)
+	if !ok {
+		http.Error(w, `{"error":"未授权"}`, http.StatusUnauthorized)
 		return
 	}
 
@@ -216,21 +232,20 @@ func (h *DatasetHandler) GetDatasetPreview(w http.ResponseWriter, r *http.Reques
 // GetQualityIssues 获取质量问题
 // GET /api/datasets/:id/quality
 func (h *DatasetHandler) GetQualityIssues(w http.ResponseWriter, r *http.Request, id string) {
-	tenantID := r.Header.Get("X-Tenant-ID")
-	if tenantID == "" {
-		http.Error(w, "未授权", http.StatusUnauthorized)
+	if _, _, ok := getAuthInfo(r); !ok {
+		http.Error(w, `{"error":"未授权"}`, http.StatusUnauthorized)
 		return
 	}
 
 	// TODO: 实现获取质量问题
 	writeJSON(w, http.StatusOK, []interface{}{})
 }
+
 // GetCleanOperations 获取可用的清洗操作
 // GET /api/datasets/:id/clean/operations
 func (h *DatasetHandler) GetCleanOperations(w http.ResponseWriter, r *http.Request, id string) {
-	tenantID := r.Header.Get("X-Tenant-ID")
-	if tenantID == "" {
-		http.Error(w, "未授权", http.StatusUnauthorized)
+	if _, _, ok := getAuthInfo(r); !ok {
+		http.Error(w, `{"error":"未授权"}`, http.StatusUnauthorized)
 		return
 	}
 
@@ -259,9 +274,8 @@ func (h *DatasetHandler) GetCleanOperations(w http.ResponseWriter, r *http.Reque
 // ExecuteClean 执行清洗操作
 // POST /api/datasets/:id/clean
 func (h *DatasetHandler) ExecuteClean(w http.ResponseWriter, r *http.Request, id string) {
-	tenantID := r.Header.Get("X-Tenant-ID")
-	if tenantID == "" {
-		http.Error(w, "未授权", http.StatusUnauthorized)
+	if _, _, ok := getAuthInfo(r); !ok {
+		http.Error(w, `{"error":"未授权"}`, http.StatusUnauthorized)
 		return
 	}
 
@@ -282,9 +296,8 @@ func (h *DatasetHandler) ExecuteClean(w http.ResponseWriter, r *http.Request, id
 // DetectSensitiveData 检测敏感数据
 // GET /api/datasets/:id/sensitive
 func (h *DatasetHandler) DetectSensitiveData(w http.ResponseWriter, r *http.Request, id string) {
-	tenantID := r.Header.Get("X-Tenant-ID")
-	if tenantID == "" {
-		http.Error(w, "未授权", http.StatusUnauthorized)
+	if _, _, ok := getAuthInfo(r); !ok {
+		http.Error(w, `{"error":"未授权"}`, http.StatusUnauthorized)
 		return
 	}
 
@@ -299,9 +312,8 @@ func (h *DatasetHandler) DetectSensitiveData(w http.ResponseWriter, r *http.Requ
 // MaskSensitiveData 脱敏敏感数据
 // POST /api/datasets/:id/mask
 func (h *DatasetHandler) MaskSensitiveData(w http.ResponseWriter, r *http.Request, id string) {
-	tenantID := r.Header.Get("X-Tenant-ID")
-	if tenantID == "" {
-		http.Error(w, "未授权", http.StatusUnauthorized)
+	if _, _, ok := getAuthInfo(r); !ok {
+		http.Error(w, `{"error":"未授权"}`, http.StatusUnauthorized)
 		return
 	}
 

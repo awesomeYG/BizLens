@@ -1,70 +1,64 @@
 import { NextRequest, NextResponse } from "next/server";
-import { unlink } from "fs/promises";
-import path from "path";
 
-// 模拟数据集存储
-const datasets: Map<string, any> = new Map();
+const GO_BACKEND_URL = process.env.GO_BACKEND_URL || "http://localhost:3001";
 
-// 获取数据集列表
+// 代理转发到 Go 后端 - 获取数据集列表
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const search = searchParams.get("search") || "";
-  const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "20");
+  try {
+    const headers: Record<string, string> = {};
+    const authHeader = request.headers.get("Authorization");
+    if (authHeader) {
+      headers["Authorization"] = authHeader;
+    }
 
-  let result = Array.from(datasets.values());
+    const searchParams = request.nextUrl.searchParams.toString();
+    const url = `${GO_BACKEND_URL}/api/datasets/${searchParams ? `?${searchParams}` : ""}`;
 
-  // 搜索过滤
-  if (search) {
-    result = result.filter(
-      (d) =>
-        d.name.toLowerCase().includes(search.toLowerCase()) ||
-        d.fileName.toLowerCase().includes(search.toLowerCase())
+    const response = await fetch(url, { headers });
+    const data = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status });
+    }
+
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("获取数据集列表代理失败:", error);
+    return NextResponse.json(
+      { error: "获取数据集列表失败" },
+      { status: 500 }
     );
   }
-
-  // 分页
-  const total = result.length;
-  const totalPages = Math.ceil(total / limit);
-  const offset = (page - 1) * limit;
-  result = result.slice(offset, offset + limit);
-
-  return NextResponse.json({
-    data: result,
-    total,
-    page,
-    limit,
-    totalPages,
-  });
 }
 
-// 删除数据集
+// 代理转发到 Go 后端 - 删除数据集
 export async function DELETE(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get("id");
-
-  if (!id) {
-    return NextResponse.json({ error: "缺少文件 ID" }, { status: 400 });
-  }
-
-  const dataset = datasets.get(id);
-  if (!dataset) {
-    return NextResponse.json({ error: "文件不存在" }, { status: 404 });
-  }
-
-  // 删除物理文件
   try {
-    const filePath = dataset.objectKey;
-    if (filePath) {
-      await unlink(filePath);
+    const headers: Record<string, string> = {};
+    const authHeader = request.headers.get("Authorization");
+    if (authHeader) {
+      headers["Authorization"] = authHeader;
     }
-  } catch (err: any) {
-    // 文件可能不存在，继续删除记录
-    console.warn("删除文件失败:", err.message);
+
+    const searchParams = request.nextUrl.searchParams.toString();
+    const url = `${GO_BACKEND_URL}/api/datasets/${searchParams ? `?${searchParams}` : ""}`;
+
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers,
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status });
+    }
+
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("删除数据集代理失败:", error);
+    return NextResponse.json(
+      { error: "删除数据集失败" },
+      { status: 500 }
+    );
   }
-
-  // 删除记录
-  datasets.delete(id);
-
-  return NextResponse.json({ success: true, message: "文件已删除" });
 }

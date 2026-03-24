@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { getAccessToken } from "@/lib/auth/api";
 
 interface UploadedFile {
   id: string;
@@ -114,7 +115,10 @@ export default function FilesSettingsPage() {
       if (searchQuery) params.set("search", searchQuery);
       params.set("limit", "100");
 
-      const response = await fetch(`/api/datasets?${params.toString()}`);
+      const token = getAccessToken();
+      const response = await fetch(`/api/datasets?${params.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const result = await response.json();
       setFiles(result.data || []);
     } catch (err) {
@@ -158,8 +162,10 @@ export default function FilesSettingsPage() {
         setUploadProgress((prev) => Math.min(prev + 10, 90));
       }, 200);
 
+      const token = getAccessToken();
       const response = await fetch("/api/datasets/upload/file", {
         method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
 
@@ -191,8 +197,10 @@ export default function FilesSettingsPage() {
 
   const handleDelete = async (id: string) => {
     try {
+      const token = getAccessToken();
       const response = await fetch(`/api/datasets?id=${id}`, {
         method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
       if (!response.ok) {

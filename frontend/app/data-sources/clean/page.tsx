@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getAccessToken } from "@/lib/auth/api";
 
 interface FieldInfo {
   name: string;
@@ -63,12 +64,14 @@ function DataCleanPageContent() {
 
     const loadData = async () => {
       try {
+        const token = getAccessToken();
+        const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
         const [dsRes, previewRes] = await Promise.all([
           fetch(`/api/datasets/${datasetId}`, {
-            headers: { "X-Tenant-ID": "demo-tenant", "X-User-ID": "demo-user" },
+            headers: authHeaders,
           }),
           fetch(`/api/datasets/${datasetId}/preview?limit=20`, {
-            headers: { "X-Tenant-ID": "demo-tenant", "X-User-ID": "demo-user" },
+            headers: authHeaders,
           }),
         ]);
 
@@ -101,8 +104,9 @@ function DataCleanPageContent() {
 
     const loadIssues = async () => {
       try {
+        const token = getAccessToken();
         const res = await fetch(`/api/datasets/${datasetId}/quality`, {
-          headers: { "X-Tenant-ID": "demo-tenant", "X-User-ID": "demo-user" },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (res.ok) {
           const data = await res.json();
@@ -131,6 +135,7 @@ function DataCleanPageContent() {
     });
 
     try {
+      const token = getAccessToken();
       const params = new URLSearchParams({
         field: field.name,
         type: field.type,
@@ -138,7 +143,7 @@ function DataCleanPageContent() {
       });
 
       const res = await fetch(`/api/datasets/${datasetId}/clean/operations?${params}`, {
-        headers: { "X-Tenant-ID": "demo-tenant", "X-User-ID": "demo-user" },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
       if (res.ok) {
@@ -168,12 +173,12 @@ function DataCleanPageContent() {
 
     setCleaning(true);
     try {
+      const token = getAccessToken();
       const res = await fetch(`/api/datasets/${datasetId}/clean`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Tenant-ID": "demo-tenant",
-          "X-User-ID": "demo-user",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           type: operation.type,

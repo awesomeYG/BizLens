@@ -477,8 +477,8 @@ func main() {
 		http.NotFound(w, r)
 	})
 
-	// 数据集路由：/api/datasets[/upload/file]
-	mux.HandleFunc("/api/datasets/", func(w http.ResponseWriter, r *http.Request) {
+	// 数据集路由：/api/datasets[/upload/file]（需要 JWT 认证）
+	datasetRouter := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/api/datasets/")
 
 		// POST /api/datasets/upload/file
@@ -490,6 +490,17 @@ func main() {
 		// GET /api/datasets - 列出数据集
 		if path == "" && r.Method == http.MethodGet {
 			datasetHandler.ListDatasets(w, r)
+			return
+		}
+
+		// DELETE /api/datasets/?id=xxx - 通过 query param 删除
+		if path == "" && r.Method == http.MethodDelete {
+			id := r.URL.Query().Get("id")
+			if id == "" {
+				http.Error(w, `{"error":"缺少文件 ID"}`, http.StatusBadRequest)
+				return
+			}
+			datasetHandler.DeleteDataset(w, r, id)
 			return
 		}
 
@@ -547,6 +558,7 @@ func main() {
 
 		http.NotFound(w, r)
 	})
+	mux.Handle("/api/datasets/", middleware.Auth(authService)(datasetRouter))
 
 	// 启动服务
 	addr := fmt.Sprintf(":%s", cfg.Port)

@@ -130,3 +130,15 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 聊天页面主容器设置 `overflow-auto` 以配合头部 `sticky` 固定，不影响整体滚动
   - SimpleChatPanel 的消息区域增加 `padding-top`，避免粘性头部遮挡首条消息
   - 头部保持 `top: 0` 粘性定位，消息列表滚动不再剪裁头部
+
+### 数据集 API 认证模式
+- Date: 2026-03-24
+- Context: Agent 在执行文件上传功能修复时发现
+- Category: 代码模式
+- Instructions:
+  - 数据集相关路由（/api/datasets/*）已统一使用 JWT 认证中间件（middleware.Auth），不再从 X-Tenant-ID/X-User-ID header 获取用户信息
+  - handler 中通过 `getAuthInfo(r)` 从 request context 获取 tenantID 和 userID（由 JWT 中间件注入）
+  - 前端 Next.js API Routes（/api/datasets, /api/datasets/upload/file）作为代理层，转发请求到 Go 后端 localhost:3001，保留 Authorization header
+  - 前端上传/列表/删除请求需要从 localStorage 获取 token 并附加到 Authorization header
+  - 上传文件在测试环境下临时存储在 `backend/uploads/` 目录（已加 .gitignore 忽略上传内容）
+  - data-sources/clean/page.tsx 中仍存在硬编码的 X-Tenant-ID/X-User-ID，待后续统一修改
