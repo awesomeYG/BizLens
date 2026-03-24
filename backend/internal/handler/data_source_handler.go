@@ -137,6 +137,14 @@ func (h *DataSourceHandler) CreateDataSource(w http.ResponseWriter, r *http.Requ
 
 		// 测试连接
 		if err := h.dataSourceService.TestConnection(ds); err != nil {
+			if ds.Type == model.DataSourcePostgreSQL {
+				diagnosis := h.dataSourceService.DiagnosePostgreSQLConnection(ds)
+				writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+					"error":              "数据库连接失败：" + err.Error(),
+					"connectionDiagnosis": diagnosis,
+				})
+				return
+			}
 			writeError(w, http.StatusBadRequest, "数据库连接失败："+err.Error())
 			return
 		}
@@ -246,6 +254,14 @@ func (h *DataSourceHandler) UpdateDataSource(w http.ResponseWriter, r *http.Requ
 			existing.SSL = req.Connection.SSL
 
 			if err := h.dataSourceService.TestConnection(existing); err != nil {
+				if existing.Type == model.DataSourcePostgreSQL {
+					diagnosis := h.dataSourceService.DiagnosePostgreSQLConnection(existing)
+					writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+						"error":              "数据库连接失败：" + err.Error(),
+						"connectionDiagnosis": diagnosis,
+					})
+					return
+				}
 				writeError(w, http.StatusBadRequest, "数据库连接失败："+err.Error())
 				return
 			}

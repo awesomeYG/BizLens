@@ -1,9 +1,12 @@
 package service
 
 import (
+	"context"
+	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -14,9 +17,39 @@ import (
 	"gorm.io/gorm"
 )
 
+func buildPostgresDSN(ds *model.DataSource) string {
+	sslmode := "disable"
+	if ds.SSL {
+		sslmode = "require"
+	}
+	return buildPostgresDSNWithSSLMode(ds, sslmode)
+}
+
+func buildPostgresDSNWithSSLMode(ds *model.DataSource, sslmode string) string {
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s connect_timeout=5",
+		ds.Host, ds.Port, ds.Username, ds.Password, ds.Database, sslmode)
+}
+
 // DataSourceService 数据源服务
 type DataSourceService struct {
 	db *gorm.DB
+}
+
+// ConnectionDiagnosis 连接诊断结果
+type ConnectionDiagnosis struct {
+	Host              string `json:"host"`
+	Port              int    `json:"port"`
+	Database          string `json:"database"`
+	DNSResolved       bool   `json:"dnsResolved"`
+	TCPReachable      bool   `json:"tcpReachable"`
+	TLSHandshakeOK    bool   `json:"tlsHandshakeOk"`
+	AuthPingOK        bool   `json:"authPingOk"`
+	DNSMessage        string `json:"dnsMessage,omitempty"`
+	TCPMessage        string `json:"tcpMessage,omitempty"`
+	TLSMessage        string `json:"tlsMessage,omitempty"`
+	AuthMessage       string `json:"authMessage,omitempty"`
+	RecommendedSSL    string `json:"recommendedSSL,omitempty"`
+	DiagnosisSummary  string `json:"diagnosisSummary,omitempty"`
 }
 
 // NewDataSourceService 创建数据源服务
@@ -74,6 +107,74 @@ func (s *DataSourceService) TestConnection(ds *model.DataSource) error {
 	}
 }
 
+// DiagnosePostgreSQLConnection 分步诊断 PostgreSQL 连接
+func (s *DataSourceService) DiagnosePostgreSQLConnection(ds *model.DataSource) ConnectionDiagnosis {
+	result := ConnectionDiagnosis{
+		Host:     ds.Host,
+		Port:     ds.Port,
+		Database: ds.Database,
+	}
+
+	address := fmt.Sprintf("%s:%d", ds.Host, ds.Port)
+
+	ips, err := net.LookupHost(ds.Host)
+	if err != nil {
+		result.DNSMessage = fmt.Sprintf("DNS 解析失败：%v", err)
+		result.DiagnosisSummary = "主机名无法解析，请检查 host 是否正确"
+		return result
+	}
+	result.DNSResolved = true
+	result.DNSMessage = fmt.Sprintf("DNS 解析成功：%s", strings.Join(ips, ", "))
+
+	dialer := net.Dialer{Timeout: 5 * time.Second}
+	tcpConn, err := dialer.DialContext(context.Background(), "tcp", address)
+	if err != nil {
+		result.TCPMessage = fmt.Sprintf("TCP 连接失败：%v", err)
+		result.DiagnosisSummary = "端口不可达，可能是安全组/防火墙/白名单未放行"
+		return result
+	}
+	result.TCPReachable = true
+	result.TCPMessage = "TCP 连接成功"
+	_ = tcpConn.Close()
+
+	tlsConn, err := tls.DialWithDialer(&dialer, "tcp", address, &tls.Config{
+		ServerName:         ds.Host,
+		InsecureSkipVerify: true,
+		MinVersion:         tls.VersionTLS12,
+	})
+	if err == nil {
+		result.TLSHandshakeOK = true
+		result.TLSMessage = "TLS 握手成功（服务端支持 SSL）"
+		_ = tlsConn.Close()
+	} else {
+		result.TLSMessage = fmt.Sprintf("TLS 握手失败：%v", err)
+	}
+
+	pingErr := s.testPostgreSQLConnection(ds)
+	if pingErr == nil {
+		result.AuthPingOK = true
+		result.AuthMessage = "数据库认证和查询握手成功"
+		if ds.SSL {
+			result.RecommendedSSL = "require"
+		} else {
+			result.RecommendedSSL = "disable"
+		}
+		result.DiagnosisSummary = "连接可用"
+		return result
+	}
+	result.AuthMessage = pingErr.Error()
+
+	if result.TLSHandshakeOK {
+		result.RecommendedSSL = "require"
+		result.DiagnosisSummary = "网络可达且服务端支持 SSL，优先使用 sslmode=require；若仍失败请检查账号密码/库名/权限"
+	} else {
+		result.RecommendedSSL = "disable"
+		result.DiagnosisSummary = "网络可达但 TLS 握手失败，可能是服务端未启用 SSL 或中间网络设备拦截"
+	}
+
+	return result
+}
+
 // testMySQLConnection 测试 MySQL 连接
 func (s *DataSourceService) testMySQLConnection(ds *model.DataSource) error {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
@@ -97,22 +198,51 @@ func (s *DataSourceService) testMySQLConnection(ds *model.DataSource) error {
 
 // testPostgreSQLConnection 测试 PostgreSQL 连接
 func (s *DataSourceService) testPostgreSQLConnection(ds *model.DataSource) error {
-	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		ds.Host, ds.Port, ds.Username, ds.Password, ds.Database)
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		return fmt.Errorf("打开连接失败：%w", err)
+	tryPing := func(sslmode string) error {
+		dsn := buildPostgresDSNWithSSLMode(ds, sslmode)
+		db, err := sql.Open("postgres", dsn)
+		if err != nil {
+			return fmt.Errorf("打开连接失败：%w", err)
+		}
+		defer db.Close()
+
+		// 设置超时
+		db.SetConnMaxLifetime(time.Second * 5)
+
+		// 测试连接
+		if err := db.Ping(); err != nil {
+			return fmt.Errorf("连接失败：%w", err)
+		}
+		return nil
 	}
-	defer db.Close()
 
-	// 设置超时
-	db.SetConnMaxLifetime(time.Second * 5)
-
-	// 测试连接
-	if err := db.Ping(); err != nil {
-		return fmt.Errorf("连接失败：%w", err)
+	preferredMode := "disable"
+	fallbackMode := "require"
+	if ds.SSL {
+		preferredMode = "require"
+		fallbackMode = "disable"
 	}
 
+	err := tryPing(preferredMode)
+	if err == nil {
+		return nil
+	}
+	firstErr := err
+
+	lowerErr := strings.ToLower(firstErr.Error())
+	shouldRetry := strings.Contains(lowerErr, "eof") ||
+		strings.Contains(lowerErr, "ssl") ||
+		strings.Contains(lowerErr, "tls") ||
+		strings.Contains(lowerErr, "handshake")
+	if !shouldRetry {
+		return firstErr
+	}
+
+	if err := tryPing(fallbackMode); err != nil {
+		return fmt.Errorf("连接失败（sslmode=%s）：%v；重试（sslmode=%s）仍失败：%v", preferredMode, firstErr, fallbackMode, err)
+	}
+
+	ds.SSL = fallbackMode == "require"
 	return nil
 }
 
@@ -209,8 +339,7 @@ func (s *DataSourceService) fetchMySQLSchema(ds *model.DataSource) (map[string]i
 
 // fetchPostgreSQLSchema 获取 PostgreSQL schema
 func (s *DataSourceService) fetchPostgreSQLSchema(ds *model.DataSource) (map[string]interface{}, error) {
-	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		ds.Host, ds.Port, ds.Username, ds.Password, ds.Database)
+	dsn := buildPostgresDSN(ds)
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return nil, err
@@ -365,8 +494,7 @@ func (s *DataSourceService) ExecuteQuery(ds *model.DataSource, query string) ([]
 			ds.Username, ds.Password, ds.Host, ds.Port, ds.Database)
 		dbConn, err = sql.Open("mysql", dsn)
 	case model.DataSourcePostgreSQL:
-		dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-			ds.Host, ds.Port, ds.Username, ds.Password, ds.Database)
+		dsn := buildPostgresDSN(ds)
 		dbConn, err = sql.Open("postgres", dsn)
 	case model.DataSourceSQLite:
 		dbConn, err = sql.Open("sqlite3", ds.Database+"?mode=ro")

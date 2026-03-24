@@ -14,10 +14,68 @@ interface ChatPanelProps {
   onDataSummaryChange?: (summary: string) => void;
 }
 
+interface ParsedConnection {
+  type: "postgresql" | "mysql";
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  password: string;
+  ssl?: boolean;
+}
+
 /* ---------- 小工具函数 ---------- */
 function formatTime(ts: number) {
   const d = new Date(ts);
   return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+}
+
+function parseConnectionUriFromText(text: string): ParsedConnection | null {
+  const uriRegex = /\b(postgres(?:ql)?|mysql):\/\/[^\s"'<>]+/i;
+  const match = uriRegex.exec(text);
+  if (!match) return null;
+
+  let normalized = match[0];
+  if (/^postgres:\/\//i.test(normalized)) {
+    normalized = normalized.replace(/^postgres:\/\//i, "postgresql://");
+  }
+
+  try {
+    const url = new URL(normalized);
+    const scheme = url.protocol.replace(":", "").toLowerCase();
+    if (scheme !== "postgresql" && scheme !== "mysql") {
+      return null;
+    }
+    if (!url.hostname || !url.pathname || !url.username) {
+      return null;
+    }
+
+    const database = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+    if (!database) return null;
+
+    const defaultPort = scheme === "postgresql" ? 5432 : 3306;
+    const parsedPort = Number(url.port || defaultPort);
+    if (!Number.isFinite(parsedPort) || parsedPort <= 0) {
+      return null;
+    }
+
+    return {
+      type: scheme,
+      host: url.hostname,
+      port: parsedPort,
+      database,
+      username: decodeURIComponent(url.username),
+      password: decodeURIComponent(url.password),
+      ssl:
+        scheme === "postgresql"
+          ? ["1", "true", "require", "verify-ca", "verify-full"].includes(
+              (url.searchParams.get("sslmode") || url.searchParams.get("ssl") || "").toLowerCase()
+            )
+          : undefined,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /* ---------- 子组件：AI 头像 ---------- */
@@ -55,7 +113,7 @@ function ThinkingIndicator() {
               <span className="w-2 h-2 rounded-full bg-purple-400/70 animate-bounce" style={{ animationDelay: "150ms" }} />
               <span className="w-2 h-2 rounded-full bg-indigo-400/70 animate-bounce" style={{ animationDelay: "300ms" }} />
             </div>
-            <span className="text-sm text-zinc-500">正在分析...</span>
+            <span className="text-sm text-zinc-500">正在分析中。。。</span>
           </div>
           <div className="mt-3 space-y-2">
             <div className="h-3 rounded-full thinking-skeleton w-3/4" />
@@ -291,11 +349,95 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
 
     setLoading(true);
     try {
+      const tenantId = user?.id || "demo-tenant";
       const token = getAccessToken();
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) {
         headers.Authorization = `Bearer ${token}`;
       }
+
+      const parsedConn = parseConnectionUriFromText(question);
+      if (parsedConn) {
+        const dsPayload = {
+          type: parsedConn.type,
+          name: `${parsedConn.database} 数据库`,
+          description: `通过聊天自动配置（${parsedConn.host}:${parsedConn.port}/${parsedConn.database}）`,
+          connection: {
+            host: parsedConn.host,
+            port: parsedConn.port,
+            database: parsedConn.database,
+            username: parsedConn.username,
+            password: parsedConn.password,
+            ssl: parsedConn.ssl ?? false,
+          },
+        };
+
+        const dsRes = await fetch(`/api/tenants/${tenantId}/data-sources`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(dsPayload),
+        });
+
+        if (!dsRes.ok) {
+          const errData = await dsRes.json().catch(() => null);
+          const errMsg = errData?.error || `HTTP ${dsRes.status}`;
+          const diagnosis = errData?.connectionDiagnosis as
+            | {
+                dnsMessage?: string;
+                tcpMessage?: string;
+                tlsMessage?: string;
+                authMessage?: string;
+                recommendedSSL?: string;
+                diagnosisSummary?: string;
+              }
+            | undefined;
+          const diagnosisText = diagnosis
+            ? `\n\n**连接诊断**：\n` +
+              `- DNS：${diagnosis.dnsMessage || "未返回"}\n` +
+              `- TCP：${diagnosis.tcpMessage || "未返回"}\n` +
+              `- TLS：${diagnosis.tlsMessage || "未返回"}\n` +
+              `- 鉴权：${diagnosis.authMessage || "未返回"}\n` +
+              `- 建议 SSL：${diagnosis.recommendedSSL || "未返回"}\n` +
+              `- 结论：${diagnosis.diagnosisSummary || "未返回"}`
+            : "";
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? {
+                    ...m,
+                    content:
+                      `已识别到数据库连接串，但自动配置失败：${errMsg}\n\n` +
+                      diagnosisText +
+                      `\n\n` +
+                      `请确认连接串可访问，或前往 [数据源管理](/data-sources) 页面查看。`,
+                  }
+                : m
+            )
+          );
+          return;
+        }
+
+        const created = await dsRes.json().catch(() => null);
+        const finalName = created?.name || dsPayload.name;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  content:
+                    `已为你自动配置数据源「${finalName}」。\n\n` +
+                    `- 类型：${parsedConn.type.toUpperCase()}\n` +
+                    `- 主机：${parsedConn.host}:${parsedConn.port}\n` +
+                    `- 数据库：${parsedConn.database}\n` +
+                    `- 用户名：${parsedConn.username}\n\n` +
+                    `现在可以直接继续提问分析，例如“帮我看下最近7天的销售趋势”。`,
+                }
+              : m
+          )
+        );
+        return;
+      }
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers,
@@ -303,7 +445,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           messages: [{ role: "user", content: question }],
           dataSummary: dataSummary || undefined,
           companyProfile: user?.companyProfile,
-          tenantId: user?.id || "demo-tenant",
+          tenantId,
         }),
       });
 
@@ -481,11 +623,11 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
 
             {/* 对话消息 */}
             <div className={`space-y-5 ${showWelcome ? "hidden" : ""}`}>
-              {messages.map((m) =>
-                m.id !== "welcome" ? (
-                  <MessageBubble key={m.id} message={m} userName={currentUser?.name} />
-                ) : null
-              )}
+              {messages.map((m) => {
+                if (m.id === "welcome") return null;
+                if (m.role === "assistant" && !m.content.trim()) return null;
+                return <MessageBubble key={m.id} message={m} userName={currentUser?.name} />;
+              })}
 
               {/* 思考中 */}
               {showThinkingIndicator && <ThinkingIndicator />}
