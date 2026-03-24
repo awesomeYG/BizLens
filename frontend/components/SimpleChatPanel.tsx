@@ -270,6 +270,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [sidebarBusyId, setSidebarBusyId] = useState<string | null>(null);
+  const [pendingDeleteConversationId, setPendingDeleteConversationId] = useState<string | null>(null);
   const [dataSummary, setDataSummary] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; summary?: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -630,12 +631,19 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
         return;
       }
 
+      const conversationMessages = [
+        ...toPersistedMessages(messages)
+          .filter((m) => m.content.trim())
+          .map((m) => ({ role: m.role, content: m.content })),
+        { role: "user", content: question },
+      ];
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers,
         signal: abortController.signal,
         body: JSON.stringify({
-          messages: [{ role: "user", content: question }],
+          messages: conversationMessages,
           dataSummary: dataSummary || undefined,
           companyProfile: user.companyProfile,
           tenantId,
@@ -723,7 +731,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       manualStopRef.current = false;
       setLoading(false);
     }
-  }, [activeConversationId, createConversation, dataSummary, router, tenantId]);
+  }, [activeConversationId, createConversation, dataSummary, messages, router, tenantId]);
 
   const handleStopGeneration = useCallback(() => {
     if (!loading || !abortControllerRef.current) return;
@@ -790,7 +798,6 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
   };
 
   const handleDeleteConversation = async (conversationId: string) => {
-    if (!window.confirm("确认删除这条历史对话吗？删除后不可恢复。")) return;
     setSidebarBusyId(conversationId);
     try {
       await request(`/tenants/${tenantId}/chat-conversations/${conversationId}`, { method: "DELETE" });
@@ -806,6 +813,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       }
     } finally {
       setSidebarBusyId(null);
+      setPendingDeleteConversationId(null);
     }
   };
 
@@ -967,7 +975,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
                           </svg>
                         </button>
                         <button
-                          onClick={() => void handleDeleteConversation(item.id)}
+                          onClick={() => setPendingDeleteConversationId(item.id)}
                           disabled={sidebarBusyId === item.id}
                           className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-rose-300 disabled:opacity-50"
                           title="删除对话"
@@ -1095,6 +1103,44 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           </div>
         </div>
       </div>
+
+      {pendingDeleteConversationId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md rounded-2xl border border-zinc-700/60 bg-zinc-900/95 p-6 shadow-2xl shadow-black/50">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-500/15">
+                <svg className="h-5 w-5 text-rose-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-base font-semibold text-zinc-100">确认删除对话</h3>
+            </div>
+            <p className="mb-6 text-sm text-zinc-400">
+              {`确定要删除“${conversations.find((item) => item.id === pendingDeleteConversationId)?.title || "新对话"}”吗？删除后将无法恢复。`}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPendingDeleteConversationId(null)}
+                className="flex-1 rounded-xl border border-zinc-700 bg-zinc-800/80 px-5 py-2.5 text-sm font-medium text-zinc-200 transition hover:bg-zinc-700/80"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => void handleDeleteConversation(pendingDeleteConversationId)}
+                disabled={sidebarBusyId === pendingDeleteConversationId}
+                className="flex-1 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-rose-500 disabled:opacity-60"
+              >
+                {sidebarBusyId === pendingDeleteConversationId ? "删除中..." : "确认删除"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

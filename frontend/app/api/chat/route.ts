@@ -23,6 +23,12 @@ const SYSTEM_PROMPT = `你是 BizLens AI 数据分析专家。你需要：
 - 关键洞察用**加粗**标注
 - 避免过度技术性术语，让业务人员能理解
 
+## 回答优先级（非常重要）
+1. 当用户在问“具体结果”（例如“最多的一天是何时”“多少”“top1 是谁”）时，优先直接给结论与关键数值。
+2. 只有在用户明确要求“方案/步骤/思路”时，才输出分析方案；不要把事实型问题回答成执行方案。
+3. 若上下文中已包含可用数据（数据摘要、历史对话、已配置数据源信息），必须先基于这些信息作答，再补充简短解释。
+4. 若确实无法得出结论，明确说明缺少的最小必要信息，并给出一个最短追问，不要泛泛而谈。
+
 ## 报表生成
 当用户要求生成报表/报告时（如"帮我生成一个销售日报"、"创建一个月度分析报表"），按以下格式输出：
 
@@ -268,6 +274,22 @@ interface AIModelConfig {
   temperature: number;
 }
 
+interface TenantDataSourceContext {
+  total: number;
+  connected: number;
+  dataSources: Array<{
+    id: string;
+    name: string;
+    type: string;
+    status: string;
+    description?: string;
+    database?: string;
+    host?: string;
+    lastSyncAt?: string;
+    tables: string[];
+  }>;
+}
+
 function getDefaultBaseURLByModelType(modelType?: string): string | undefined {
   if (modelType === "minmax") {
     return "https://api.minimax.io/v1";
@@ -356,6 +378,7 @@ export async function POST(req: NextRequest) {
       companyProfile?.tenantId ||
       "demo-tenant";
     const analysisPacket = await getAnalysisPacketFromBackend(tenantId, latestUserMessage);
+    const dataSourceContext = await getTenantDataSourcesContextFromBackend(tenantId, authHeader);
 
     const serverConfig = await getTenantAIConfigFromBackend(tenantId, authHeader);
 
@@ -420,6 +443,9 @@ export async function POST(req: NextRequest) {
 
     if (conversationContext) {
       systemContent += `\n\n## 对话上下文\n${JSON.stringify(conversationContext, null, 2)}`;
+    }
+    if (dataSourceContext && dataSourceContext.total > 0) {
+      systemContent += `\n\n## 已配置数据源上下文\n${JSON.stringify(dataSourceContext, null, 2)}`;
     }
     systemContent += `\n\n## AI分析引擎上下文（用于提高回答稳定性）\n${JSON.stringify(analysisPacket, null, 2)}`;
 
@@ -499,8 +525,23 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     console.error("Chat API error:", err);
+    const errMessage = String(err?.message || "");
+    const lowerErrMessage = errMessage.toLowerCase();
     
     // 错误分类处理
+    if (
+      finalModelType === "minmax" &&
+      (lowerErrMessage.includes("insufficient balance") || errMessage.includes("1008"))
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "MiniMax 余额不足（错误码 1008）。请在 MiniMax 控制台确认计费账户余额、API Key 所属项目是否正确，充值后稍等片刻再重试。",
+        },
+        { status: 402 }
+      );
+    }
+
     if (err.status === 401) {
       const providerHint =
         finalModelType === "deepseek"
@@ -523,7 +564,7 @@ export async function POST(req: NextRequest) {
     
     return NextResponse.json(
       {
-        error: "AI 服务异常：" + err.message,
+        error: "AI 服务异常：" + errMessage,
         analysisEvaluation: getEvaluationSummary(),
       },
       { status: 500 }
@@ -586,6 +627,75 @@ async function getTenantAIConfigFromBackend(tenantId: string, authHeader?: strin
       baseUrl: payload?.baseUrl,
       modelType: payload?.modelType,
       model: payload?.model,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function getTenantDataSourcesContextFromBackend(
+  tenantId: string,
+  authHeader?: string | null
+): Promise<TenantDataSourceContext | null> {
+  const backendBase = process.env.BACKEND_INTERNAL_URL || "http://localhost:3001";
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-Tenant-ID": tenantId,
+    };
+    if (authHeader) {
+      headers.Authorization = authHeader;
+    }
+
+    const res = await fetch(`${backendBase}/api/tenants/${tenantId}/data-sources`, {
+      method: "GET",
+      headers,
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      return null;
+    }
+
+    const payload = await res.json();
+    if (!Array.isArray(payload)) {
+      return null;
+    }
+
+    const normalized = payload
+      .map((item: any) => {
+        let tables: string[] = [];
+        if (Array.isArray(item?.tables)) {
+          tables = item.tables.filter((t: unknown): t is string => typeof t === "string");
+        } else if (typeof item?.tableInfo === "string" && item.tableInfo.trim()) {
+          try {
+            const parsed = JSON.parse(item.tableInfo);
+            if (Array.isArray(parsed)) {
+              tables = parsed.filter((t: unknown): t is string => typeof t === "string");
+            }
+          } catch {
+            // ignore invalid tableInfo
+          }
+        }
+
+        return {
+          id: String(item?.id || ""),
+          name: String(item?.name || "未命名数据源"),
+          type: String(item?.type || "unknown"),
+          status: String(item?.status || "unknown"),
+          description: typeof item?.description === "string" ? item.description : undefined,
+          database: typeof item?.database === "string" ? item.database : undefined,
+          host: typeof item?.host === "string" ? item.host : undefined,
+          lastSyncAt: typeof item?.lastSyncAt === "string" ? item.lastSyncAt : undefined,
+          tables: tables.slice(0, 100),
+        };
+      })
+      .filter((item: { id: string; name: string }) => item.id || item.name);
+
+    return {
+      total: normalized.length,
+      connected: normalized.filter((item: { status: string }) => item.status === "connected").length,
+      dataSources: normalized.slice(0, 20),
     };
   } catch {
     return null;

@@ -43,7 +43,8 @@ export default function OnboardingPage() {
     const syncDataSources = async () => {
       try {
         const token = getAccessToken();
-        const response = await fetch(`/api/tenants/${user.id}/data-sources`, {
+        const tenantId = user.tenantId || user.id;
+        const response = await fetch(`/api/tenants/${tenantId}/data-sources`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
 

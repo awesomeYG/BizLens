@@ -113,7 +113,7 @@ export default function DatabaseConnectionTab() {
 
   const getTenantId = useCallback(() => {
     const user = getCurrentUser();
-    return user?.id || "demo-tenant";
+    return user?.tenantId || user?.id || "demo-tenant";
   }, []);
 
   const getAuthHeaders = useCallback((): Record<string, string> => {

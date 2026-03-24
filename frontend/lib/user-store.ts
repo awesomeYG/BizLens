@@ -34,6 +34,21 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   recommendedMetrics: ["营收", "毛利率", "复购率"],
 };
 
+function hasCompletedOnboarding(session: Partial<UserSession> | null | undefined): boolean {
+  if (!session) return false;
+  if (session.isOnboarded) return true;
+
+  const hasCompanyInfo = !!session.companyInfo && Object.values(session.companyInfo).some((v) => v.trim().length > 0);
+  const hasDataSources = Array.isArray(session.dataSources) && session.dataSources.length > 0;
+  const hasProfile =
+    !!session.companyProfile &&
+    ((session.companyProfile.summary || "").trim().length > 0 ||
+      (session.companyProfile.analysisFocuses?.length || 0) > 0 ||
+      (session.companyProfile.recommendedMetrics?.length || 0) > 0);
+
+  return hasCompanyInfo || hasDataSources || hasProfile;
+}
+
 export function getCurrentUser(): UserSessionWithAuth | null {
   if (globalThis.window === undefined) return null;
   
@@ -93,6 +108,10 @@ export async function loginUser(email: string, password: string): Promise<UserSe
     const { login } = await import("./auth/api");
     const response = await login({ email, password });
     saveTokens(response.tokens);
+
+    const existing = getCurrentUser();
+    const isSameUser = existing?.id === response.user.id;
+    const inferredOnboarded = hasCompletedOnboarding(existing);
     
     const user: UserSessionWithAuth = {
       id: response.user.id,
@@ -100,10 +119,13 @@ export async function loginUser(email: string, password: string): Promise<UserSe
       name: response.user.name,
       email: response.user.email,
       createdAt: new Date(response.user.createdAt).getTime(),
-      isOnboarded: false, // 默认未 onboarding
+      isOnboarded: isSameUser ? inferredOnboarded : false,
       accessToken: response.tokens.accessToken,
       refreshToken: response.tokens.refreshToken,
       tokenExpiresAt: Date.now() + response.tokens.expiresIn * 1000,
+      companyInfo: isSameUser ? existing?.companyInfo : undefined,
+      dataSources: isSameUser ? existing?.dataSources : undefined,
+      companyProfile: isSameUser ? existing?.companyProfile : undefined,
     };
     
     saveCurrentUser(user);
@@ -215,15 +237,21 @@ export async function syncCurrentUser(): Promise<UserSessionWithAuth | null> {
   
   try {
     const user = await fetchCurrentUser();
+    const existing = getCurrentUser();
+    const isSameUser = existing?.id === user.id;
+    const inferredOnboarded = hasCompletedOnboarding(existing);
     const session: UserSessionWithAuth = {
       id: user.id,
       tenantId: user.tenantId,
       name: user.name,
       email: user.email,
       createdAt: new Date(user.createdAt).getTime(),
-      isOnboarded: false,
+      isOnboarded: isSameUser ? inferredOnboarded : false,
       accessToken: getAccessToken() || undefined,
       refreshToken: getRefreshToken() || undefined,
+      companyInfo: isSameUser ? existing?.companyInfo : undefined,
+      dataSources: isSameUser ? existing?.dataSources : undefined,
+      companyProfile: isSameUser ? existing?.companyProfile : undefined,
     };
     
     saveCurrentUser(session);
