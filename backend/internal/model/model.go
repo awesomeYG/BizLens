@@ -154,6 +154,7 @@ type DataSourceType string
 const (
 	DataSourceMySQL      DataSourceType = "mysql"
 	DataSourcePostgreSQL DataSourceType = "postgresql"
+	DataSourceSQLite     DataSourceType = "sqlite"
 	DataSourceCSV        DataSourceType = "csv"
 	DataSourceExcel      DataSourceType = "excel"
 	DataSourceAPI        DataSourceType = "api"

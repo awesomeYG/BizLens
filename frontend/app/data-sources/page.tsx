@@ -8,6 +8,7 @@ import { getCurrentUser, saveOnboardingDraft } from "@/lib/user-store";
 const DATA_SOURCE_OPTIONS: Array<{ value: DataSourceType; label: string }> = [
   { value: "mysql", label: "MySQL" },
   { value: "postgresql", label: "PostgreSQL" },
+  { value: "sqlite", label: "SQLite" },
   { value: "api", label: "API" },
   { value: "csv", label: "CSV / Excel" },
   { value: "mongodb", label: "MongoDB" },
@@ -131,6 +132,7 @@ export default function DataSourcesPage() {
   };
 
   const isDatabaseSource = DATABASE_SOURCE_TYPES.includes(form.type);
+  const isSQLiteSource = form.type === "sqlite";
   const isApiSource = form.type === "api";
   const isFileSource = form.type === "csv" || form.type === "excel";
 
@@ -152,6 +154,17 @@ export default function DataSourcesPage() {
         username: form.username.trim(),
         password: form.password,
         ssl: form.ssl,
+      };
+    }
+
+    if (isSQLiteSource) {
+      normalizedDataSource.connection = {
+        host: "",
+        port: 0,
+        database: form.database.trim(),
+        username: "",
+        password: "",
+        ssl: false,
       };
     }
 
@@ -197,6 +210,12 @@ export default function DataSourcesPage() {
       const connection = normalizedDataSource.connection;
       if (!connection?.host || !connection.port || !connection.database || !connection.username || !connection.password) {
         return "请完整填写数据库连接信息。";
+      }
+    }
+
+    if (isSQLiteSource) {
+      if (!normalizedDataSource.connection?.database) {
+        return "请填写 SQLite 文件路径。";
       }
     }
 
@@ -368,6 +387,16 @@ export default function DataSourcesPage() {
                   <input type="checkbox" checked={form.ssl} onChange={(e) => setForm((current) => ({ ...current, ssl: e.target.checked }))} className="h-4 w-4 rounded border-zinc-600 bg-zinc-900" />
                   启用 SSL / TLS
                 </label>
+              </div>
+            ) : null}
+
+            {isSQLiteSource ? (
+              <div className="mt-4 grid gap-4">
+                <label className="text-sm text-zinc-300">
+                  SQLite 文件路径（服务器端绝对路径）
+                  <input value={form.database} onChange={(e) => setForm((current) => ({ ...current, database: e.target.value }))} className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-zinc-100 outline-none transition focus:border-cyan-500" placeholder="/tmp/demo_ecommerce.db" />
+                </label>
+                <p className="text-xs text-zinc-500">SQLite 数据源直接读取服务器上的 .db 文件，无需 Host/Port/用户名/密码。</p>
               </div>
             ) : null}
 
