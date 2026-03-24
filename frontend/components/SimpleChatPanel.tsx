@@ -175,10 +175,22 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; summary?: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const hasScrolledRef = useRef(false);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const needsScroll = container.scrollHeight - container.clientHeight > 8;
+    if (!needsScroll) {
+      hasScrolledRef.current = true;
+      return;
+    }
+
+    container.scrollTo({ top: container.scrollHeight, behavior: hasScrolledRef.current ? "smooth" : "auto" });
+    hasScrolledRef.current = true;
   }, [messages, loading]);
 
   useEffect(() => {
@@ -385,8 +397,8 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       </header>
 
       {/* ===== 消息区域 ===== */}
-      <div className="flex-1 min-h-0 overflow-y-auto pt-6">
-        <div className="max-w-3xl mx-auto px-4 py-6">
+      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto pt-6">
+        <div className="max-w-3xl mx-auto px-4 py-6 pb-24">
           {/* 欢迎页 */}
           {showWelcome && (
             <WelcomeScreen questions={suggestedQuestions} onSelect={sendToAI} />
@@ -413,7 +425,8 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
         {/* 顶部微光线 */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2/3 h-px bg-gradient-to-r from-transparent via-indigo-500/15 to-transparent" />
 
-        <div className="max-w-3xl mx-auto px-4 py-4">
+          <div className="max-w-3xl mx-auto px-4 py-4 pb-6">
+
           {/* 已上传文件标签 */}
           {uploadedFiles.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">

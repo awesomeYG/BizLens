@@ -9,6 +9,8 @@ const MODEL_OPTIONS = [
   { value: "claude", label: "Anthropic Claude", models: ["claude-3-sonnet-20240229", "claude-3-opus-20240229"], icon: "🧠" },
   { value: "qwen", label: "通义千问", models: ["qwen-plus", "qwen-max"], icon: "🔮" },
   { value: "ernie", label: "文心一言", models: ["ernie-bot-4"], icon: "📚" },
+  { value: "deepseek", label: "DeepSeek", models: ["deepseek-chat", "deepseek-coder"], icon: "💡" },
+  { value: "minmax", label: "Minimax", models: ["abab6.5-chat", "abab5.5-chat"], icon: "⚡" },
 ];
 
 export default function SettingsPage() {
@@ -200,47 +202,47 @@ export default function SettingsPage() {
         <div className="space-y-6">
           {/* 模型服务商选择 */}
           <div className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-5">
+            <div className="flex items-center gap-2 mb-4">
               <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-100 text-blue-600">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-gray-900">选择模型服务商</h3>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">选择模型服务商</h3>
+                <p className="text-sm text-gray-600">下拉选择即可，减少视觉负担</p>
+              </div>
             </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {MODEL_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => handleModelTypeChange(option.value)}
-                  className={`group relative p-4 rounded-xl border-2 text-left transition-all duration-200 hover:shadow-md ${
-                    aiConfig.modelType === option.value
-                      ? "border-blue-500 bg-blue-50/50 shadow-sm"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
-                  }`}
-                >
-                  {aiConfig.modelType === option.value && (
-                    <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
-                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
-                  <div className="flex items-start gap-3">
-                    <span className="text-3xl flex-shrink-0">{option.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-gray-900 mb-1">{option.label}</div>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100">
-                          {option.models.length} 个模型
-                        </span>
-                      </div>
-                    </div>
+
+            <div className="space-y-3">
+              <div>
+                <label htmlFor="model-type" className="block text-sm font-medium text-gray-700 mb-2">
+                  模型服务商
+                </label>
+                <div className="relative">
+                  <select
+                    id="model-type"
+                    value={aiConfig.modelType}
+                    onChange={(e) => handleModelTypeChange(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm appearance-none bg-white cursor-pointer"
+                  >
+                    {MODEL_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}（{option.models.length} 个模型）
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
                   </div>
-                </button>
-              ))}
+                </div>
+              </div>
+
+              <div className="text-xs text-gray-500">
+                <p>当前可选：{MODEL_OPTIONS.find((o) => o.value === aiConfig.modelType)?.models.join(", ") || "-"}</p>
+              </div>
             </div>
           </div>
 
@@ -287,20 +289,26 @@ export default function SettingsPage() {
                   {serverHasApiKey && !aiConfig.apiKey && (
                     <p className="mb-2 text-xs text-emerald-700">已保存服务端密钥：{maskedApiKey || "********"}</p>
                   )}
-                  <p className="text-xs text-gray-600">
-                    {aiConfig.modelType === "openai" && (
-                      <span>在 <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">OpenAI 平台</a> 获取 API Key</span>
-                    )}
-                    {aiConfig.modelType === "claude" && (
-                      <span>在 <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Anthropic 控制台</a> 获取 API Key</span>
-                    )}
-                    {aiConfig.modelType === "qwen" && (
-                      <span>在 <a href="https://bailian.console.aliyun.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">阿里云百炼平台</a> 获取 API Key</span>
-                    )}
-                    {aiConfig.modelType === "ernie" && (
-                      <span>在 <a href="https://console.bce.baidu.com/qianfan/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">百度智能云千帆平台</a> 获取 API Key</span>
-                    )}
-                  </p>
+                   <p className="text-xs text-gray-600">
+                     {aiConfig.modelType === "openai" && (
+                       <span>在 <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">OpenAI 平台</a> 获取 API Key</span>
+                     )}
+                     {aiConfig.modelType === "claude" && (
+                       <span>在 <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Anthropic 控制台</a> 获取 API Key</span>
+                     )}
+                     {aiConfig.modelType === "qwen" && (
+                       <span>在 <a href="https://bailian.console.aliyun.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">阿里云百炼平台</a> 获取 API Key</span>
+                     )}
+                     {aiConfig.modelType === "ernie" && (
+                       <span>在 <a href="https://console.bce.baidu.com/qianfan/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">百度智能云千帆平台</a> 获取 API Key</span>
+                     )}
+                     {aiConfig.modelType === "deepseek" && (
+                       <span>在 <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">DeepSeek 控制台</a> 获取 API Key</span>
+                     )}
+                     {aiConfig.modelType === "minmax" && (
+                       <span>在 <a href="https://www.minimaxi.com/platform/api-key" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Minimax 平台</a> 获取 API Key</span>
+                     )}
+                   </p>
                 </div>
               </div>
 
@@ -316,9 +324,9 @@ export default function SettingsPage() {
                   type="url"
                   value={aiConfig.baseUrl}
                   onChange={(e) => setAiConfig({ ...aiConfig, baseUrl: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm"
-                  placeholder="https://api.openai.com/v1"
-                />
+                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm"
+                   placeholder="https://api.openai.com/v1 或自定义代理地址"
+                 />
                 <p className="mt-2 text-xs text-gray-500">
                   使用第三方代理服务时填写，留空则使用官方默认地址
                 </p>
