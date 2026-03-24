@@ -19,6 +19,21 @@ import {
 
 const USER_STORAGE_KEY = "ai-bi-user-session";
 
+export const EMPTY_COMPANY_INFO: CompanyInfo = {
+  companyName: "",
+  industry: "",
+  size: "",
+  region: "",
+  businessModel: "",
+  coreGoals: "",
+};
+
+export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
+  summary: "",
+  analysisFocuses: ["收入增长趋势", "客户留存与复购", "利润结构优化"],
+  recommendedMetrics: ["营收", "毛利率", "复购率"],
+};
+
 export function getCurrentUser(): UserSessionWithAuth | null {
   if (globalThis.window === undefined) return null;
   
@@ -131,6 +146,39 @@ export function saveOnboardingDraft(draft: {
     companyInfo: draft.companyInfo ?? current.companyInfo,
     dataSources: draft.dataSources ?? current.dataSources,
     companyProfile: draft.companyProfile ?? current.companyProfile,
+  };
+
+  saveCurrentUser(next);
+  return next;
+}
+
+export function updateCompanySettings(payload: {
+  companyInfo?: CompanyInfo;
+  companyProfile?: CompanyProfile;
+}): UserSession | null {
+  const current = getCurrentUser();
+  if (!current) return null;
+
+  const next: UserSession = {
+    ...current,
+    companyInfo: payload.companyInfo ?? current.companyInfo ?? EMPTY_COMPANY_INFO,
+    companyProfile: payload.companyProfile ?? current.companyProfile ?? DEFAULT_COMPANY_PROFILE,
+  };
+
+  saveCurrentUser(next);
+  return next;
+}
+
+export function finishOnboarding(): UserSession | null {
+  const current = getCurrentUser();
+  if (!current) return null;
+
+  const next: UserSession = {
+    ...current,
+    isOnboarded: true,
+    companyInfo: current.companyInfo ?? EMPTY_COMPANY_INFO,
+    dataSources: current.dataSources ?? [],
+    companyProfile: current.companyProfile ?? DEFAULT_COMPANY_PROFILE,
   };
 
   saveCurrentUser(next);

@@ -208,9 +208,9 @@ export default function AppHeader({
           {/* 设置按钮 */}
           {showNav && (
             <Link
-              href="/settings/ai"
+              href="/settings/profile"
               className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/70 transition-all"
-              title="AI 设置"
+              title="系统设置"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={SETTINGS_ICON_PATH} />

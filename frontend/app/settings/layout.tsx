@@ -6,6 +6,12 @@ import AppHeader from "@/components/AppHeader";
 
 const SETTINGS_NAV = [
   {
+    href: "/settings/profile",
+    label: "企业档案",
+    icon: "M3.75 19.5h16.5M4.5 16.5a3 3 0 013-3h9a3 3 0 013 3V18H4.5v-1.5ZM12 11.25a3.75 3.75 0 100-7.5 3.75 3.75 0 000 7.5Z",
+    description: "维护公司信息与分析偏好",
+  },
+  {
     href: "/settings/ai",
     label: "AI 模型配置",
     icon: "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
@@ -34,7 +40,7 @@ export default function SettingsLayout({
           <div className="glass-card rounded-xl p-4">
             <div className="mb-4 pb-4 border-b border-zinc-800/60">
               <h2 className="text-sm font-semibold text-zinc-200">系统设置</h2>
-              <p className="mt-1 text-xs text-zinc-500">管理 AI 与数据文件能力</p>
+              <p className="mt-1 text-xs text-zinc-500">管理企业档案、AI 与数据能力</p>
             </div>
             <nav className="space-y-1">
               {SETTINGS_NAV.map((item) => {

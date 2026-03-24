@@ -19,16 +19,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "缺少公司信息" }, { status: 400 });
     }
 
-    if (!dataSources.length) {
-      return NextResponse.json({ error: "至少配置一个数据源" }, { status: 400 });
-    }
-
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json({
-        summary: `公司 ${companyInfo.companyName} 属于 ${companyInfo.industry} 行业，当前业务目标是 ${companyInfo.coreGoals}。已接入 ${dataSources.length} 个数据源（如 ${dataSources
-          .slice(0, 3)
-          .map((s) => s.name)
-          .join("、")}），可用于构建统一经营分析视图。`,
+        summary: dataSources.length
+          ? `公司 ${companyInfo.companyName} 属于 ${companyInfo.industry} 行业，当前业务目标是 ${companyInfo.coreGoals}。已接入 ${dataSources.length} 个数据源（如 ${dataSources
+              .slice(0, 3)
+              .map((s) => s.name)
+              .join("、")}），可用于构建统一经营分析视图。`
+          : `公司 ${companyInfo.companyName} 属于 ${companyInfo.industry} 行业，当前业务目标是 ${companyInfo.coreGoals}。当前尚未接入数据源，建议先明确分析重点和关键指标，再逐步补齐数据连接。`,
         analysisFocuses: [
           "收入增长趋势与异常波动",
           "渠道转化漏斗与客户分层",
@@ -48,7 +46,7 @@ export async function POST(req: NextRequest) {
         {
           role: "system",
           content:
-            "你是企业 BI 架构顾问。请基于公司信息和数据源生成可执行的公司画像，输出 JSON，字段包含 summary(字符串)、analysisFocuses(字符串数组，3项)、recommendedMetrics(字符串数组，3项)。",
+            "你是企业 BI 架构顾问。请基于公司信息和数据源生成可执行的公司画像，输出 JSON，字段包含 summary(字符串)、analysisFocuses(字符串数组，3项)、recommendedMetrics(字符串数组，3项)。如果暂时没有数据源，也要给出适用于首期搭建阶段的建议。",
         },
         {
           role: "user",
