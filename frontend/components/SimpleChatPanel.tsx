@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import { getCurrentUser, logoutUser } from "@/lib/user-store";
+import { getCurrentUser } from "@/lib/user-store";
 import { request, getAccessToken } from "@/lib/auth/api";
 import type { ChatConversation, ChatConversationSummary, ChatMessage } from "@/lib/types";
 import AppHeader from "@/components/AppHeader";
@@ -746,11 +746,6 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     void sendToAI(text);
   };
 
-  const handleLogout = () => {
-    logoutUser();
-    router.replace("/auth/login");
-  };
-
   const handleNewConversation = async () => {
     setSidebarBusyId("new");
     try {
@@ -964,14 +959,6 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
             subtitle={
               (currentUser?.name ? currentUser.name : "智能洞察与分析建议") +
               (uploadedFiles.length > 0 ? ` | ${uploadedFiles.length} 个数据文件` : "")
-            }
-            actions={
-              <button
-                onClick={handleLogout}
-                className="rounded-xl border border-zinc-700/50 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-800/60"
-              >
-                退出
-              </button>
             }
             showOnlineStatus
           />

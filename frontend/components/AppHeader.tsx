@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 
@@ -70,8 +71,13 @@ export default function AppHeader({
 }: AppHeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const handleLogout = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const handleConfirmLogout = () => {
     localStorage.clear();
     router.push("/auth/login");
   };
@@ -93,11 +99,12 @@ export default function AppHeader({
   };
 
   return (
-    <header className="relative sticky top-0 z-40 shrink-0 px-5 py-3 border-b border-zinc-800/40 bg-zinc-900/60 backdrop-blur-xl">
-      {/* 底部微光线 */}
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent" />
+    <>
+      <header className="relative sticky top-0 z-40 shrink-0 px-5 py-3 border-b border-zinc-800/40 bg-zinc-900/60 backdrop-blur-xl">
+        {/* 底部微光线 */}
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent" />
 
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
         {/* 左侧 */}
         <div className="flex items-center gap-3 min-w-0">
           {/* 返回箭头 */}
@@ -232,7 +239,40 @@ export default function AppHeader({
             </button>
           )}
         </div>
-      </div>
-    </header>
+        </div>
+      </header>
+
+      {showLogoutConfirm ? (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-zinc-950/70 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-700/60 bg-zinc-900/95 p-5 shadow-2xl shadow-black/50">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="mt-0.5 rounded-xl bg-rose-500/15 p-2 text-rose-300">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d={LOGOUT_ICON_PATH} />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-zinc-100">确认退出登录？</p>
+                <p className="mt-1 text-xs leading-5 text-zinc-400">退出后将返回登录页，如需继续使用请重新登录。</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="rounded-lg border border-zinc-700/60 bg-zinc-800/70 px-3 py-1.5 text-xs text-zinc-200 transition hover:bg-zinc-700/80"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirmLogout}
+                className="rounded-lg bg-rose-500/90 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-rose-500"
+              >
+                确认退出
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
