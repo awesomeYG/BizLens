@@ -99,7 +99,7 @@ datamind/
 - **数据库**: SQLite / PostgreSQL
 
 ### AI
-- **模型**: OpenAI GPT-4 / GPT-4o-mini
+- **模型**: OpenAI GPT-4 / GPT-4o-mini、MiniMax-M2 / MiniMax-M1
 - **能力**: NL2SQL、自动洞察、智能图表推荐
 
 ---

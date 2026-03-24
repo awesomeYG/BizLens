@@ -269,16 +269,25 @@ interface AIModelConfig {
 }
 
 function getDefaultBaseURLByModelType(modelType?: string): string | undefined {
+  if (modelType === "minmax") {
+    return "https://api.minimax.io/v1";
+  }
   if (modelType === "deepseek") {
     return "https://api.deepseek.com/v1";
   }
   return undefined;
 }
 
-function getModelConfig(): AIModelConfig {
-  const modelType = process.env.AI_MODEL_TYPE || "openai";
-  
-  switch (modelType) {
+function getModelConfig(modelType?: string): AIModelConfig {
+  const resolvedModelType = modelType || process.env.AI_MODEL_TYPE || "openai";
+
+  switch (resolvedModelType) {
+    case "minmax":
+      return {
+        model: process.env.MINIMAX_MODEL || "MiniMax-M2",
+        maxTokens: 2000,
+        temperature: 0.7,
+      };
     case "claude":
       return {
         model: "claude-3-sonnet-20240229",
@@ -375,9 +384,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const modelConfig = getModelConfig();
     finalModelType =
       clientAiConfig?.modelType || serverConfig?.modelType || process.env.AI_MODEL_TYPE || "openai";
+    const modelConfig = getModelConfig(finalModelType);
     
     // 如果客户端指定了模型，使用客户端的
     let finalModel = modelConfig.model;
@@ -496,7 +505,9 @@ export async function POST(req: NextRequest) {
       const providerHint =
         finalModelType === "deepseek"
           ? "（可能是 DeepSeek Base URL 未配置或配置错误，建议使用 https://api.deepseek.com/v1）"
-          : "";
+          : finalModelType === "minmax"
+            ? "（建议确认 Base URL 为 https://api.minimax.io/v1，模型名如 MiniMax-M2）"
+            : "";
       return NextResponse.json(
         { error: `AI 认证失败，请检查 API Key / Base URL / 模型配置${providerHint}` },
         { status: 401 }

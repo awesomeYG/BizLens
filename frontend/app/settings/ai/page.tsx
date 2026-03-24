@@ -11,7 +11,7 @@ const MODEL_OPTIONS = [
   { value: "qwen", label: "通义千问", models: ["qwen-plus", "qwen-max"], color: "sky", desc: "阿里云，国内直连" },
   { value: "ernie", label: "文心一言", models: ["ernie-bot-4"], color: "blue", desc: "百度，中文理解优秀" },
   { value: "deepseek", label: "DeepSeek", models: ["deepseek-chat", "deepseek-coder"], color: "violet", desc: "高性价比，代码能力强" },
-  { value: "minmax", label: "Minimax", models: ["abab6.5-chat", "abab5.5-chat"], color: "orange", desc: "国产多模态大模型" },
+  { value: "minmax", label: "MiniMax", models: ["MiniMax-M2", "MiniMax-M1"], color: "orange", desc: "兼容 OpenAI SDK，适合中文与通用对话" },
 ];
 
 const COLOR_MAP: Record<string, { dot: string; activeBg: string; activeBorder: string; activeText: string }> = {
@@ -262,7 +262,7 @@ export default function SettingsPage() {
       qwen: { url: "https://bailian.console.aliyun.com/", label: "阿里云百炼平台" },
       ernie: { url: "https://console.bce.baidu.com/qianfan/", label: "百度智能云千帆平台" },
       deepseek: { url: "https://platform.deepseek.com/api_keys", label: "DeepSeek 控制台" },
-      minmax: { url: "https://www.minimaxi.com/platform/api-key", label: "Minimax 平台" },
+      minmax: { url: "https://platform.minimax.io/", label: "MiniMax 平台" },
     };
     return links[aiConfig.modelType] || links.openai;
   };
@@ -401,7 +401,7 @@ export default function SettingsPage() {
                   value={aiConfig.apiKey}
                   onChange={(e) => setAiConfig({ ...aiConfig, apiKey: e.target.value })}
                   className="input-base pr-20"
-                  placeholder={aiConfig.modelType === "openai" ? "sk-..." : "输入你的 API Key"}
+                  placeholder={aiConfig.modelType === "openai" ? "sk-..." : aiConfig.modelType === "minmax" ? "输入 MiniMax API Key" : "输入你的 API Key"}
                 />
                 <button
                   type="button"
@@ -440,10 +440,10 @@ export default function SettingsPage() {
                 value={aiConfig.baseUrl}
                 onChange={(e) => setAiConfig({ ...aiConfig, baseUrl: e.target.value })}
                 className="input-base"
-                placeholder="https://api.openai.com/v1 或自定义代理地址"
+                placeholder={aiConfig.modelType === "minmax" ? "https://api.minimax.io/v1 或自定义代理地址" : "https://api.openai.com/v1 或自定义代理地址"}
               />
               <p className="mt-2 text-xs text-zinc-600">
-                使用第三方代理服务时填写，留空则使用官方默认地址
+                使用第三方代理服务时填写，留空则使用官方默认地址{aiConfig.modelType === "minmax" ? "（MiniMax 默认 https://api.minimax.io/v1）" : ""}
               </p>
             </div>
 
