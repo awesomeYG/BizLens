@@ -99,6 +99,10 @@ func main() {
 	datasetService := service.NewDatasetService(db, "./uploads", 100*1024*1024) // 100MB
 	datasetHandler := handler.NewDatasetHandler(datasetService, "./uploads")
 
+	// 报表服务
+	reportService := service.NewReportService(db)
+	reportHandler := handler.NewReportHandler(reportService)
+
 	// 初始化系统预置模板
 	if err := dashboardTemplateService.InitSystemTemplates(); err != nil {
 		log.Printf("警告：系统模板初始化失败：%v", err)
@@ -459,6 +463,12 @@ func main() {
 		// /api/tenants/{tenantId}/dashboards/instances[/{id}[/sections[/{sectionId}]]]
 		if len(parts) >= 3 && parts[1] == "dashboards" && parts[2] == "instances" {
 			dashboardTemplateHandler.HandleInstances(w, r)
+			return
+		}
+
+		// /api/tenants/{tenantId}/reports[/{reportId}[/{action}]]
+		if len(parts) >= 2 && parts[1] == "reports" {
+			reportHandler.HandleReports(w, r)
 			return
 		}
 

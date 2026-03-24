@@ -349,3 +349,98 @@ export interface UserSessionWithAuth extends UserSession {
   refreshToken?: string;
   tokenExpiresAt?: number;
 }
+
+// ==================== 报表相关类型 ====================
+
+export type ReportStatus = "draft" | "published" | "archived";
+export type ReportType = "daily" | "weekly" | "monthly" | "custom" | "realtime";
+export type ReportCategory = "sales" | "finance" | "operations" | "marketing" | "custom";
+
+/** 报表区块 */
+export interface ReportSection {
+  id: string;
+  reportId: string;
+  type: DashboardSectionType;
+  title?: string;
+  metrics?: string[];
+  dimensions?: string[];
+  chartConfig?: Record<string, any>;
+  dataConfig?: Record<string, any>;
+  sortOrder: number;
+  colSpan: number;
+  rowSpan: number;
+  timeGrain?: string;
+  topN?: number;
+  comparison?: string;
+  filterExpr?: string;
+}
+
+/** 报表 */
+export interface Report {
+  id: string;
+  tenantId: string;
+  title: string;
+  description: string;
+  type: ReportType;
+  status: ReportStatus;
+  category: string;
+  tags: string[];
+  dataSourceId?: string;
+  layoutConfig?: string;
+  colorPalette?: string;
+  scheduleEnabled: boolean;
+  scheduleCron?: string;
+  aiGenerated: boolean;
+  aiPrompt?: string;
+  viewCount: number;
+  createdBy: string;
+  sections?: ReportSection[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 创建报表区块请求 */
+export interface CreateReportSectionRequest {
+  type: DashboardSectionType;
+  title?: string;
+  metrics?: string[];
+  dimensions?: string[];
+  chartConfig?: Record<string, any>;
+  dataConfig?: Record<string, any>;
+  sortOrder?: number;
+  colSpan?: number;
+  rowSpan?: number;
+  timeGrain?: string;
+  topN?: number;
+  comparison?: string;
+  filterExpr?: string;
+}
+
+/** 创建报表请求 */
+export interface CreateReportRequest {
+  title: string;
+  description?: string;
+  type?: ReportType;
+  category?: string;
+  tags?: string[];
+  dataSourceId?: string;
+  layoutConfig?: string;
+  colorPalette?: string;
+  aiGenerated?: boolean;
+  aiPrompt?: string;
+  sections?: CreateReportSectionRequest[];
+}
+
+/** 更新报表请求 */
+export interface UpdateReportRequest {
+  title?: string;
+  description?: string;
+  type?: ReportType;
+  status?: ReportStatus;
+  category?: string;
+  tags?: string[];
+  dataSourceId?: string;
+  layoutConfig?: string;
+  colorPalette?: string;
+  sections?: CreateReportSectionRequest[];
+}

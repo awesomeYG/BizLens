@@ -583,6 +583,88 @@ type AIServiceConfig struct {
 	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
 }
 
+// ReportStatus 报表状态
+type ReportStatus string
+
+const (
+	ReportStatusDraft     ReportStatus = "draft"     // 草稿
+	ReportStatusPublished ReportStatus = "published" // 已发布
+	ReportStatusArchived  ReportStatus = "archived"  // 已归档
+)
+
+// ReportType 报表类型
+type ReportType string
+
+const (
+	ReportTypeDaily    ReportType = "daily"    // 日报
+	ReportTypeWeekly   ReportType = "weekly"   // 周报
+	ReportTypeMonthly  ReportType = "monthly"  // 月报
+	ReportTypeCustom   ReportType = "custom"   // 自定义
+	ReportTypeRealtime ReportType = "realtime" // 实时
+)
+
+// Report 数据报表
+type Report struct {
+	ID          string       `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID    string       `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	Title       string       `gorm:"size:200;not null" json:"title"`
+	Description string       `gorm:"size:500" json:"description"`
+	Type        ReportType   `gorm:"size:50;default:'custom'" json:"type"`
+	Status      ReportStatus `gorm:"size:50;default:'draft'" json:"status"`
+	// 分类和标签
+	Category string `gorm:"size:100" json:"category"` // sales/finance/operations/marketing/custom
+	Tags     string `gorm:"size:500" json:"tags"`     // JSON 数组
+	// 数据源
+	DataSourceID string `gorm:"type:varchar(50)" json:"dataSourceId,omitempty"`
+	// 布局配置
+	LayoutConfig string `gorm:"type:text" json:"layoutConfig,omitempty"` // JSON：grid 布局配置
+	ColorPalette string `gorm:"type:text" json:"colorPalette,omitempty"` // JSON：配色方案
+	// 调度配置（定时报表）
+	ScheduleEnabled bool   `gorm:"default:false" json:"scheduleEnabled"`
+	ScheduleCron    string `gorm:"size:100" json:"scheduleCron,omitempty"` // cron 表达式
+	// AI 相关
+	AIGenerated bool   `gorm:"default:false" json:"aiGenerated"` // 是否 AI 生成
+	AIPrompt    string `gorm:"type:text" json:"aiPrompt,omitempty"`
+	// 使用统计
+	ViewCount int `gorm:"default:0" json:"viewCount"`
+	// 元数据
+	CreatedBy string         `gorm:"type:varchar(50)" json:"createdBy"`
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+
+	Tenant   Tenant          `gorm:"foreignKey:TenantID" json:"-"`
+	Sections []ReportSection `gorm:"foreignKey:ReportID" json:"sections,omitempty"`
+}
+
+// ReportSection 报表区块
+type ReportSection struct {
+	ID       string               `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID string               `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	ReportID string               `gorm:"type:varchar(50);not null;index" json:"reportId"`
+	Type     DashboardSectionType `gorm:"size:50;not null" json:"type"` // 复用大屏区块类型
+	Title    string               `gorm:"size:200" json:"title"`
+	// 数据配置
+	Metrics    string `gorm:"type:text" json:"metrics,omitempty"`    // JSON 数组：关联指标
+	Dimensions string `gorm:"type:text" json:"dimensions,omitempty"` // JSON 数组：关联维度
+	// 图表配置
+	ChartConfig string `gorm:"type:text" json:"chartConfig,omitempty"` // JSON：图表详细配置
+	DataConfig  string `gorm:"type:text" json:"dataConfig,omitempty"`  // JSON：数据查询/样本数据
+	// 布局配置
+	SortOrder int `gorm:"default:0" json:"sortOrder"` // 排列顺序
+	ColSpan   int `gorm:"default:12" json:"colSpan"`  // 列宽 (1-12)
+	RowSpan   int `gorm:"default:1" json:"rowSpan"`   // 行高
+	// 数据查询配置
+	TimeGrain  string `gorm:"size:50" json:"timeGrain,omitempty"`  // 时间粒度
+	TopN       int    `json:"topN,omitempty"`                      // 排行 TopN
+	Comparison string `gorm:"size:50" json:"comparison,omitempty"` // 对比维度
+	FilterExpr string `gorm:"type:text" json:"filterExpr,omitempty"`
+	// 元数据
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
 // AutoMigrate 自动迁移所有表
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
@@ -620,5 +702,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&DatasetVersion{},
 		&DataQualityIssue{},
 		&DatasetAccessLog{},
+		// 报表
+		&Report{},
+		&ReportSection{},
 	)
 }

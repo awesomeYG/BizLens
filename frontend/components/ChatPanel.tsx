@@ -16,7 +16,9 @@ import type {
   DashboardData,
   DashboardSection,
   DashboardTemplateId,
+  Report,
 } from "@/lib/types";
+import { request } from "@/lib/auth/api";
 
 interface ChatPanelProps {
   onDataSummaryChange?: (summary: string) => void;
@@ -338,6 +340,58 @@ export default function ChatPanel({
       }
     };
 
+    const createReportFromResponse = async (rawContent: string) => {
+      const reportRegex = /```report_config\s*\n([\s\S]*?)\n```/;
+      const reportMatch = reportRegex.exec(rawContent);
+      if (!reportMatch) return false;
+
+      try {
+        const reportConfig = JSON.parse(reportMatch[1]);
+        const user = getCurrentUser();
+        const tenantId = user?.id?.split("@")[0] || "demo";
+
+        const created = await request<Report>(
+          `/tenants/${tenantId}/reports`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              title: reportConfig.title || "AI 生成报表",
+              description: reportConfig.description || "",
+              type: reportConfig.type || "custom",
+              category: reportConfig.category || "custom",
+              aiGenerated: true,
+              sections: (reportConfig.sections || []).map((s: any, i: number) => ({
+                type: s.type || "kpi",
+                title: s.title || "",
+                colSpan: s.colSpan || 12,
+                rowSpan: s.rowSpan || 1,
+                sortOrder: i,
+                dataConfig: s.dataConfig || s.data || {},
+              })),
+            }),
+          }
+        );
+
+        const cleanContent = rawContent.replace(reportRegex, "").trim();
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  content:
+                    cleanContent +
+                    `\n\n报表「${created.title}」已自动创建！包含 ${created.sections?.length || 0} 个图表区块。\n\n你可以在 [我的报表](/reports/${created.id}) 页面查看和编辑。`,
+                }
+              : m
+          )
+        );
+        return true;
+      } catch (err) {
+        console.error("创建报表失败:", err);
+        return false;
+      }
+    };
+
     setLoading(true);
 
     // 先追加用户消息和空的 assistant 占位
@@ -399,6 +453,7 @@ export default function ChatPanel({
         );
         await createAlertFromResponse(content);
         await createNotificationRuleFromResponse(content);
+        await createReportFromResponse(content);
         return;
       }
 
@@ -448,10 +503,11 @@ export default function ChatPanel({
         }
       }
 
-      // 流式完成后处理告警/通知规则
+      // 流式完成后处理告警/通知规则/报表
       if (fullContent) {
         await createAlertFromResponse(fullContent);
         await createNotificationRuleFromResponse(fullContent);
+        await createReportFromResponse(fullContent);
       }
     } catch (err) {
       setMessages((prev) =>
