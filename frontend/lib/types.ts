@@ -13,6 +13,7 @@ export interface DashboardData {
 export type DataSourceType =
   | "mysql"
   | "postgresql"
+  | "sqlite"
   | "sqlserver"
   | "oracle"
   | "mongodb"

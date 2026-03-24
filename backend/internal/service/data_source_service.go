@@ -10,6 +10,7 @@ import (
 	"ai-bi-server/internal/model"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
+	_ "github.com/mattn/go-sqlite3"
 	"gorm.io/gorm"
 )
 
@@ -66,6 +67,8 @@ func (s *DataSourceService) TestConnection(ds *model.DataSource) error {
 		return s.testMySQLConnection(ds)
 	case model.DataSourcePostgreSQL:
 		return s.testPostgreSQLConnection(ds)
+	case model.DataSourceSQLite:
+		return s.testSQLiteConnection(ds)
 	default:
 		return nil // 其他类型暂不测试
 	}
@@ -113,6 +116,24 @@ func (s *DataSourceService) testPostgreSQLConnection(ds *model.DataSource) error
 	return nil
 }
 
+// testSQLiteConnection 测试 SQLite 连接
+func (s *DataSourceService) testSQLiteConnection(ds *model.DataSource) error {
+	// SQLite 使用 Database 字段存储文件路径
+	if ds.Database == "" {
+		return fmt.Errorf("请填写 SQLite 文件路径")
+	}
+	db, err := sql.Open("sqlite3", ds.Database+"?mode=ro")
+	if err != nil {
+		return fmt.Errorf("打开文件失败：%w", err)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		return fmt.Errorf("连接失败：%w", err)
+	}
+	return nil
+}
+
 // FetchSchema 获取数据库 schema 信息
 func (s *DataSourceService) FetchSchema(ds *model.DataSource) (map[string]interface{}, error) {
 	switch ds.Type {
@@ -120,6 +141,8 @@ func (s *DataSourceService) FetchSchema(ds *model.DataSource) (map[string]interf
 		return s.fetchMySQLSchema(ds)
 	case model.DataSourcePostgreSQL:
 		return s.fetchPostgreSQLSchema(ds)
+	case model.DataSourceSQLite:
+		return s.fetchSQLiteSchema(ds)
 	default:
 		return nil, fmt.Errorf("不支持的数据源类型：%s", ds.Type)
 	}
@@ -256,6 +279,69 @@ func (s *DataSourceService) fetchPostgreSQLSchema(ds *model.DataSource) (map[str
 	}, nil
 }
 
+// fetchSQLiteSchema 获取 SQLite schema
+func (s *DataSourceService) fetchSQLiteSchema(ds *model.DataSource) (map[string]interface{}, error) {
+	db, err := sql.Open("sqlite3", ds.Database+"?mode=ro")
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		tables = append(tables, name)
+	}
+
+	tableStructures := make(map[string]interface{})
+	for _, table := range tables {
+		pragmaRows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+		if err != nil {
+			continue
+		}
+		defer pragmaRows.Close()
+
+		columns := make([]map[string]interface{}, 0)
+		for pragmaRows.Next() {
+			var cid int
+			var name, colType string
+			var notNull int
+			var dfltValue sql.NullString
+			var pk int
+			if err := pragmaRows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+				continue
+			}
+			columns = append(columns, map[string]interface{}{
+				"field":    name,
+				"type":     colType,
+				"nullable": notNull == 0,
+				"key": func() string {
+					if pk > 0 {
+						return "PRI"
+					}
+					return ""
+				}(),
+				"default": dfltValue.String,
+			})
+		}
+		tableStructures[table] = columns
+	}
+
+	return map[string]interface{}{
+		"tables":    tables,
+		"structure": tableStructures,
+	}, nil
+}
+
 // ExecuteQuery 执行 SQL 查询（只读）
 func (s *DataSourceService) ExecuteQuery(ds *model.DataSource, query string) ([]map[string]interface{}, error) {
 	// 安全检查：只允许 SELECT 查询
@@ -282,6 +368,8 @@ func (s *DataSourceService) ExecuteQuery(ds *model.DataSource, query string) ([]
 		dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 			ds.Host, ds.Port, ds.Username, ds.Password, ds.Database)
 		dbConn, err = sql.Open("postgres", dsn)
+	case model.DataSourceSQLite:
+		dbConn, err = sql.Open("sqlite3", ds.Database+"?mode=ro")
 	default:
 		return nil, fmt.Errorf("不支持的数据源类型：%s", ds.Type)
 	}
@@ -348,6 +436,8 @@ func (s *DataSourceService) GetSampleData(ds *model.DataSource, tableName string
 	case model.DataSourceMySQL:
 		query = fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableName, limit)
 	case model.DataSourcePostgreSQL:
+		query = fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableName, limit)
+	case model.DataSourceSQLite:
 		query = fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableName, limit)
 	}
 
