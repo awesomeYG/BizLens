@@ -237,6 +237,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           messages: [{ role: "user", content: question }],
           dataSummary: dataSummary || undefined,
           companyProfile: user?.companyProfile,
+          tenantId: user?.id || "demo-tenant",
         }),
       });
 

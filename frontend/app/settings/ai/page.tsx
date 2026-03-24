@@ -132,12 +132,20 @@ export default function SettingsPage() {
     setTestResult(null);
     
     try {
+      const testAiConfig = {
+        apiKey: aiConfig.apiKey.trim(),
+        baseUrl: aiConfig.baseUrl.trim(),
+        modelType: aiConfig.modelType,
+        model: aiConfig.model,
+      };
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [{ role: "user", content: "Hello, this is a test." }],
           tenantId: user?.id || "demo-tenant",
+          aiConfig: testAiConfig,
         }),
       });
 

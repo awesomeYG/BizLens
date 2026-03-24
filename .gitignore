@@ -20,6 +20,7 @@ backend/*.exe
 backend/*.test
 backend/test.db
 backend/ai_bi.db
+backend/uploads/demo/
 
 # IDE
 .vscode/

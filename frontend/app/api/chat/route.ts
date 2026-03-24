@@ -148,6 +148,13 @@ interface AIModelConfig {
   temperature: number;
 }
 
+function getDefaultBaseURLByModelType(modelType?: string): string | undefined {
+  if (modelType === "deepseek") {
+    return "https://api.deepseek.com/v1";
+  }
+  return undefined;
+}
+
 function getModelConfig(): AIModelConfig {
   const modelType = process.env.AI_MODEL_TYPE || "openai";
   
@@ -180,6 +187,7 @@ function getModelConfig(): AIModelConfig {
 }
 
 export async function POST(req: NextRequest) {
+  let finalModelType = process.env.AI_MODEL_TYPE || "openai";
   try {
     const body = await req.json();
     const { 
@@ -247,6 +255,8 @@ export async function POST(req: NextRequest) {
     }
 
     const modelConfig = getModelConfig();
+    finalModelType =
+      clientAiConfig?.modelType || serverConfig?.modelType || process.env.AI_MODEL_TYPE || "openai";
     
     // 如果客户端指定了模型，使用客户端的
     let finalModel = modelConfig.model;
@@ -256,7 +266,12 @@ export async function POST(req: NextRequest) {
       finalModel = serverConfig.model;
     }
 
-    const finalBaseURL = clientAiConfig?.baseUrl || serverConfig?.baseUrl || process.env.OPENAI_BASE_URL || undefined;
+    const finalBaseURL =
+      clientAiConfig?.baseUrl ||
+      serverConfig?.baseUrl ||
+      process.env.OPENAI_BASE_URL ||
+      getDefaultBaseURLByModelType(finalModelType) ||
+      undefined;
     
     // 构建增强版系统提示
     let systemContent = SYSTEM_PROMPT;
@@ -340,8 +355,12 @@ export async function POST(req: NextRequest) {
     
     // 错误分类处理
     if (err.status === 401) {
+      const providerHint =
+        finalModelType === "deepseek"
+          ? "（可能是 DeepSeek Base URL 未配置或配置错误，建议使用 https://api.deepseek.com/v1）"
+          : "";
       return NextResponse.json(
-        { error: "AI API Key 无效，请检查配置" },
+        { error: `AI 认证失败，请检查 API Key / Base URL / 模型配置${providerHint}` },
         { status: 401 }
       );
     }
@@ -392,6 +411,7 @@ async function getAnalysisPacketFromBackend(tenantId: string, question: string) 
 async function getTenantAIConfigFromBackend(tenantId: string): Promise<{
   apiKey?: string;
   baseUrl?: string;
+  modelType?: string;
   model?: string;
 } | null> {
   const backendBase = process.env.BACKEND_INTERNAL_URL || "http://localhost:3001";
@@ -408,6 +428,7 @@ async function getTenantAIConfigFromBackend(tenantId: string): Promise<{
     return {
       apiKey: payload?.apiKey,
       baseUrl: payload?.baseUrl,
+      modelType: payload?.modelType,
       model: payload?.model,
     };
   } catch {
