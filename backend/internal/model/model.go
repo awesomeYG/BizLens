@@ -713,10 +713,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&MetricLineage{},
 		&Dimension{},
 		&Relationship{},
-		// 大屏模板和实例
+		// 大屏模板和实例（先建实例表，再建依赖实例外键的区块表）
 		&DashboardTemplate{},
-		&DashboardSection{},
 		&DashboardInstance{},
+		&DashboardSection{},
 		// 认证相关
 		&RefreshToken{},
 		&AuthProvider{},
