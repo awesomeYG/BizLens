@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DataSourceConfig, DataSourceType } from "@/lib/types";
 import { getCurrentUser, saveOnboardingDraft } from "@/lib/user-store";
+import AppHeader from "@/components/AppHeader";
 
 const DATA_SOURCE_OPTIONS: Array<{ value: DataSourceType; label: string }> = [
   { value: "mysql", label: "MySQL" },
@@ -288,7 +289,9 @@ export default function DataSourcesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 px-6 py-12 text-zinc-100">
+    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+      <AppHeader title="数据源配置" backHref="/chat" />
+      <div className="px-6 py-12">
       <div className="mx-auto max-w-5xl">
         <div className="mb-10 flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -466,6 +469,7 @@ export default function DataSourcesPage() {
             </div>
           </section>
         </div>
+      </div>
       </div>
     </main>
   );

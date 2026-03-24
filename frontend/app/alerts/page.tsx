@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getCurrentUser } from "@/lib/user-store";
 import type { AlertEvent, AlertTriggerLog } from "@/lib/im";
+import AppHeader from "@/components/AppHeader";
 
 export default function AlertsPage() {
   const router = useRouter();
@@ -39,29 +40,7 @@ export default function AlertsPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 bg-grid">
-      <nav className="flex items-center justify-between px-6 py-3 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-md sticky top-0 z-40">
-        <Link href="/" className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 transition-colors">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-          </svg>
-          <span className="font-medium text-sm bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">BizLens</span>
-        </Link>
-        <div className="flex gap-1 items-center">
-          <Link href="/chat" className="btn-ghost text-sm">AI 对话</Link>
-          <Link href="/alerts" className="px-3 py-1.5 rounded-lg text-sm font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">智能告警</Link>
-          <Link href="/alerts/config" className="btn-ghost text-sm">告警配置</Link>
-          <Link
-            href="/im/settings"
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm text-purple-300 hover:bg-purple-500/10 border border-transparent hover:border-purple-500/20 transition-all"
-            title="IM 集成与通知"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-            </svg>
-            集成
-          </Link>
-        </div>
-      </nav>
+      <AppHeader title="智能告警" backHref="/" />
 
       <main className="p-6 max-w-4xl mx-auto">
         {/* 概览卡片 */}

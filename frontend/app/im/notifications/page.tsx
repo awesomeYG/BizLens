@@ -6,6 +6,7 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/user-store";
 import { IM_PLATFORM_REGISTRY, type IMPlatformConfig, type NotificationRecord, type NotificationSendRequest } from "@/lib/im";
 import IMPlatformIcon from "@/components/IMPlatformIcon";
+import AppHeader from "@/components/AppHeader";
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -85,18 +86,17 @@ export default function NotificationsPage() {
   return (
     <div className="min-h-screen bg-zinc-950 bg-grid">
       {/* Navigation */}
-      <nav className="flex items-center justify-between px-6 py-3 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-md sticky top-0 z-40">
-        <Link href="/im/settings" className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 transition-colors">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-          </svg>
-          <span className="text-sm">返回设置</span>
-        </Link>
-        <div className="flex items-center gap-4 text-xs text-zinc-500">
-          <span>成功：<span className="text-emerald-400">{sentCount}</span></span>
-          <span>失败：<span className="text-red-400">{failCount}</span></span>
-        </div>
-      </nav>
+      <AppHeader
+        title="通知中心"
+        backHref="/im/settings"
+        backLabel="返回设置"
+        actions={
+          <div className="flex items-center gap-4 text-xs text-zinc-500">
+            <span>成功：<span className="text-emerald-400">{sentCount}</span></span>
+            <span>失败：<span className="text-red-400">{failCount}</span></span>
+          </div>
+        }
+      />
 
       {/* Hero Section */}
       <div className="relative overflow-hidden border-b border-zinc-800/50">

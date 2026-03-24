@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import AppHeader from "@/components/AppHeader";
 
 const SAMPLE_REPORTS = [
   {
@@ -33,37 +34,18 @@ export default function ReportsPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950">
-      {/* 顶部导航 */}
-      <nav className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/50">
-        <button
-          onClick={() => router.back()}
-          className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-          </svg>
-          <span className="text-sm">返回</span>
-        </button>
-        <h1 className="text-lg font-semibold text-zinc-100">我的报表</h1>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => router.push("/im/settings")}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-purple-300 hover:bg-purple-500/10 border border-transparent hover:border-purple-500/20 transition-all"
-            title="IM 集成与通知"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-            </svg>
-            集成
-          </button>
+      <AppHeader
+        title="我的报表"
+        backHref="/chat"
+        actions={
           <button
             onClick={() => router.push("/chat")}
-            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-all shadow-lg shadow-indigo-500/30"
+            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-lg shadow-indigo-500/30"
           >
             新建报表
           </button>
-        </div>
-      </nav>
+        }
+      />
 
       <main className="max-w-5xl mx-auto p-6">
         <div className="text-center mb-8">

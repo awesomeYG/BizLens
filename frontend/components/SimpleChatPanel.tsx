@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getCurrentUser, logoutUser } from "@/lib/user-store";
 import type { ChatMessage } from "@/lib/types";
+import AppHeader from "@/components/AppHeader";
 
 interface ChatPanelProps {
   onDataSummaryChange?: (summary: string) => void;
@@ -325,78 +326,14 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       {/* ===== 滚动区域：包含顶部导航和消息列表 ===== */}
       <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto flex flex-col">
         {/* 顶部导航 */}
-        <header className="relative sticky top-0 z-20 shrink-0 px-5 py-3 border-b border-zinc-800/40 bg-zinc-900/60 backdrop-blur-xl">
-          {/* 顶栏底部微光线 */}
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent" />
-
-          <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
-            {/* 左侧：品牌 */}
-            <div className="flex items-center gap-3 min-w-0">
-              <AiAvatar size="lg" />
-              <div className="min-w-0">
-                <h1 className="text-sm font-semibold text-zinc-100 tracking-wide flex items-center gap-2">
-                  AI 数据分析师
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                  </span>
-                </h1>
-                <p className="text-xs text-zinc-500 truncate">
-                  {currentUser?.name ? `${currentUser.name}` : "智能洞察与分析建议"}
-                  {uploadedFiles.length > 0 && (
-                    <span className="ml-2 text-indigo-400/70">{uploadedFiles.length} 个数据文件</span>
-                  )}
-                </p>
-              </div>
-            </div>
-
-            {/* 右侧：操作按钮 */}
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => router.push("/data-sources")}
-                className="px-3 py-1.5 text-xs rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/70 transition-all"
-              >
-                数据源
-              </button>
-              <button
-                onClick={() => router.push("/reports")}
-                className="px-3 py-1.5 text-xs rounded-lg text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 transition-all"
-              >
-                报表
-              </button>
-              <div className="w-px h-4 bg-zinc-800 mx-1" />
-              <button
-                onClick={() => router.push("/im/settings")}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 transition-all"
-                title="IM 集成与通知"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-                </svg>
-                集成
-              </button>
-              <button
-                onClick={() => router.push("/settings/ai")}
-                className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/70 transition-all"
-                title="AI 设置"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                </svg>
-              </button>
-              <button
-                onClick={handleLogout}
-                className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
-                title="退出登录"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </header>
+        <AppHeader
+          title="AI 数据分析师"
+          subtitle={
+            (currentUser?.name ? currentUser.name : "智能洞察与分析建议") +
+            (uploadedFiles.length > 0 ? ` | ${uploadedFiles.length} 个数据文件` : "")
+          }
+          showOnlineStatus
+        />
 
         {/* 消息区域 */}
         <div className="flex-1 min-h-0 pt-6">
