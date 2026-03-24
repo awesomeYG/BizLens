@@ -105,6 +105,12 @@ function createWelcomeMessages(): ChatMessage[] {
   ];
 }
 
+function isNotFoundError(err: unknown) {
+  if (!(err instanceof Error)) return false;
+  const message = err.message.toLowerCase();
+  return message === "not found" || message.includes("404") || message.includes("会话不存在");
+}
+
 function toPersistedMessages(messages: ChatMessage[]) {
   return messages.filter((item) => item.id !== "welcome");
 }
@@ -304,6 +310,15 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     lastSavedSignatureRef.current = JSON.stringify(persistedMessages);
   }, []);
 
+  const resetToWelcomeState = useCallback(() => {
+    setConversations([]);
+    setActiveConversationId(null);
+    setMessages(createWelcomeMessages());
+    setUploadedFiles([]);
+    setDataSummary("");
+    lastSavedSignatureRef.current = "[]";
+  }, []);
+
   const upsertConversationSummary = useCallback((summary: ChatConversationSummary) => {
     setConversations((prev) => {
       const next = [summary, ...prev.filter((item) => item.id !== summary.id)];
@@ -376,6 +391,12 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     bootstrap().catch((err) => {
       console.error("初始化会话失败:", err);
       if (!disposed) {
+        if (isNotFoundError(err)) {
+          resetToWelcomeState();
+          setHistoryLoading(false);
+          return;
+        }
+
         setHistoryLoading(false);
         setMessages([
           ...createWelcomeMessages(),
@@ -392,7 +413,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     return () => {
       disposed = true;
     };
-  }, [createConversation, currentUser, loadConversation, router, tenantId]);
+  }, [createConversation, currentUser, loadConversation, resetToWelcomeState, router, tenantId]);
 
   useEffect(() => {
     if (!activeConversationId || loading || historyLoading) return;
