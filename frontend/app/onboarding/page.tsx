@@ -80,67 +80,142 @@ export default function OnboardingPage() {
   };
 
   if (!ready) {
-    return <div className="min-h-screen bg-zinc-950" />;
+    return <div className="min-h-screen bg-slate-950" />;
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 px-6 py-12 text-zinc-100">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-10">
-          <div className="inline-flex items-center rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-300">
-            首次使用引导
-          </div>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight">先完成初始化，再进入数据大屏</h1>
-          <p className="mt-3 max-w-3xl text-zinc-400">
-            公司信息和分析偏好已经迁移到设置中心维护。你可以先快速完成初始化进入系统，随后随时去设置页修改；也可以现在就去补充。
-          </p>
-        </div>
+    <main className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-930 to-slate-950 text-slate-100">
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_20%,rgba(56,189,248,0.12),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(129,140,248,0.12),transparent_30%),radial-gradient(circle_at_70%_80%,rgba(16,185,129,0.12),transparent_30%)]" />
 
-        <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="space-y-6">
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
+      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-12 lg:px-10">
+        <header className="flex flex-col gap-4 rounded-3xl border border-white/5 bg-white/5/10 backdrop-blur-xl px-6 py-5 shadow-[0_20px_60px_-28px_rgba(0,0,0,0.6)]">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 animate-pulse" />
+              首次使用引导
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-full border border-slate-400/20 px-3 py-1 text-[11px] text-slate-300">
+              准备就绪后随时可修改
+            </span>
+          </div>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-2">
+              <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">完成初始化，直接开始提问数据</h1>
+              <p className="max-w-3xl text-sm text-slate-300/90 md:text-base">
+                企业档案、分析偏好和数据源都可以后续在设置中心与数据源页面持续维护。先完成引导，立刻进入 AI 对话与大屏探索。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => router.push("/settings/profile?returnTo=/onboarding")}
+                className="rounded-xl border border-cyan-400/40 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300 hover:bg-cyan-500/20"
+              >
+                去设置中心补充档案
+              </button>
+              <button
+                onClick={() => router.push("/data-sources?returnTo=/onboarding")}
+                className="rounded-xl border border-indigo-400/40 bg-indigo-500/10 px-4 py-2 text-sm font-medium text-indigo-100 transition hover:border-indigo-300 hover:bg-indigo-500/20"
+              >
+                管理数据源
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div className="grid gap-6 lg:grid-cols-[1.4fr_0.85fr]">
+          <section className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-inner shadow-black/30">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">建议动作</p>
+                <h3 className="mt-3 text-lg font-semibold text-white">快速完成并进入系统</h3>
+                <p className="mt-2 text-sm text-slate-300/90">完成后可随时返回设置和数据源页面调整，无需一次填完。</p>
+                <div className="mt-4 flex flex-col gap-3">
+                  <button
+                    onClick={() => void handleComplete()}
+                    disabled={submitting}
+                    className="rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:from-cyan-300 hover:to-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {submitting ? "初始化中..." : "跳过并进入系统"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      completeOnboarding(MOCK_DATA.companyInfo, MOCK_DATA.dataSources, MOCK_DATA.companyProfile);
+                      router.replace("/chat");
+                    }}
+                    className="rounded-xl border border-slate-700/80 bg-slate-900/70 px-4 py-3 text-sm font-medium text-slate-100 transition hover:border-slate-500"
+                  >
+                    使用演示数据快速体验
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 to-cyan-500/5 p-5 text-sm text-emerald-50 shadow-[0_10px_40px_-24px_rgba(16,185,129,0.8)]">
+                <div className="flex items-center gap-2 text-emerald-100">
+                  <span className="h-2 w-2 rounded-full bg-emerald-300" />
+                  更贴合业务的回答
+                </div>
+                <p className="mt-3 text-slate-100/90">
+                  补充企业档案与分析偏好后，AI 回复和报表推荐会更贴近你的行业与核心目标。
+                </p>
+                <button
+                  onClick={() => router.push("/settings/profile?returnTo=/onboarding")}
+                  className="mt-4 inline-flex items-center justify-center rounded-lg border border-emerald-400/50 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-50 transition hover:border-emerald-300"
+                >
+                  前往企业档案
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-6 shadow-inner shadow-black/30">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-medium">1. 企业档案与分析偏好</h2>
-                  <p className="mt-2 text-sm text-zinc-400">
-                    首次进入时不再在引导页里一次性填写。请前往设置中心维护，这样后续可以持续调整，不会被锁死在 onboarding 里。
-                  </p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">企业档案与分析偏好</p>
+                  <h3 className="mt-2 text-lg font-semibold text-white">随时可在设置中心更新</h3>
+                  <p className="mt-2 text-sm text-slate-300/90">档案用于个性化回答与指标推荐，后续变更不会影响你现在的引导流。</p>
                 </div>
                 <button
                   onClick={() => router.push("/settings/profile?returnTo=/onboarding")}
-                  className="rounded-xl border border-cyan-500/40 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:border-cyan-400 hover:bg-cyan-500/10"
+                  className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:border-slate-500"
                 >
-                  去设置中心编辑
+                  去编辑
                 </button>
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-2">
                 {companyInfoItems.map((item) => (
-                  <div key={item.label} className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4">
-                    <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">{item.label}</div>
-                    <div className="mt-3 text-sm text-zinc-200">{item.value || "未填写，可稍后在设置中心补充"}</div>
+                  <div key={item.label} className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">{item.label}</div>
+                    <div className="mt-3 text-sm text-slate-100">
+                      {item.value || "未填写，可稍后在设置中心补充"}
+                    </div>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-5 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5">
-                <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">当前分析偏好</div>
+              <div className="mt-5 rounded-2xl border border-slate-800/80 bg-slate-950/60 p-5">
+                <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">当前分析偏好</div>
                 <div className="mt-4 grid gap-5 md:grid-cols-2">
                   <div>
-                    <div className="text-sm text-zinc-300">重点分析方向</div>
+                    <div className="text-sm text-slate-200">重点分析方向</div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {(companyProfile.analysisFocuses?.length ? companyProfile.analysisFocuses : DEFAULT_COMPANY_PROFILE.analysisFocuses).map((item) => (
-                        <span key={item} className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-200">
+                        <span
+                          key={item}
+                          className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-100"
+                        >
                           {item}
                         </span>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <div className="text-sm text-zinc-300">推荐指标</div>
+                    <div className="text-sm text-slate-200">推荐指标</div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {(companyProfile.recommendedMetrics?.length ? companyProfile.recommendedMetrics : DEFAULT_COMPANY_PROFILE.recommendedMetrics).map((item) => (
-                        <span key={item} className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300">
+                        <span
+                          key={item}
+                          className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200"
+                        >
                           {item}
                         </span>
                       ))}
@@ -148,99 +223,101 @@ export default function OnboardingPage() {
                   </div>
                 </div>
               </div>
-            </section>
+            </div>
 
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-6 shadow-inner shadow-black/30">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-medium">2. 数据源</h2>
-                  <p className="mt-2 text-sm text-zinc-400">
-                    数据源依然在独立页面统一维护，支持持续新增。它不是首登必填项，但越早接入，AI 和大屏就越快进入可用状态。
-                  </p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">数据源</p>
+                  <h3 className="mt-2 text-lg font-semibold text-white">越早接入，越快获得可用洞察</h3>
+                  <p className="mt-2 text-sm text-slate-300/90">支持持续新增，未填也可先进入系统。连接后 AI 和大屏会即时利用数据。</p>
                 </div>
                 <button
                   onClick={() => router.push("/data-sources?returnTo=/onboarding")}
-                  className="rounded-xl border border-cyan-500/40 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:border-cyan-400 hover:bg-cyan-500/10"
+                  className="rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-100 transition hover:border-indigo-300"
                 >
-                  前往数据源页面
+                  前往数据源
                 </button>
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-2">
-                {dataSources.length ? dataSources.map((source) => (
-                  <div key={source.id} className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-medium text-zinc-100">{source.name}</div>
-                        <div className="mt-1 text-xs uppercase tracking-wide text-cyan-300">{source.type}</div>
+                {dataSources.length ? (
+                  dataSources.map((source) => (
+                    <div key={source.id} className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-white">{source.name}</div>
+                          <div className="mt-1 text-[11px] uppercase tracking-wide text-indigo-200">{source.type}</div>
+                        </div>
+                        <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-100">
+                          {source.status || "connected"}
+                        </span>
                       </div>
-                      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-200">
-                        {source.status || "connected"}
-                      </span>
+                      {source.description ? <p className="mt-3 text-sm text-slate-300/90">{source.description}</p> : null}
                     </div>
-                    {source.description ? <p className="mt-3 text-sm text-zinc-400">{source.description}</p> : null}
-                  </div>
-                )) : (
-                  <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950/50 p-4 text-sm text-zinc-400 md:col-span-2">
-                    还没有已保存的数据源。你可以先完成初始化，后续再去独立页面补充。
+                  ))
+                ) : (
+                  <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/60 p-4 text-sm text-slate-400 md:col-span-2">
+                    还没有已保存的数据源。你可以先完成初始化，稍后再到独立页面补充。
                   </div>
                 )}
               </div>
-            </section>
-          </div>
+            </div>
+          </section>
 
-          <aside className="space-y-6">
-            <section className="rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 to-sky-500/5 p-6">
-              <h2 className="text-xl font-medium">完成初始化</h2>
-              <p className="mt-3 text-sm text-zinc-300">
-                初始化现在只负责带你确认入口，不再把企业信息锁在一次性表单里。进入系统后，你仍然可以随时去设置中心和数据源页面继续补充。
-              </p>
-              <div className="mt-6 flex flex-col gap-3">
-                <button
-                  onClick={() => router.push("/settings/profile?returnTo=/onboarding")}
-                  className="rounded-xl border border-cyan-500/40 px-5 py-3 font-medium text-cyan-200 transition hover:border-cyan-400 hover:bg-cyan-500/10"
-                >
-                  先去补充企业档案
-                </button>
-                <button
-                  onClick={() => router.push("/data-sources?returnTo=/onboarding")}
-                  className="rounded-xl border border-cyan-500/40 px-5 py-3 font-medium text-cyan-200 transition hover:border-cyan-400 hover:bg-cyan-500/10"
-                >
-                  现在去配置数据源
-                </button>
-                <button
-                  onClick={() => void handleComplete()}
-                  disabled={submitting}
-                  className="rounded-xl bg-cyan-500 px-5 py-3 font-medium text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {submitting ? "初始化中..." : "跳过并进入系统"}
-                </button>
-                <button
-                  onClick={() => {
-                    completeOnboarding(MOCK_DATA.companyInfo, MOCK_DATA.dataSources, MOCK_DATA.companyProfile);
-                    router.replace("/chat");
-                  }}
-                  className="rounded-xl border border-zinc-700 px-5 py-3 font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800"
-                >
-                  使用演示数据快速体验
-                </button>
+          <aside className="space-y-4 lg:space-y-5">
+            <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-5 shadow-inner shadow-black/30">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">步骤进度</p>
+              <div className="mt-4 space-y-4">
+                {[{
+                  title: "补充企业档案与偏好",
+                  description: "在设置中心维护档案，驱动个性化回答与指标推荐。",
+                  action: () => router.push("/settings/profile?returnTo=/onboarding"),
+                  done: hasCompanyInfo(companyInfo),
+                }, {
+                  title: "连接数据源",
+                  description: "接入数据库或文件，获得真实业务数据洞察。",
+                  action: () => router.push("/data-sources?returnTo=/onboarding"),
+                  done: Boolean(dataSources.length),
+                }, {
+                  title: "进入系统体验",
+                  description: "完成引导或直接跳过，开始 AI 对话与报表。",
+                  action: () => void handleComplete(),
+                  done: false,
+                }].map((item) => (
+                  <div key={item.title} className="flex items-start gap-3 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
+                    <div className={`mt-0.5 h-3 w-3 rounded-full ${item.done ? "bg-emerald-400" : "bg-slate-600"}`} />
+                    <div className="space-y-1">
+                      <div className="text-sm font-semibold text-white">{item.title}</div>
+                      <p className="text-xs text-slate-400">{item.description}</p>
+                      <button
+                        onClick={item.action}
+                        className="text-xs font-medium text-cyan-200 underline-offset-4 hover:text-cyan-100 hover:underline"
+                      >
+                        去完成
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </section>
+            </div>
 
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6 text-sm text-zinc-400">
-              <h2 className="text-lg font-medium text-zinc-100">使用建议</h2>
-              <ul className="mt-4 space-y-3">
-                <li>公司信息和分析偏好统一在 `设置中心 / 企业档案` 维护，后续可持续更新。</li>
-                <li>数据源不是首登必填项，可以先进入系统，等拿到连接信息后再补充。</li>
-                <li>如果希望 AI 一上来就给出更贴合业务的建议，建议先补充企业档案。</li>
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5 text-sm text-amber-50 shadow-[0_10px_40px_-24px_rgba(245,158,11,0.5)]">
+              <div className="flex items-center gap-2 text-amber-100">
+                <span className="h-2 w-2 rounded-full bg-amber-300" />
+                小贴士
+              </div>
+              <ul className="mt-3 space-y-2 text-amber-50/90">
+                <li>登录后所有入口都可回到设置中心与数据源页面补充资料。</li>
+                <li>没有数据源也能先体验 AI，对话将使用通用建议。</li>
+                <li>演示数据适合快速试用，真实效果以你接入的数据为准。</li>
               </ul>
-            </section>
-
-            {!hasCompanyInfo(companyInfo) ? (
-              <section className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-6 text-sm text-amber-100">
-                当前还没有填写公司信息。你仍然可以先进入系统，但 AI 建议会以通用模式为主。
-              </section>
-            ) : null}
+              {!hasCompanyInfo(companyInfo) ? (
+                <div className="mt-4 rounded-xl border border-amber-300/40 bg-amber-300/10 p-3 text-amber-50">
+                  当前还没有填写公司信息，AI 将以通用模式回复。
+                </div>
+              ) : null}
+            </div>
           </aside>
         </div>
       </div>
