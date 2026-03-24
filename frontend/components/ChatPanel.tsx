@@ -185,6 +185,8 @@ export default function ChatPanel({
   const [analysisEvaluation, setAnalysisEvaluation] = useState<AnalysisEvaluation | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const manualStopRef = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -196,6 +198,12 @@ export default function ChatPanel({
 
   useEffect(() => {
     fetchAnalysisEvaluation();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
   }, []);
 
   const fetchAnalysisEvaluation = async () => {
@@ -457,6 +465,9 @@ export default function ChatPanel({
     };
 
     setLoading(true);
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    manualStopRef.current = false;
 
     // 先追加用户消息和空的 assistant 占位
     setMessages((prev) => [
@@ -489,6 +500,7 @@ export default function ChatPanel({
       const res = await fetch("/api/chat", {
         method: "POST",
         headers,
+        signal: abortController.signal,
         body: JSON.stringify({
           messages: msgList,
           dataSummary: dataSummary || undefined,
@@ -581,6 +593,20 @@ export default function ChatPanel({
         await createDataSourceFromResponse(fullContent);
       }
     } catch (err) {
+      const isManualAbort = manualStopRef.current || (err instanceof DOMException && err.name === "AbortError");
+      if (isManualAbort) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== assistantMsgId) return m;
+            const content = m.content.trim();
+            return {
+              ...m,
+              content: content ? `${content}\n\n[已手动中断生成]` : "已手动中断本次生成。",
+            };
+          })
+        );
+        return;
+      }
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMsgId
@@ -592,8 +618,16 @@ export default function ChatPanel({
         )
       );
     } finally {
+      abortControllerRef.current = null;
+      manualStopRef.current = false;
       setLoading(false);
     }
+  };
+
+  const handleStopGeneration = () => {
+    if (!loading || !abortControllerRef.current) return;
+    manualStopRef.current = true;
+    abortControllerRef.current.abort();
   };
 
   const handleSend = () => {
@@ -825,15 +859,25 @@ export default function ChatPanel({
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
             placeholder="输入问题，或描述告警规则..."
             className="flex-1 input-base !rounded-xl" />
-          <button onClick={handleSend} disabled={loading || !input.trim()}
-            className="shrink-0 btn-primary disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
-            </svg>
-          </button>
+          {loading ? (
+            <button onClick={handleStopGeneration}
+              className="shrink-0 p-2.5 rounded-xl bg-rose-500/90 hover:bg-rose-500 text-white transition-all duration-200 shadow-lg shadow-rose-500/20"
+              title="停止生成">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6.5" y="6.5" width="11" height="11" rx="2.5" />
+              </svg>
+            </button>
+          ) : (
+            <button onClick={handleSend} disabled={!input.trim()}
+              className="shrink-0 btn-primary disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+              </svg>
+            </button>
+          )}
         </div>
         <div className="max-w-4xl mx-auto mt-2 text-xs text-zinc-500">
-          提示：可以说 "当今日销售额超过 1000 时，发钉钉通知我" 来创建智能通知规则
+          {loading ? "正在生成回答，你可以随时手动中断。" : '提示：可以说 "当今日销售额超过 1000 时，发钉钉通知我" 来创建智能通知规则'}
         </div>
       </div>
     </div>

@@ -279,6 +279,8 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
   const hasScrolledRef = useRef(false);
   const lastSavedSignatureRef = useRef("[]");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const manualStopRef = useRef(false);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -297,6 +299,12 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
   useEffect(() => {
     onDataSummaryChange?.(dataSummary);
   }, [dataSummary, onDataSummaryChange]);
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   const applyConversation = useCallback((conversation: ChatConversation) => {
     const persistedMessages = conversation.messages.length ? conversation.messages : [];
@@ -530,6 +538,9 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     ]);
 
     setLoading(true);
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    manualStopRef.current = false;
     try {
       const token = getAccessToken();
       const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -622,6 +633,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       const res = await fetch("/api/chat", {
         method: "POST",
         headers,
+        signal: abortController.signal,
         body: JSON.stringify({
           messages: [{ role: "user", content: question }],
           dataSummary: dataSummary || undefined,
@@ -687,15 +699,37 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
         await createDataSourceFromResponse(fullContent);
       }
     } catch (err) {
+      const isManualAbort = manualStopRef.current || (err instanceof DOMException && err.name === "AbortError");
+      if (isManualAbort) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== assistantMsgId) return m;
+            const content = m.content.trim();
+            return {
+              ...m,
+              content: content ? `${content}\n\n[已手动中断生成]` : "已手动中断本次生成。",
+            };
+          })
+        );
+        return;
+      }
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMsgId ? { ...m, content: `请求失败：${err instanceof Error ? err.message : "网络错误"}` } : m
         )
       );
     } finally {
+      abortControllerRef.current = null;
+      manualStopRef.current = false;
       setLoading(false);
     }
   }, [activeConversationId, createConversation, dataSummary, router, tenantId]);
+
+  const handleStopGeneration = useCallback(() => {
+    if (!loading || !abortControllerRef.current) return;
+    manualStopRef.current = true;
+    abortControllerRef.current.abort();
+  }, [loading]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1032,16 +1066,30 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
                 />
               </div>
 
-              <button
-                onClick={handleSend}
-                disabled={loading || !input.trim() || historyLoading}
-                className="shrink-0 p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 btn-ripple disabled:shadow-none"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
-                </svg>
-              </button>
+              {loading ? (
+                <button
+                  onClick={handleStopGeneration}
+                  disabled={historyLoading}
+                  className="shrink-0 p-2.5 rounded-xl bg-rose-500/90 hover:bg-rose-500 text-white transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-rose-500/20"
+                  title="停止生成"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6.5" y="6.5" width="11" height="11" rx="2.5" />
+                  </svg>
+                </button>
+              ) : (
+                <button
+                  onClick={handleSend}
+                  disabled={!input.trim() || historyLoading}
+                  className="shrink-0 p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 btn-ripple disabled:shadow-none"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+                  </svg>
+                </button>
+              )}
             </div>
+            {loading ? <p className="mt-2 text-xs text-zinc-500">正在生成回答，你可以随时手动中断。</p> : null}
 
             <p className="mt-2.5 text-center text-[10px] text-zinc-700 select-none">AI 分析结果仅供参考，请结合实际业务场景验证</p>
           </div>

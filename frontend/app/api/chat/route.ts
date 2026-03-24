@@ -434,6 +434,8 @@ export async function POST(req: NextRequest) {
       max_tokens: modelConfig.maxTokens,
       temperature: modelConfig.temperature,
       stream: true,
+    }, {
+      signal: req.signal,
     });
 
     // 构造 SSE 响应流
@@ -441,11 +443,18 @@ export async function POST(req: NextRequest) {
     const readable = new ReadableStream({
       async start(controller) {
         try {
+          if (req.signal.aborted) {
+            controller.close();
+            return;
+          }
           // 先发送 analysis 元数据
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: "meta", analysis: analysisPacket, model: finalModel })}\n\n`)
           );
           for await (const chunk of stream) {
+            if (req.signal.aborted) {
+              break;
+            }
             const delta = chunk.choices[0]?.delta?.content;
             if (delta) {
               controller.enqueue(
@@ -453,13 +462,21 @@ export async function POST(req: NextRequest) {
               );
             }
           }
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
+          if (!req.signal.aborted) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
+          }
         } catch (err) {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: "error", error: String(err) })}\n\n`)
-          );
+          if (!req.signal.aborted) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: "error", error: String(err) })}\n\n`)
+            );
+          }
         } finally {
-          controller.close();
+          try {
+            controller.close();
+          } catch {
+            // ignore close race when client disconnects
+          }
         }
       },
     });
