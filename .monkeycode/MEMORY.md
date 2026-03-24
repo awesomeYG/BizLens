@@ -168,3 +168,17 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 支持的区块类型：kpi、line、area、bar、pie、funnel、ranking、gauge、table
   - AI 对话中用户说"生成大屏"时，AI 输出 `dashboard_config` JSON 块，ChatPanel 自动解析并内联预览
   - 旧的 `frontend/lib/templates.ts` 已改为重导出 `dashboard-templates.ts`，保持向后兼容
+
+### 统一数据源管理模块
+- Date: 2026-03-24
+- Context: Agent 在执行数据源整合重构时发现
+- Category: 代码结构
+- Instructions:
+  - 数据库数据源和文件上传已统一到 `/data-sources` 页面，使用 Tab 切换（数据库连接 / 上传文件）
+  - 组件结构：`data-sources/page.tsx`（Tab 容器） -> `components/DatabaseConnectionTab.tsx` + `components/FileUploadTab.tsx`
+  - Tab 使用 CSS `hidden` 控制显隐，保持两个 Tab 都挂载以避免状态丢失
+  - 数据库数据源已改为通过后端 API (`/api/tenants/{id}/data-sources`) 管理，不再使用 localStorage
+  - 首次加载时自动检测并迁移 localStorage 中的旧数据源到后端
+  - `/settings/files` 已改为自动重定向到 `/data-sources?tab=files`
+  - 所有 tenant 路由 (`/api/tenants/*`) 已统一使用 JWT 认证中间件
+  - `parseTenantID` 优先从 JWT context 获取 tenantID，fallback 到 URL path 和 Header
