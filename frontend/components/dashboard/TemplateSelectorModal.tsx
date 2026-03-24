@@ -1,20 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import type { DashboardTemplate } from "@/lib/types";
 
-export interface DashboardTemplate {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  icon?: string;
-  isSystem?: boolean;
-  tags?: string[];
-  usageCount?: number;
-  sections?: any[];
-  layoutConfig?: string;
-  colorTone?: string;
-}
+export type { DashboardTemplate };
 
 interface TemplateSelectorModalProps {
   isOpen: boolean;

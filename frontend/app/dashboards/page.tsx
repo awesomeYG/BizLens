@@ -2,18 +2,26 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import TemplateSelectorModal, { DashboardTemplate } from "@/components/dashboard/TemplateSelectorModal";
 import { getCurrentUser } from "@/lib/user-store";
 import AppHeader from "@/components/AppHeader";
+import DashboardView from "@/components/DashboardView";
+import { DASHBOARD_TEMPLATES, getTemplatesByCategory } from "@/lib/dashboard-templates";
+import type { DashboardTemplate } from "@/lib/types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+const CATEGORIES = [
+  { id: "all", name: "全部", icon: "📊" },
+  { id: "operations", name: "运营分析", icon: "📈" },
+  { id: "finance", name: "财务分析", icon: "💰" },
+  { id: "channel", name: "渠道/客户", icon: "📣" },
+  { id: "product", name: "供应链", icon: "📦" },
+  { id: "custom", name: "自定义", icon: "🎨" },
+];
 
 export default function DashboardsPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [templates, setTemplates] = useState<DashboardTemplate[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [previewTemplate, setPreviewTemplate] = useState<DashboardTemplate | null>(null);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -22,81 +30,63 @@ export default function DashboardsPage() {
       return;
     }
     setReady(true);
-    loadTemplates();
   }, [router]);
 
-  const loadTemplates = async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/tenants/user123/dashboards/templates?includeSystem=true`);
-      const data = await res.json();
-      setTemplates(data.templates || []);
-    } catch (error) {
-      console.error("Failed to load templates:", error);
-    }
-  };
+  const filteredTemplates = getTemplatesByCategory(selectedCategory).filter(
+    (t) => t.id !== "custom" || selectedCategory === "custom" || selectedCategory === "all"
+  );
 
-  const handleSelectTemplate = (template: DashboardTemplate) => {
-    console.log("Selected template:", template);
-    // 下一步：配置数据源（简化版本，直接使用默认数据源）
-    createDashboardFromTemplate(template);
-  };
-
-  const createDashboardFromTemplate = async (template: DashboardTemplate) => {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `${API_BASE_URL}/api/tenants/user123/dashboards/templates/${template.id}/generate`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            dataSourceId: "default",
-            name: `${template.name} - ${new Date().toLocaleDateString("zh-CN")}`,
-          }),
-        }
-      );
-      
-      if (res.ok) {
-        const data = await res.json();
-        console.log("Dashboard created:", data.instance);
-        // 跳转到详情页面（后续实现）
-        router.push(`/dashboards/${data.instance.id}`);
-      } else {
-        console.error("Failed to create dashboard");
-      }
-    } catch (error) {
-      console.error("Error creating dashboard:", error);
-    } finally {
-      setLoading(false);
-      setShowTemplateModal(false);
-    }
+  const handleUseTemplate = (template: DashboardTemplate) => {
+    // TODO: 后续接入后端创建实例，暂时进入预览
+    setPreviewTemplate(template);
   };
 
   if (!ready) {
-    return <div className="min-h-screen bg-slate-900" />;
+    return <div className="min-h-screen bg-[#0b0b10]" />;
   }
 
+  // =============== 模板预览全屏页面 ===============
+  if (previewTemplate) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#0b0b10] via-[#0f1020] to-[#0b0b10] text-white">
+        <AppHeader
+          title={previewTemplate.name}
+          breadcrumb={["BizLens", "数据大屏", previewTemplate.name]}
+          actions={
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPreviewTemplate(null)}
+                className="px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 text-zinc-300 text-xs font-medium hover:bg-white/10 transition-all"
+              >
+                返回模板库
+              </button>
+              <button className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-lg shadow-indigo-500/30">
+                保存为我的大屏
+              </button>
+            </div>
+          }
+        />
+        <main className="flex-1 px-4 pb-8">
+          <div className="max-w-[1400px] mx-auto">
+            <DashboardView template={previewTemplate} />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // =============== 模板库主页面 ===============
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#0b0b10] via-[#0f1020] to-[#0b0b10] text-white">
       {/* 顶部导航 */}
       <AppHeader
         title="数据大屏"
         breadcrumb={["BizLens", "数据大屏"]}
-        actions={
-          <button
-            onClick={() => setShowTemplateModal(true)}
-            disabled={loading}
-            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-lg shadow-indigo-500/30 disabled:opacity-60"
-          >
-            {loading ? "创建中..." : "+ 新建大屏"}
-          </button>
-        }
       />
 
-      {/* 主体 */}
       <main className="flex-1 px-6 pb-12">
         <div className="max-w-7xl mx-auto space-y-8">
-          {/* 顶部英雄区 */}
+          {/* 英雄区 */}
           <section className="relative overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-br from-indigo-900/40 via-slate-900/60 to-black/80 px-8 py-10 shadow-2xl shadow-indigo-900/30">
             <div className="absolute inset-0 pointer-events-none" aria-hidden>
               <div className="absolute -left-10 -top-10 h-56 w-56 rounded-full bg-indigo-600/20 blur-3xl" />
@@ -105,44 +95,22 @@ export default function DashboardsPage() {
             <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
               <div className="space-y-4 max-w-2xl">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-indigo-100">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse-soft" />
-                  实时驱动 · 多场景模板 · ECharts 深色主题
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  8 大行业模板 -- 配置驱动 -- ECharts 深色主题
                 </div>
                 <div>
                   <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-white">数据大屏中心</h1>
                   <p className="mt-3 text-zinc-300 text-base md:text-lg">
-                    从预置模板快速生成，或导入数据一键生成专属 BI 大屏。深色质感、分层布局和可视化预览，让你的数据信息更有高级感。
+                    选择预置行业模板一键预览，或通过 AI 对话自动生成专属大屏。支持 KPI、趋势、饼图、漏斗、排行、仪表盘等多种区块。
                   </p>
-                </div>
-                <div className="flex flex-wrap gap-3 text-sm text-zinc-300">
-                  <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400" /> 智能模板克隆
-                  </div>
-                  <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10">
-                    <span className="w-2 h-2 rounded-full bg-cyan-400" /> 多租户隔离
-                  </div>
-                  <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10">
-                    <span className="w-2 h-2 rounded-full bg-amber-400" /> 实时刷新计划
-                  </div>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3 w-full lg:w-[420px]">
-                {[{
-                  label: "模板数量",
-                  value: templates.length || 5,
-                  desc: "系统模板+自定义",
-                  color: "from-indigo-500/60 to-violet-500/40",
-                }, {
-                  label: "预估创建时间",
-                  value: "1-2 分钟",
-                  desc: "一键生成并预览",
-                  color: "from-cyan-500/60 to-blue-500/30",
-                }, {
-                  label: "可视化组件",
-                  value: "图表/卡片/表格",
-                  desc: "ECharts 深色主题",
-                  color: "from-emerald-500/50 to-teal-500/30",
-                }].map((card) => (
+                {[
+                  { label: "行业模板", value: DASHBOARD_TEMPLATES.length - 1, desc: "覆盖主流场景", color: "from-indigo-500/60 to-violet-500/40" },
+                  { label: "图表类型", value: "10+", desc: "折线/柱状/饼图/漏斗...", color: "from-cyan-500/60 to-blue-500/30" },
+                  { label: "区块组件", value: "配置驱动", desc: "JSON 定义零代码", color: "from-emerald-500/50 to-teal-500/30" },
+                ].map((card) => (
                   <div key={card.label} className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 px-4 py-5 shadow-lg">
                     <div className={`absolute inset-0 bg-gradient-to-br ${card.color} opacity-30`} />
                     <div className="relative space-y-1">
@@ -156,115 +124,118 @@ export default function DashboardsPage() {
             </div>
           </section>
 
-          {/* 快速开始模板 */}
-          <section className="space-y-3">
+          {/* 分类标签 */}
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl whitespace-nowrap border transition-all ${
+                  selectedCategory === cat.id
+                    ? "border-indigo-500/50 bg-indigo-500/15 text-indigo-100 shadow-md shadow-indigo-900/30"
+                    : "border-white/5 bg-white/[0.03] text-zinc-300 hover:border-white/10 hover:bg-white/5"
+                }`}
+              >
+                <span>{cat.icon}</span>
+                <span className="font-medium text-sm">{cat.name}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* 模板网格 */}
+          <section className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-white">快速开始</h2>
-                <p className="text-sm text-zinc-400">精选高频模板，点击即可生成实例</p>
+                <h2 className="text-lg font-semibold text-white">模板库</h2>
+                <p className="text-sm text-zinc-400">点击模板卡片预览完整大屏效果</p>
               </div>
-              <button
-                onClick={() => setShowTemplateModal(true)}
-                className="btn-secondary border border-white/10"
-              >
-                查看全部模板
-              </button>
+              <span className="text-xs text-zinc-500">{filteredTemplates.length} 个模板</span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {templates.slice(0, 3).map((template) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredTemplates.map((template) => (
                 <div
                   key={template.id}
-                  onClick={() => handleSelectTemplate(template)}
-                  className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur hover:border-indigo-400/60 hover:shadow-xl hover:shadow-indigo-900/30 transition-all cursor-pointer"
+                  onClick={() => handleUseTemplate(template)}
+                  className="group relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur hover:border-indigo-400/50 hover:shadow-xl hover:shadow-indigo-900/20 transition-all cursor-pointer"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/3 via-transparent to-white/5 opacity-70" aria-hidden />
-                  <div className="p-5 space-y-4">
+                  {/* 缩略预览 */}
+                  <div className="h-40 overflow-hidden bg-gradient-to-br from-slate-900/80 via-[#0f1020] to-black relative">
+                    {template.sections && template.sections.length > 0 ? (
+                      <div className="pointer-events-none">
+                        <DashboardView template={template} compact />
+                      </div>
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center text-zinc-600">
+                        <span className="text-4xl">{template.icon || "📊"}</span>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                  </div>
+
+                  {/* 信息 */}
+                  <div className="p-4 space-y-3">
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/30 to-cyan-500/30 flex items-center justify-center text-xl">
-                        <span>{template.icon || "📊"}</span>
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500/25 to-cyan-500/25 flex items-center justify-center text-lg shrink-0">
+                        {template.icon || "📊"}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-base font-semibold text-white line-clamp-1">{template.name}</h3>
-                        <p className="text-sm text-zinc-400 line-clamp-2">{template.description}</p>
+                        <h3 className="text-sm font-semibold text-white line-clamp-1">{template.name}</h3>
+                        <p className="text-xs text-zinc-400 line-clamp-2 mt-0.5">{template.description}</p>
                       </div>
                     </div>
-                    <div className="h-24 rounded-xl bg-gradient-to-br from-indigo-900/40 via-slate-900/70 to-black/80 border border-white/5 relative overflow-hidden">
-                      <div className="absolute inset-0 opacity-60" style={{ backgroundImage: "radial-gradient(circle at 30% 30%, rgba(99,102,241,0.3), transparent 40%), radial-gradient(circle at 70% 60%, rgba(14,165,233,0.25), transparent 45%)" }} />
-                      <div className="absolute inset-0 grid grid-cols-5 gap-1 p-3 opacity-80">
-                        <div className="col-span-3 bg-indigo-500/30 rounded" />
-                        <div className="col-span-2 bg-cyan-500/20 rounded" />
-                        <div className="col-span-5 grid grid-cols-5 gap-1 mt-1">
-                          {[...Array(5)].map((_, i) => (
-                            <div key={i} className="h-2 rounded bg-white/10" />
-                          ))}
-                        </div>
-                        <div className="col-span-2 h-12 rounded bg-emerald-500/20" />
-                        <div className="col-span-3 h-12 rounded bg-indigo-500/25" />
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-zinc-400">
-                      <span className="inline-flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        {template.usageCount ?? 0} 次使用
-                      </span>
-                      {template.category && (
-                        <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] text-indigo-100">
-                          {template.category}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {template.tags?.slice(0, 3).map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[10px] text-zinc-300"
+                        >
+                          {tag}
                         </span>
-                      )}
+                      ))}
+                      <span className="ml-auto text-[10px] text-zinc-500">
+                        {template.sections?.length || 0} 个区块
+                      </span>
                     </div>
                   </div>
-                  <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-0 group-hover:opacity-100 transition" />
+
+                  {/* hover 底部微光 */}
+                  <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-indigo-400/40 to-transparent opacity-0 group-hover:opacity-100 transition" />
                 </div>
               ))}
             </div>
           </section>
 
-          {/* 我的大屏 */}
+          {/* 我的大屏 -- 占位 */}
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-white">我的大屏</h2>
-                <p className="text-sm text-zinc-400">生成后会出现在这里，可继续编辑和发布</p>
-              </div>
-              <div className="flex gap-3">
-                <button className="btn-ghost border border-white/5">导入配置</button>
-                <button
-                  onClick={() => setShowTemplateModal(true)}
-                  className="btn-primary"
-                >
-                  新建大屏
-                </button>
+                <p className="text-sm text-zinc-400">通过模板生成或 AI 对话创建的大屏会出现在这里</p>
               </div>
             </div>
-            <div className="relative overflow-hidden rounded-2xl border border-dashed border-white/10 bg-white/3 px-6 py-10 text-center">
+            <div className="relative overflow-hidden rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-6 py-10 text-center">
               <div className="absolute inset-0 opacity-40" style={{ backgroundImage: "radial-gradient(circle at 30% 30%, rgba(99,102,241,0.15), transparent 35%), radial-gradient(circle at 70% 60%, rgba(14,165,233,0.15), transparent 40%)" }} />
               <div className="relative space-y-3 max-w-xl mx-auto">
-                <div className="mx-auto w-12 h-12 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-100">📺</div>
+                <div className="mx-auto w-12 h-12 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-100 text-xl">
+                  📺
+                </div>
                 <h3 className="text-xl font-semibold text-white">还没有大屏</h3>
-                <p className="text-sm text-zinc-400">选择一个模板，几秒钟内生成可视化大屏。支持 KPI 卡片、趋势、渠道分布、区域对比等常用组件。</p>
+                <p className="text-sm text-zinc-400">
+                  点击上方模板卡片预览效果，或前往 AI 对话页面用自然语言生成专属大屏。
+                </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-2">
                   <button
-                    onClick={() => setShowTemplateModal(true)}
-                    className="btn-primary w-full sm:w-auto"
+                    onClick={() => router.push("/chat")}
+                    className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium shadow-lg shadow-indigo-500/30 hover:bg-indigo-500 transition-all"
                   >
-                    立即创建
+                    用 AI 生成大屏
                   </button>
-                  <button className="btn-secondary w-full sm:w-auto border border-white/10">查看全部模板</button>
                 </div>
               </div>
             </div>
           </section>
         </div>
       </main>
-
-      {/* 模板选择弹窗 */}
-      <TemplateSelectorModal
-        isOpen={showTemplateModal}
-        onClose={() => setShowTemplateModal(false)}
-        onSelectTemplate={handleSelectTemplate}
-        templates={templates}
-      />
     </div>
   );
 }

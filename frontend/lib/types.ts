@@ -1,3 +1,4 @@
+/** 旧版 DashboardData，保留向后兼容 */
 export interface DashboardData {
   months: string[];
   sales: number[];
@@ -8,6 +9,71 @@ export interface DashboardData {
   totalSales: number;
   growth: number;
   customers: number;
+}
+
+// ==================== 泛化大屏数据模型 ====================
+
+/** 通用数据序列 -- 用于折线/柱状/面积等图表 */
+export interface SeriesData {
+  name: string;
+  values: number[];
+  color?: string;
+}
+
+/** 通用 KPI 卡片数据 */
+export interface KpiItem {
+  label: string;
+  value: string | number;
+  unit?: string;
+  trend?: "up" | "down" | "flat";
+  trendValue?: string;
+  color?: string;
+  icon?: string;
+}
+
+/** 通用饼图/环形图数据 */
+export interface PieItem {
+  name: string;
+  value: number;
+}
+
+/** 通用排行榜数据 */
+export interface RankingItem {
+  label: string;
+  value: number;
+  maxValue?: number;
+}
+
+/** 通用漏斗数据 */
+export interface FunnelItem {
+  name: string;
+  value: number;
+}
+
+/** 通用表格数据 */
+export interface TableData {
+  columns: string[];
+  rows: (string | number)[][];
+}
+
+/** 通用仪表盘数据 */
+export interface GaugeData {
+  name: string;
+  value: number;
+  min?: number;
+  max?: number;
+}
+
+/** 泛化的大屏区块数据 -- 每个 Section 携带自己的数据 */
+export interface SectionData {
+  kpiItems?: KpiItem[];
+  categories?: string[];
+  series?: SeriesData[];
+  pieItems?: PieItem[];
+  rankingItems?: RankingItem[];
+  funnelItems?: FunnelItem[];
+  tableData?: TableData;
+  gaugeData?: GaugeData;
 }
 
 export type DataSourceType =
@@ -121,7 +187,17 @@ export interface ChatMessage {
   schemaContext?: string;
 }
 
-export type DashboardTemplateId = "sales" | "operations" | "finance" | "promotion" | "custom";
+export type DashboardTemplateId =
+  | "sales"
+  | "operations"
+  | "finance"
+  | "promotion"
+  | "ecommerce"
+  | "saas"
+  | "marketing"
+  | "supply-chain"
+  | "customer"
+  | "custom";
 
 export interface DashboardTemplate {
   id: DashboardTemplateId;
@@ -133,6 +209,12 @@ export interface DashboardTemplate {
   isSystem?: boolean;
   tags?: string[];
   usageCount?: number;
+  /** 模板包含的区块配置 */
+  sections?: DashboardSection[];
+  /** 布局列数 (默认 12) */
+  gridCols?: number;
+  /** 配色方案标识 */
+  colorTone?: string;
 }
 
 // 大屏区块类型
@@ -149,6 +231,10 @@ export type DashboardSectionType =
   | "table"
   | "insight"
   | "alert"
+  | "gauge"
+  | "radar"
+  | "scatter"
+  | "heatmap"
   | "custom";
 
 // 大屏区块配置
@@ -156,14 +242,17 @@ export interface DashboardSection {
   id: string;
   type: DashboardSectionType;
   title?: string;
+  subtitle?: string;
   metrics?: string[];
   dimensions?: string[];
   chartConfig?: any;
-  // 布局配置
+  // 布局配置 -- colSpan/rowSpan 用于 grid 布局
   row?: number;
   col?: number;
   width?: number;
   height?: number;
+  colSpan?: number;
+  rowSpan?: number;
   priority?: number;
   // 数据配置
   timeGrain?: string;
@@ -171,6 +260,8 @@ export interface DashboardSection {
   comparison?: string;
   splitBy?: string;
   filterExpr?: string;
+  // 区块携带的样本/默认数据
+  data?: SectionData;
   // AI 配置
   autoGenerate?: boolean;
 }
