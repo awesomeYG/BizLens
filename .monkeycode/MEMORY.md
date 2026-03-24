@@ -182,3 +182,19 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - `/settings/files` 已改为自动重定向到 `/data-sources?tab=files`
   - 所有 tenant 路由 (`/api/tenants/*`) 已统一使用 JWT 认证中间件
   - `parseTenantID` 优先从 JWT context 获取 tenantID，fallback 到 URL path 和 Header
+
+### 报表模块架构
+- Date: 2026-03-24
+- Context: Agent 在执行报表功能完整实现时发现
+- Category: 代码结构
+- Instructions:
+  - 后端模型：Report + ReportSection 在 backend/internal/model/model.go
+  - 后端服务：backend/internal/service/report_service.go，支持完整 CRUD + 复制 + DTO 转换
+  - 后端 Handler：backend/internal/handler/report_handler.go，统一入口 HandleReports 按路径分发
+  - 后端路由：/api/tenants/{id}/reports[/{reportId}[/duplicate]]，注册在 main.go 的 tenantRouter 中
+  - ReportSection 复用 DashboardSectionType 枚举，与大屏区块共用 SectionRenderer 渲染引擎
+  - 前端页面：/reports（列表）、/reports/[id]（详情/查看）、/reports/create（创建/编辑，?edit=id 编辑模式）
+  - 前端类型定义在 frontend/lib/types.ts：Report、ReportSection、CreateReportRequest、UpdateReportRequest
+  - AI 对话中用户说"生成报表"时，AI 输出 report_config JSON 块，ChatPanel 自动解析并调用后端 API 创建
+  - system prompt 在 frontend/app/api/chat/route.ts 中已添加 report_config 格式说明
+  - 报表创建页使用 Suspense 包裹 useSearchParams（Next.js 15 要求）
