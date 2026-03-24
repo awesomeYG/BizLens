@@ -2,6 +2,9 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 import { getCurrentUser, logoutUser } from "@/lib/user-store";
 import type { ChatMessage } from "@/lib/types";
 
@@ -95,8 +98,10 @@ function MessageBubble({ message, userName }: { message: ChatMessage; userName?:
           {isUser ? (
             <p className="whitespace-pre-wrap">{message.content}</p>
           ) : (
-            <div className="prose-chat whitespace-pre-wrap font-sans">
-              {message.content}
+            <div className="prose-chat prose-invert max-w-none">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                {message.content}
+              </ReactMarkdown>
             </div>
           )}
         </div>
@@ -204,12 +209,21 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       return;
     }
 
+    const userMsgId = crypto.randomUUID();
+    const assistantMsgId = crypto.randomUUID();
+
     setMessages((prev) => [
       ...prev,
       {
-        id: crypto.randomUUID(),
+        id: userMsgId,
         role: "user",
         content: question,
+        timestamp: Date.now(),
+      },
+      {
+        id: assistantMsgId,
+        role: "assistant",
+        content: "",
         timestamp: Date.now(),
       },
     ]);
@@ -225,28 +239,74 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           companyProfile: user?.companyProfile,
         }),
       });
-      const data = await res.json();
-      const content = data.content || data.error || "无回复";
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content,
-          timestamp: Date.now(),
-        },
-      ]);
+      // 兼容非流式（如 demo 模式）
+      const contentType = res.headers.get("content-type") || "";
+      if (!res.ok) {
+        let errText = `请求失败：${res.status}`;
+        if (contentType.includes("application/json")) {
+          const data = await res.json();
+          errText = data.error || data.content || errText;
+        }
+        throw new Error(errText);
+      }
+      if (contentType.includes("application/json")) {
+        const data = await res.json();
+        const content = data.content || data.error || "无回复";
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId ? { ...m, content } : m
+          )
+        );
+        return;
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("无法读取响应流");
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buffer.indexOf("\n\n")) !== -1) {
+          const raw = buffer.slice(0, idx).trim();
+          buffer = buffer.slice(idx + 2);
+          if (!raw.startsWith("data:")) continue;
+          const jsonStr = raw.replace(/^data:\s*/, "");
+          if (!jsonStr) continue;
+          const evt = JSON.parse(jsonStr) as
+            | { type: "delta"; content: string }
+            | { type: "meta"; analysis?: any; model?: string }
+            | { type: "done" }
+            | { type: "error"; error?: string };
+
+          if (evt.type === "delta") {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId
+                  ? { ...m, content: (m.content || "") + (evt.content || "") }
+                  : m
+              )
+            );
+          } else if (evt.type === "error") {
+            throw new Error(evt.error || "流式响应错误");
+          }
+        }
+      }
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: `请求失败：${err instanceof Error ? err.message : "网络错误"}`,
-          timestamp: Date.now(),
-        },
-      ]);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? {
+                ...m,
+                content: `请求失败：${err instanceof Error ? err.message : "网络错误"}`,
+              }
+            : m
+        )
+      );
     } finally {
       setLoading(false);
     }

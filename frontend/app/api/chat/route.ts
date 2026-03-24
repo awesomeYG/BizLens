@@ -288,8 +288,8 @@ export async function POST(req: NextRequest) {
       baseURL: finalBaseURL,
     });
 
-    // 调用 AI API
-    const response = await openai.chat.completions.create({
+    // 调用 AI API（流式输出）
+    const stream = await openai.chat.completions.create({
       model: finalModel,
       messages: [
         { role: "system", content: systemContent },
@@ -297,15 +297,42 @@ export async function POST(req: NextRequest) {
       ],
       max_tokens: modelConfig.maxTokens,
       temperature: modelConfig.temperature,
+      stream: true,
     });
 
-    const content = response.choices[0]?.message?.content || "抱歉，未能生成回复。";
-    return NextResponse.json({ 
-      content,
-      usage: response.usage,
-      model: finalModel,
-      analysis: {
-        ...analysisPacket,
+    // 构造 SSE 响应流
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          // 先发送 analysis 元数据
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: "meta", analysis: analysisPacket, model: finalModel })}\n\n`)
+          );
+          for await (const chunk of stream) {
+            const delta = chunk.choices[0]?.delta?.content;
+            if (delta) {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: "delta", content: delta })}\n\n`)
+              );
+            }
+          }
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
+        } catch (err) {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: "error", error: String(err) })}\n\n`)
+          );
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
       },
     });
   } catch (err: any) {

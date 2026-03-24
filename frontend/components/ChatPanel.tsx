@@ -2,6 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 import { saveDashboard } from "@/lib/dashboard-store";
 import { DASHBOARD_TEMPLATES } from "@/lib/templates";
 import { DEFAULT_DASHBOARD_DATA, mapSampleToDashboard } from "@/lib/data-mapper";
@@ -216,30 +219,9 @@ export default function ChatPanel({
     msgList: { role: string; content: string }[],
     appendUser = true
   ) => {
-    const appendMessages = (assistantContent: string) => {
-      setMessages((prev) => [
-        ...prev,
-        ...(appendUser
-          ? [
-              {
-                id: crypto.randomUUID(),
-                role: "user" as const,
-                content: input,
-                timestamp: Date.now(),
-              },
-            ]
-          : []),
-        {
-          id: crypto.randomUUID(),
-          role: "assistant" as const,
-          content: assistantContent,
-          timestamp: Date.now(),
-        },
-      ]);
-      setInput("");
-    };
+    const assistantMsgId = crypto.randomUUID();
 
-    const createAlertFromResponse = async (rawContent: string, renderContent: string) => {
+    const createAlertFromResponse = async (rawContent: string) => {
       const alertRegex = /```alert_config\s*\n([\s\S]*?)\n```/;
       const alertMatch = alertRegex.exec(rawContent);
       if (!alertMatch) return false;
@@ -256,15 +238,21 @@ export default function ChatPanel({
         if (!alertRes.ok) return false;
 
         const created = await alertRes.json();
-        const cleanContent = renderContent.replace(alertRegex, "").trim();
-        appendMessages(cleanContent + `\n\n✅ 告警规则「${created.name}」已自动创建，可在 [智能告警](/alerts) 页面查看和管理。`);
+        const cleanContent = rawContent.replace(alertRegex, "").trim();
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? { ...m, content: cleanContent + `\n\n[check] 告警规则「${created.name}」已自动创建，可在 [智能告警](/alerts) 页面查看和管理。` }
+              : m
+          )
+        );
         return true;
       } catch {
         return false;
       }
     };
 
-    const createNotificationRuleFromResponse = async (rawContent: string, renderContent: string) => {
+    const createNotificationRuleFromResponse = async (rawContent: string) => {
       const notificationRegex = /```notification_rule\s*\n([\s\S]*?)\n```/;
       const notificationMatch = notificationRegex.exec(rawContent);
       if (!notificationMatch) return false;
@@ -281,10 +269,18 @@ export default function ChatPanel({
         if (!ruleRes.ok) return false;
 
         const created = await ruleRes.json();
-        const cleanContent = renderContent.replace(notificationRegex, "").trim();
-        appendMessages(
-          cleanContent +
-            `\n\n✅ 智能通知规则「${created.name}」已自动创建！\n\n**配置详情**：\n- 触发条件：${formatCondition(created.conditionType)} ${created.threshold}\n- 时间范围：${formatTimeRange(created.timeRange)}\n- 通知频率：${formatFrequency(created.frequency)}\n\n你可以在对话中继续调整规则，或说"查看通知规则"来管理。`
+        const cleanContent = rawContent.replace(notificationRegex, "").trim();
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  content:
+                    cleanContent +
+                    `\n\n[check] 智能通知规则「${created.name}」已自动创建！\n\n**配置详情**：\n- 触发条件：${formatCondition(created.conditionType)} ${created.threshold}\n- 时间范围：${formatTimeRange(created.timeRange)}\n- 通知频率：${formatFrequency(created.frequency)}\n\n你可以在对话中继续调整规则，或说"查看通知规则"来管理。`,
+                }
+              : m
+          )
         );
         return true;
       } catch (err) {
@@ -294,6 +290,29 @@ export default function ChatPanel({
     };
 
     setLoading(true);
+
+    // 先追加用户消息和空的 assistant 占位
+    setMessages((prev) => [
+      ...prev,
+      ...(appendUser
+        ? [
+            {
+              id: crypto.randomUUID(),
+              role: "user" as const,
+              content: input,
+              timestamp: Date.now(),
+            },
+          ]
+        : []),
+      {
+        id: assistantMsgId,
+        role: "assistant" as const,
+        content: "",
+        timestamp: Date.now(),
+      },
+    ]);
+    setInput("");
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -305,44 +324,97 @@ export default function ChatPanel({
           companyProfile,
         }),
       });
-      const data = await res.json();
-      const content = data.content || data.error || "无回复";
-      const analysis = data.analysis as
-        | {
-            clarificationQuestion?: string;
-            quality?: { confidence?: string; issues?: string[] };
-            insight?: { chartRecommendation?: string };
-          }
-        | undefined;
-      const analysisHint = analysis
-        ? [
-            analysis.clarificationQuestion ? `补充信息：${analysis.clarificationQuestion}` : "",
-            analysis.quality?.confidence ? `结果可信度：${analysis.quality.confidence}` : "",
-            analysis.insight?.chartRecommendation ? `建议图表：${analysis.insight.chartRecommendation}` : "",
-          ]
-            .filter(Boolean)
-            .join("\n")
-        : "";
-      const finalContent = analysisHint ? `${content}\n\n---\n${analysisHint}` : content;
-      if (data?.analysis?.evaluation) {
-        setAnalysisEvaluation(data.analysis.evaluation as AnalysisEvaluation);
-      } else {
-        await fetchAnalysisEvaluation();
+
+      const contentType = res.headers.get("content-type") || "";
+
+      if (!res.ok) {
+        let errText = `请求失败：${res.status}`;
+        if (contentType.includes("application/json")) {
+          const data = await res.json();
+          errText = data.error || data.content || errText;
+        }
+        throw new Error(errText);
       }
 
-      if (await createAlertFromResponse(content, finalContent)) return;
-      if (await createNotificationRuleFromResponse(content, finalContent)) return;
-      appendMessages(finalContent);
+      // 兼容非流式（demo 模式）
+      if (contentType.includes("application/json")) {
+        const data = await res.json();
+        const content = data.content || data.error || "无回复";
+        if (data?.analysis?.evaluation) {
+          setAnalysisEvaluation(data.analysis.evaluation as AnalysisEvaluation);
+        }
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId ? { ...m, content } : m
+          )
+        );
+        await createAlertFromResponse(content);
+        await createNotificationRuleFromResponse(content);
+        return;
+      }
+
+      // 流式读取
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("无法读取响应流");
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullContent = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buffer.indexOf("\n\n")) !== -1) {
+          const raw = buffer.slice(0, idx).trim();
+          buffer = buffer.slice(idx + 2);
+          if (!raw.startsWith("data:")) continue;
+          const jsonStr = raw.replace(/^data:\s*/, "");
+          if (!jsonStr) continue;
+          const evt = JSON.parse(jsonStr) as
+            | { type: "delta"; content: string }
+            | { type: "meta"; analysis?: any; model?: string }
+            | { type: "done" }
+            | { type: "error"; error?: string };
+
+          if (evt.type === "delta") {
+            fullContent += evt.content || "";
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId
+                  ? { ...m, content: fullContent }
+                  : m
+              )
+            );
+          } else if (evt.type === "meta") {
+            const meta = evt as { analysis?: { evaluation?: AnalysisEvaluation } };
+            if (meta.analysis?.evaluation) {
+              setAnalysisEvaluation(meta.analysis.evaluation);
+            } else {
+              await fetchAnalysisEvaluation();
+            }
+          } else if (evt.type === "error") {
+            throw new Error(evt.error || "流式响应错误");
+          }
+        }
+      }
+
+      // 流式完成后处理告警/通知规则
+      if (fullContent) {
+        await createAlertFromResponse(fullContent);
+        await createNotificationRuleFromResponse(fullContent);
+      }
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant" as const,
-          content: `请求失败：${err instanceof Error ? err.message : "网络错误"}`,
-          timestamp: Date.now(),
-        },
-      ]);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? {
+                ...m,
+                content: `请求失败：${err instanceof Error ? err.message : "网络错误"}`,
+              }
+            : m
+        )
+      );
     } finally {
       setLoading(false);
     }
@@ -423,7 +495,15 @@ export default function ChatPanel({
                     {m.files.map((f) => f.name).join(", ")}
                   </div>
                 ) : null}
-                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{m.content}</pre>
+                {m.role === "user" ? (
+                  <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{m.content}</pre>
+                ) : (
+                  <div className="prose-chat prose-invert max-w-none text-sm leading-relaxed">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                      {m.content}
+                    </ReactMarkdown>
+                  </div>
+                )}
               </div>
             </div>
           ))}

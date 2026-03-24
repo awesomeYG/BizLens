@@ -473,3 +473,45 @@ body {
   color: #a1a1aa;
   margin: 0.75em 0;
 }
+
+.prose-chat table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  font-size: 0.85em;
+}
+
+.prose-chat th {
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(63, 63, 70, 0.5);
+  padding: 0.5em 0.75em;
+  text-align: left;
+  font-weight: 600;
+  color: #e4e4e7;
+}
+
+.prose-chat td {
+  border: 1px solid rgba(63, 63, 70, 0.4);
+  padding: 0.4em 0.75em;
+  color: #a1a1aa;
+}
+
+.prose-chat tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.prose-chat a {
+  color: #818cf8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prose-chat a:hover {
+  color: #a5b4fc;
+}
+
+.prose-chat hr {
+  border: none;
+  border-top: 1px solid rgba(63, 63, 70, 0.5);
+  margin: 1em 0;
+}
