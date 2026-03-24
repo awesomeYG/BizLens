@@ -172,8 +172,8 @@ func main() {
 		}
 	})
 
-	// IM 配置路由：/api/tenants/{tenantId}/im-configs[/{configId}[/test]]
-	mux.HandleFunc("/api/tenants/", func(w http.ResponseWriter, r *http.Request) {
+	// 租户级路由（统一 JWT 认证）：/api/tenants/{tenantId}/...
+	tenantRouter := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/api/tenants/")
 		parts := strings.Split(strings.Trim(path, "/"), "/")
 
@@ -476,6 +476,7 @@ func main() {
 
 		http.NotFound(w, r)
 	})
+	mux.Handle("/api/tenants/", middleware.Auth(authService)(tenantRouter))
 
 	// 数据集路由：/api/datasets[/upload/file]（需要 JWT 认证）
 	datasetRouter := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

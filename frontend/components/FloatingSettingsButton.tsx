@@ -10,7 +10,7 @@ export default function FloatingSettingsButton() {
   return (
     <>
       <button
-        onClick={() => router.push("/settings/files")}
+        onClick={() => router.push("/data-sources?tab=files")}
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
         className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-full shadow-lg shadow-indigo-500/30 flex items-center justify-center transition-all hover:scale-110 z-50"

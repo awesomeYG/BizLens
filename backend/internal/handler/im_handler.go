@@ -16,8 +16,14 @@ func NewIMHandler(imService *service.IMService) *IMHandler {
 	return &IMHandler{imService: imService}
 }
 
-// parseTenantID 从请求头或路径解析租户 ID
+// parseTenantID 从 JWT context、请求头或路径解析租户 ID
 func parseTenantID(r *http.Request) string {
+	// 优先从 JWT context 获取（由 Auth 中间件注入）
+	if tid := r.Context().Value("tenantID"); tid != nil {
+		if s, ok := tid.(string); ok && s != "" {
+			return s
+		}
+	}
 	if tid := r.Header.Get("X-Tenant-ID"); tid != "" {
 		return tid
 	}
