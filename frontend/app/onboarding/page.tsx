@@ -31,7 +31,7 @@ export default function OnboardingPage() {
     }
 
     if (user.isOnboarded) {
-      router.replace("/dashboards");
+      router.replace("/chat");
       return;
     }
 
@@ -76,7 +76,7 @@ export default function OnboardingPage() {
   const handleComplete = async () => {
     setSubmitting(true);
     finishOnboarding();
-    router.replace("/dashboard");
+    router.replace("/chat");
   };
 
   if (!ready) {
@@ -218,7 +218,7 @@ export default function OnboardingPage() {
                 <button
                   onClick={() => {
                     completeOnboarding(MOCK_DATA.companyInfo, MOCK_DATA.dataSources, MOCK_DATA.companyProfile);
-                    router.replace("/dashboard");
+                    router.replace("/chat");
                   }}
                   className="rounded-xl border border-zinc-700 px-5 py-3 font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800"
                 >
