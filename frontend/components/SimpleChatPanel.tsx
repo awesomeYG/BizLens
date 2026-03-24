@@ -913,7 +913,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
                   }`}
                 >
                   <div className="flex items-start gap-2">
-                    <div className="flex-1">
+                    <div className="min-w-0 flex-1">
                       {isEditing ? (
                         <div className="space-y-2">
                           <input
@@ -955,7 +955,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
                       )}
                     </div>
                     {!isEditing ? (
-                      <div className="flex items-center gap-1">
+                      <div className="shrink-0 flex items-center gap-1 self-start">
                         <button
                           onClick={() => handleStartRename(item)}
                           disabled={sidebarBusyId === item.id}
