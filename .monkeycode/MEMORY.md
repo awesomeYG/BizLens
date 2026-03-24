@@ -182,3 +182,14 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - `/settings/files` 已改为自动重定向到 `/data-sources?tab=files`
   - 所有 tenant 路由 (`/api/tenants/*`) 已统一使用 JWT 认证中间件
   - `parseTenantID` 优先从 JWT context 获取 tenantID，fallback 到 URL path 和 Header
+
+### AI 对话自动执行模式（Action Blocks）
+- Date: 2026-03-24
+- Context: Agent 在执行 chat 数据源配置功能开发时发现
+- Category: 代码模式
+- Instructions:
+  - AI 对话支持 4 种结构化 JSON 块：`dashboard_config`、`alert_config`、`notification_rule`、`datasource_config`
+  - System Prompt 定义在 `frontend/app/api/chat/route.ts` 的 SYSTEM_PROMPT 常量中（第 8-185 行附近）
+  - ChatPanel (`frontend/components/ChatPanel.tsx`) 在流式/非流式响应完成后依次调用 create*FromResponse 函数
+  - SimpleChatPanel (`frontend/components/SimpleChatPanel.tsx`) 是简化版聊天，也支持 datasource_config 自动执行
+  - 新增 action block 的标准流程：1) System Prompt 加引导格式 2) ChatPanel 加解析+API调用函数 3) 渲染时过滤 JSON 块 4) SimpleChatPanel 同步
