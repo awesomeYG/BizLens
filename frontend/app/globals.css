@@ -408,10 +408,18 @@ body {
 /* Markdown 样式 - AI 消息内容 */
 .prose-chat {
   line-height: 1.75;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.prose-chat > * {
+  max-width: 100%;
 }
 
 .prose-chat p {
   margin-bottom: 0.75em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .prose-chat p:last-child {
@@ -424,6 +432,9 @@ body {
   border-radius: 4px;
   font-size: 0.85em;
   color: #c4b5fd;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
 }
 
 .prose-chat pre {
@@ -433,6 +444,7 @@ body {
   padding: 1em;
   margin: 0.75em 0;
   overflow-x: auto;
+  max-width: 100%;
 }
 
 .prose-chat pre code {
@@ -440,6 +452,9 @@ body {
   padding: 0;
   font-size: 0.85em;
   color: #e4e4e7;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .prose-chat ul, .prose-chat ol {
@@ -449,6 +464,8 @@ body {
 
 .prose-chat li {
   margin: 0.25em 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .prose-chat strong {
@@ -472,6 +489,8 @@ body {
   padding-left: 1em;
   color: #a1a1aa;
   margin: 0.75em 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .prose-chat table {
@@ -479,6 +498,9 @@ body {
   border-collapse: collapse;
   margin: 0.75em 0;
   font-size: 0.85em;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .prose-chat th {
@@ -488,12 +510,16 @@ body {
   text-align: left;
   font-weight: 600;
   color: #e4e4e7;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .prose-chat td {
   border: 1px solid rgba(63, 63, 70, 0.4);
   padding: 0.4em 0.75em;
   color: #a1a1aa;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .prose-chat tr:nth-child(even) {
@@ -504,6 +530,8 @@ body {
   color: #818cf8;
   text-decoration: underline;
   text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .prose-chat a:hover {

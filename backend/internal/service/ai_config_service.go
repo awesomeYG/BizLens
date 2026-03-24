@@ -4,6 +4,7 @@ import (
 	"ai-bi-server/internal/model"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type AIConfigService struct {
@@ -29,8 +30,17 @@ func (s *AIConfigService) GetOrInitConfig(tenantID string) (*model.AIServiceConf
 		ModelType: "openai",
 		Model:     "gpt-4o-mini",
 	}
-	if createErr := s.db.Create(&cfg).Error; createErr != nil {
+	// 并发首次访问时可能出现重复初始化，这里用 upsert 语义保证幂等。
+	if createErr := s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "tenant_id"}},
+		DoNothing: true,
+	}).Create(&cfg).Error; createErr != nil {
 		return nil, createErr
+	}
+
+	// 无论是新建成功还是冲突忽略，都回查得到最终记录。
+	if queryErr := s.db.Where("tenant_id = ?", tenantID).First(&cfg).Error; queryErr != nil {
+		return nil, queryErr
 	}
 	return &cfg, nil
 }

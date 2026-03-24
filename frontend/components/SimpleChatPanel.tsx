@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
+import { getAccessToken } from "@/lib/auth/api";
 import { getCurrentUser, logoutUser } from "@/lib/user-store";
 import type { ChatMessage } from "@/lib/types";
 import AppHeader from "@/components/AppHeader";
@@ -76,10 +77,10 @@ function MessageBubble({ message, userName }: { message: ChatMessage; userName?:
       {isUser ? <UserAvatar name={userName} /> : <AiAvatar />}
 
       {/* 消息体 */}
-      <div className={`max-w-[75%] group ${isUser ? "items-end" : "items-start"} flex flex-col`}>
+      <div className={`w-fit min-w-0 max-w-[75%] group ${isUser ? "items-end" : "items-start"} flex flex-col`}>
         {/* 气泡 */}
         <div
-          className={`relative rounded-2xl px-4 py-3 text-sm leading-relaxed transition-shadow ${
+          className={`relative min-w-0 overflow-hidden rounded-2xl px-4 py-3 text-sm leading-relaxed transition-shadow ${
             isUser
               ? "rounded-tr-md bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-500/15"
               : "rounded-tl-md bg-zinc-800/50 border border-zinc-700/30 text-zinc-200 backdrop-blur-sm"
@@ -97,9 +98,9 @@ function MessageBubble({ message, userName }: { message: ChatMessage; userName?:
 
           {/* 内容 */}
           {isUser ? (
-            <p className="whitespace-pre-wrap">{message.content}</p>
+            <p className="whitespace-pre-wrap break-words">{message.content}</p>
           ) : (
-            <div className="prose-chat prose-invert max-w-none">
+            <div className="prose-chat prose-invert max-w-full min-w-0 overflow-x-auto">
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                 {message.content}
               </ReactMarkdown>
@@ -221,7 +222,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       try {
         const dsConfig = JSON.parse(dsMatch[1]);
         const tenantId = user?.id || "demo-tenant";
-        const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+        const token = getAccessToken();
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -290,9 +291,14 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
 
     setLoading(true);
     try {
+      const token = getAccessToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           messages: [{ role: "user", content: question }],
           dataSummary: dataSummary || undefined,
@@ -448,11 +454,13 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
   ];
 
   const showWelcome = messages.length === 1;
+  const latestAssistantMessage = [...messages].reverse().find((m) => m.role === "assistant");
+  const showThinkingIndicator = loading && !latestAssistantMessage?.content.trim();
 
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* ===== 滚动区域：包含顶部导航和消息列表 ===== */}
-      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+      <div ref={scrollContainerRef} className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col">
         {/* 顶部导航 */}
         <AppHeader
           title="AI 数据分析师"
@@ -480,7 +488,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
               )}
 
               {/* 思考中 */}
-              {loading && <ThinkingIndicator />}
+              {showThinkingIndicator && <ThinkingIndicator />}
             </div>
 
             <div ref={messagesEndRef} />

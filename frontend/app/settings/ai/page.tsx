@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/user-store";
+import { getAccessToken } from "@/lib/auth/api";
 
 const MODEL_OPTIONS = [
   { value: "openai", label: "OpenAI", models: ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo"], color: "emerald", desc: "GPT 系列，综合能力强" },
@@ -47,6 +48,18 @@ export default function SettingsPage() {
   const providerRef = useRef<HTMLDivElement>(null);
   const modelRef = useRef<HTMLDivElement>(null);
 
+  const buildAuthHeaders = (withJsonContentType = true): HeadersInit => {
+    const headers: Record<string, string> = {};
+    if (withJsonContentType) {
+      headers["Content-Type"] = "application/json";
+    }
+    const token = getAccessToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    return headers;
+  };
+
   // 点击外部关闭下拉
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -70,7 +83,7 @@ export default function SettingsPage() {
       try {
         const response = await fetch(`/api/tenants/${tenantId}/ai-config`, {
           method: "GET",
-          headers: { "Content-Type": "application/json" },
+          headers: buildAuthHeaders(),
         });
         const result = await response.json();
         if (!response.ok) {
@@ -104,7 +117,7 @@ export default function SettingsPage() {
     try {
       const response = await fetch(`/api/tenants/${tenantId}/ai-config`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: buildAuthHeaders(),
         body: JSON.stringify({
           apiKey: aiConfig.apiKey.trim(),
           baseUrl: aiConfig.baseUrl.trim(),
@@ -141,27 +154,75 @@ export default function SettingsPage() {
 
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: buildAuthHeaders(),
         body: JSON.stringify({
           messages: [{ role: "user", content: "Hello, this is a test." }],
           tenantId: user?.id || "demo-tenant",
           aiConfig: testAiConfig,
         }),
       });
+      const contentType = response.headers.get("content-type") || "";
 
-      const result = await response.json();
-      
-      if (response.ok) {
+      if (!response.ok) {
+        let errText = `请求失败：${response.status}`;
+        if (contentType.includes("application/json")) {
+          const result = await response.json().catch(() => ({}));
+          errText = (result as { error?: string; content?: string }).error || (result as { error?: string; content?: string }).content || errText;
+        }
+        throw new Error(errText);
+      }
+
+      if (contentType.includes("application/json")) {
+        const result = await response.json();
         setTestResult({
           success: true,
           message: `连接成功！模型：${result.model || "AI"}，使用 tokens: ${result.usage?.total_tokens || "N/A"}`,
         });
-      } else {
-        setTestResult({
-          success: false,
-          message: `测试失败：${result.error}`,
-        });
+        return;
       }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("无法读取响应流");
+      }
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullContent = "";
+      let model = "AI";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buffer.indexOf("\n\n")) !== -1) {
+          const raw = buffer.slice(0, idx).trim();
+          buffer = buffer.slice(idx + 2);
+          if (!raw.startsWith("data:")) continue;
+          const jsonStr = raw.replace(/^data:\s*/, "");
+          if (!jsonStr) continue;
+
+          const evt = JSON.parse(jsonStr) as
+            | { type: "meta"; model?: string }
+            | { type: "delta"; content?: string }
+            | { type: "error"; error?: string }
+            | { type: "done" };
+
+          if (evt.type === "meta" && evt.model) {
+            model = evt.model;
+          } else if (evt.type === "delta") {
+            fullContent += evt.content || "";
+          } else if (evt.type === "error") {
+            throw new Error(evt.error || "流式响应错误");
+          }
+        }
+      }
+
+      const streamInfo = fullContent ? `，返回长度: ${fullContent.length} 字符` : "";
+      setTestResult({
+        success: true,
+        message: `连接成功！模型：${model}${streamInfo}`,
+      });
     } catch (err: any) {
       setTestResult({
         success: false,

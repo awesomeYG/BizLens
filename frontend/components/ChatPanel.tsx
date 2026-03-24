@@ -18,7 +18,7 @@ import type {
   DashboardTemplateId,
   Report,
 } from "@/lib/types";
-import { request } from "@/lib/auth/api";
+import { getAccessToken, request } from "@/lib/auth/api";
 
 interface ChatPanelProps {
   onDataSummaryChange?: (summary: string) => void;
@@ -405,7 +405,7 @@ export default function ChatPanel({
         const dsConfig = JSON.parse(dsMatch[1]);
         const user = getCurrentUser();
         const tenantId = user?.id || "demo-tenant";
-        const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+        const token = getAccessToken();
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -481,9 +481,14 @@ export default function ChatPanel({
     setInput("");
 
     try {
+      const token = getAccessToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           messages: msgList,
           dataSummary: dataSummary || undefined,
@@ -632,6 +637,8 @@ export default function ChatPanel({
   const clarificationWindow = buildRollingRate(trendItems.map((item) => item.hadClarification), 5);
   const successPolyline = buildSparklinePoints(successWindow);
   const clarificationPolyline = buildSparklinePoints(clarificationWindow);
+  const latestAssistantMessage = [...messages].reverse().find((m) => m.role === "assistant");
+  const showThinkingIndicator = loading && !latestAssistantMessage?.content.trim();
 
   return (
     <div className="flex flex-col h-full">
@@ -650,10 +657,10 @@ export default function ChatPanel({
 
       <div className="flex flex-1 min-h-0">
         {/* 消息区域 */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-6 space-y-4">
           {messages.map((m) => (
-            <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}>
-              <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+            <div key={m.id} className={`flex min-w-0 ${m.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}>
+              <div className={`w-fit min-w-0 max-w-[80%] overflow-hidden rounded-2xl px-4 py-3 ${
                 m.role === "user"
                   ? "bg-indigo-500/15 border border-indigo-500/20 text-zinc-200"
                   : "bg-zinc-800/60 border border-zinc-700/40 text-zinc-300"
@@ -667,10 +674,10 @@ export default function ChatPanel({
                   </div>
                 ) : null}
                 {m.role === "user" ? (
-                  <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{m.content}</pre>
+                  <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">{m.content}</pre>
                 ) : (
                   <>
-                    <div className="prose-chat prose-invert max-w-none text-sm leading-relaxed">
+                    <div className="prose-chat prose-invert max-w-full min-w-0 overflow-x-auto text-sm leading-relaxed">
                       <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                         {removeDashboardConfigBlock(m.content)}
                       </ReactMarkdown>
@@ -681,7 +688,7 @@ export default function ChatPanel({
               </div>
             </div>
           ))}
-          {loading && (
+          {showThinkingIndicator && (
             <div className="flex justify-start animate-fade-in">
               <div className="bg-zinc-800/60 border border-zinc-700/40 rounded-2xl px-4 py-3 text-zinc-500 flex items-center gap-2">
                 <div className="flex gap-1">

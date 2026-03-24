@@ -309,6 +309,7 @@ function getModelConfig(): AIModelConfig {
 export async function POST(req: NextRequest) {
   let finalModelType = process.env.AI_MODEL_TYPE || "openai";
   try {
+    const authHeader = req.headers.get("authorization");
     const body = await req.json();
     const { 
       messages, 
@@ -347,7 +348,7 @@ export async function POST(req: NextRequest) {
       "demo-tenant";
     const analysisPacket = await getAnalysisPacketFromBackend(tenantId, latestUserMessage);
 
-    const serverConfig = await getTenantAIConfigFromBackend(tenantId);
+    const serverConfig = await getTenantAIConfigFromBackend(tenantId, authHeader);
 
     // 优先使用客户端传来的配置，其次服务端租户配置，最后环境变量
     const apiKey =
@@ -528,7 +529,7 @@ async function getAnalysisPacketFromBackend(tenantId: string, question: string) 
   };
 }
 
-async function getTenantAIConfigFromBackend(tenantId: string): Promise<{
+async function getTenantAIConfigFromBackend(tenantId: string, authHeader?: string | null): Promise<{
   apiKey?: string;
   baseUrl?: string;
   modelType?: string;
@@ -536,9 +537,16 @@ async function getTenantAIConfigFromBackend(tenantId: string): Promise<{
 } | null> {
   const backendBase = process.env.BACKEND_INTERNAL_URL || "http://localhost:3001";
   try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-Tenant-ID": tenantId,
+    };
+    if (authHeader) {
+      headers.Authorization = authHeader;
+    }
     const res = await fetch(`${backendBase}/api/tenants/${tenantId}/ai-config`, {
       method: "GET",
-      headers: { "Content-Type": "application/json", "X-Tenant-ID": tenantId },
+      headers,
       cache: "no-store",
     });
     if (!res.ok) {
