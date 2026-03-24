@@ -151,6 +151,7 @@ export interface CompanyProfile {
 
 export interface UserSession {
   id: string;
+  tenantId?: string;
   name: string;
   email: string;
   createdAt: number;
@@ -185,6 +186,25 @@ export interface ChatMessage {
   };
   // Schema 上下文
   schemaContext?: string;
+}
+
+export interface ChatConversationSummary {
+  id: string;
+  title: string;
+  preview: string;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+  lastMessageAt?: string;
+}
+
+export interface ChatConversation {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  lastMessageAt?: string;
+  messages: ChatMessage[];
 }
 
 export type DashboardTemplateId =

@@ -148,6 +148,36 @@ type AlertTriggerLog struct {
 	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
 }
 
+// ChatConversation 对话会话
+type ChatConversation struct {
+	ID            string         `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID      string         `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	UserID        string         `gorm:"type:varchar(50);not null;index" json:"userId"`
+	Title         string         `gorm:"size:200;not null;default:'新对话'" json:"title"`
+	LastMessageAt *time.Time     `json:"lastMessageAt,omitempty"`
+	CreatedAt     time.Time      `json:"createdAt"`
+	UpdatedAt     time.Time      `json:"updatedAt"`
+	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
+
+	Messages []ChatConversationMessage `gorm:"foreignKey:ConversationID" json:"messages,omitempty"`
+}
+
+// ChatConversationMessage 对话消息
+type ChatConversationMessage struct {
+	ID             string    `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	ConversationID string    `gorm:"type:varchar(50);not null;index" json:"conversationId"`
+	TenantID       string    `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	Role           string    `gorm:"size:20;not null" json:"role"`
+	Content        string    `gorm:"type:text;not null" json:"content"`
+	Files          string    `gorm:"type:text" json:"files,omitempty"`
+	OccurredAt     time.Time `gorm:"index" json:"occurredAt"`
+	SortOrder      int       `gorm:"not null;default:0" json:"sortOrder"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+
+	Conversation ChatConversation `gorm:"foreignKey:ConversationID" json:"-"`
+}
+
 // DataSourceType 数据源类型
 type DataSourceType string
 
@@ -674,6 +704,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&NotificationRecord{},
 		&AlertEvent{},
 		&AlertTriggerLog{},
+		&ChatConversation{},
+		&ChatConversationMessage{},
 		&DataSource{},
 		&NotificationRule{},
 		// 语义层模型

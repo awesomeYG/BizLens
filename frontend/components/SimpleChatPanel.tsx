@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import { getAccessToken } from "@/lib/auth/api";
 import { getCurrentUser, logoutUser } from "@/lib/user-store";
-import type { ChatMessage } from "@/lib/types";
+import { request, getAccessToken } from "@/lib/auth/api";
+import type { ChatConversation, ChatConversationSummary, ChatMessage } from "@/lib/types";
 import AppHeader from "@/components/AppHeader";
 
 interface ChatPanelProps {
@@ -24,7 +24,6 @@ interface ParsedConnection {
   ssl?: boolean;
 }
 
-/* ---------- 小工具函数 ---------- */
 function formatTime(ts: number) {
   const d = new Date(ts);
   return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
@@ -78,7 +77,52 @@ function parseConnectionUriFromText(text: string): ParsedConnection | null {
   }
 }
 
-/* ---------- 子组件：AI 头像 ---------- */
+function formatHistoryDate(value?: string) {
+  if (!value) return "刚刚";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "刚刚";
+  const now = new Date();
+  const sameDay = now.toDateString() === date.toDateString();
+  if (sameDay) return formatTime(date.getTime());
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function buildConversationTitle(messages: ChatMessage[]) {
+  const firstUserMessage = messages.find((item) => item.role === "user" && item.content.trim());
+  if (!firstUserMessage) return "新对话";
+  const text = firstUserMessage.content.trim();
+  return text.length > 24 ? `${text.slice(0, 24)}...` : text;
+}
+
+function createWelcomeMessages(): ChatMessage[] {
+  return [
+    {
+      id: "welcome",
+      role: "assistant",
+      content: "你好！我是你的 AI 数据分析师。问我任何数据问题，我会立即生成可视化分析。",
+      timestamp: Date.now(),
+    },
+  ];
+}
+
+function toPersistedMessages(messages: ChatMessage[]) {
+  return messages.filter((item) => item.id !== "welcome");
+}
+
+function summaryFromConversation(conversation: ChatConversation): ChatConversationSummary {
+  const persistedMessages = toPersistedMessages(conversation.messages);
+  const preview = persistedMessages[persistedMessages.length - 1]?.content?.replace(/\s+/g, " ").trim() || "";
+  return {
+    id: conversation.id,
+    title: conversation.title,
+    preview: preview.length > 40 ? `${preview.slice(0, 40)}...` : preview,
+    messageCount: persistedMessages.length,
+    createdAt: conversation.createdAt,
+    updatedAt: conversation.updatedAt,
+    lastMessageAt: conversation.lastMessageAt,
+  };
+}
+
 function AiAvatar({ size = "sm" }: { size?: "sm" | "lg" }) {
   const dim = size === "lg" ? "w-10 h-10" : "w-7 h-7";
   return (
@@ -90,7 +134,6 @@ function AiAvatar({ size = "sm" }: { size?: "sm" | "lg" }) {
   );
 }
 
-/* ---------- 子组件：用户头像 ---------- */
 function UserAvatar({ name }: { name?: string }) {
   const letter = name?.charAt(0)?.toUpperCase() || "U";
   return (
@@ -100,7 +143,6 @@ function UserAvatar({ name }: { name?: string }) {
   );
 }
 
-/* ---------- 子组件：思考中指示器 ---------- */
 function ThinkingIndicator() {
   return (
     <div className="flex items-start gap-3 animate-msg-left">
@@ -125,18 +167,13 @@ function ThinkingIndicator() {
   );
 }
 
-/* ---------- 子组件：消息气泡 ---------- */
 function MessageBubble({ message, userName }: { message: ChatMessage; userName?: string }) {
   const isUser = message.role === "user";
 
   return (
     <div className={`flex items-end gap-2.5 ${isUser ? "flex-row-reverse" : ""} ${isUser ? "animate-msg-right" : "animate-msg-left"}`}>
-      {/* 头像 */}
       {isUser ? <UserAvatar name={userName} /> : <AiAvatar />}
-
-      {/* 消息体 */}
       <div className={`w-fit min-w-0 max-w-[75%] group ${isUser ? "items-end" : "items-start"} flex flex-col`}>
-        {/* 气泡 */}
         <div
           className={`relative min-w-0 overflow-hidden rounded-2xl px-4 py-3 text-sm leading-relaxed transition-shadow ${
             isUser
@@ -144,7 +181,6 @@ function MessageBubble({ message, userName }: { message: ChatMessage; userName?:
               : "rounded-tl-md bg-zinc-800/50 border border-zinc-700/30 text-zinc-200 backdrop-blur-sm"
           }`}
         >
-          {/* 文件附件 */}
           {message.files?.length ? (
             <div className={`mb-2 flex items-center gap-1.5 text-xs ${isUser ? "text-indigo-200/70" : "text-zinc-500"}`}>
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -154,7 +190,6 @@ function MessageBubble({ message, userName }: { message: ChatMessage; userName?:
             </div>
           ) : null}
 
-          {/* 内容 */}
           {isUser ? (
             <p className="whitespace-pre-wrap break-words">{message.content}</p>
           ) : (
@@ -166,7 +201,6 @@ function MessageBubble({ message, userName }: { message: ChatMessage; userName?:
           )}
         </div>
 
-        {/* 时间戳 */}
         <span className={`mt-1.5 text-[10px] text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity select-none ${isUser ? "text-right pr-1" : "pl-1"}`}>
           {formatTime(message.timestamp)}
         </span>
@@ -175,11 +209,9 @@ function MessageBubble({ message, userName }: { message: ChatMessage; userName?:
   );
 }
 
-/* ---------- 子组件：欢迎页 ---------- */
 function WelcomeScreen({ questions, onSelect }: { questions: string[]; onSelect: (q: string) => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 animate-scale-in">
-      {/* 装饰光球 */}
       <div className="relative mb-8">
         <div className="absolute -inset-8 bg-indigo-500/10 rounded-full blur-2xl animate-float-orb" />
         <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-2xl shadow-indigo-500/25 card-shimmer-border">
@@ -189,15 +221,11 @@ function WelcomeScreen({ questions, onSelect }: { questions: string[]; onSelect:
         </div>
       </div>
 
-      {/* 标题 */}
-      <h2 className="text-3xl font-bold text-gradient mb-2 tracking-tight">
-        有什么数据问题?
-      </h2>
+      <h2 className="text-3xl font-bold text-gradient mb-2 tracking-tight">有什么数据问题?</h2>
       <p className="text-zinc-500 text-sm mb-10 max-w-md text-center leading-relaxed">
         上传数据文件或直接提问，我将为你提供深度分析洞察与可视化建议
       </p>
 
-      {/* 快捷问题 */}
       <div className="grid sm:grid-cols-2 gap-3 max-w-2xl w-full px-4">
         {questions.map((q, i) => (
           <button
@@ -222,20 +250,20 @@ function WelcomeScreen({ questions, onSelect }: { questions: string[]; onSelect:
   );
 }
 
-/* ========== 主组件 ========== */
 export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPanelProps>) {
   const router = useRouter();
-  const currentUser = getCurrentUser();
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content: "你好！我是你的 AI 数据分析师。问我任何数据问题，我会立即生成可视化分析。",
-      timestamp: Date.now(),
-    },
-  ]);
+  const currentUser = useMemo(() => getCurrentUser(), []);
+  const tenantId = currentUser?.tenantId || currentUser?.id || "demo-tenant";
+  const [messages, setMessages] = useState<ChatMessage[]>(() => createWelcomeMessages());
+  const [conversations, setConversations] = useState<ChatConversationSummary[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [input, setInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [sidebarBusyId, setSidebarBusyId] = useState<string | null>(null);
   const [dataSummary, setDataSummary] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; summary?: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -243,6 +271,8 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const hasScrolledRef = useRef(false);
+  const lastSavedSignatureRef = useRef("[]");
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -262,11 +292,154 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     onDataSummaryChange?.(dataSummary);
   }, [dataSummary, onDataSummaryChange]);
 
+  const applyConversation = useCallback((conversation: ChatConversation) => {
+    const persistedMessages = conversation.messages.length ? conversation.messages : [];
+    setEditingConversationId(null);
+    setEditingTitle("");
+    setActiveConversationId(conversation.id);
+    setMessages(persistedMessages.length ? persistedMessages : createWelcomeMessages());
+    setUploadedFiles(
+      persistedMessages.flatMap((item) => item.files?.map((file) => ({ name: file.name, summary: file.summary })) || [])
+    );
+    lastSavedSignatureRef.current = JSON.stringify(persistedMessages);
+  }, []);
+
+  const upsertConversationSummary = useCallback((summary: ChatConversationSummary) => {
+    setConversations((prev) => {
+      const next = [summary, ...prev.filter((item) => item.id !== summary.id)];
+      return next.sort((a, b) => {
+        const aTime = new Date(a.lastMessageAt || a.updatedAt).getTime();
+        const bTime = new Date(b.lastMessageAt || b.updatedAt).getTime();
+        return bTime - aTime;
+      });
+    });
+  }, []);
+
+  const filteredConversations = useMemo(() => {
+    const keyword = searchQuery.trim().toLowerCase();
+    if (!keyword) return conversations;
+    return conversations.filter((item) => {
+      const haystack = `${item.title} ${item.preview}`.toLowerCase();
+      return haystack.includes(keyword);
+    });
+  }, [conversations, searchQuery]);
+
+  const loadConversation = useCallback(async (conversationId: string) => {
+    setSidebarBusyId(conversationId);
+    try {
+      const conversation = await request<ChatConversation>(`/tenants/${tenantId}/chat-conversations/${conversationId}`);
+      applyConversation(conversation);
+    } finally {
+      setSidebarBusyId(null);
+    }
+  }, [applyConversation, tenantId]);
+
+  const createConversation = useCallback(async () => {
+    const conversation = await request<ChatConversation>(`/tenants/${tenantId}/chat-conversations`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    setSearchQuery("");
+    applyConversation(conversation);
+    upsertConversationSummary(summaryFromConversation(conversation));
+    setDataSummary("");
+    setInput("");
+    return conversation;
+  }, [applyConversation, tenantId, upsertConversationSummary]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    const bootstrap = async () => {
+      if (!currentUser) {
+        router.replace("/auth/login");
+        return;
+      }
+
+      try {
+        const items = await request<ChatConversationSummary[]>(`/tenants/${tenantId}/chat-conversations`);
+        if (disposed) return;
+        setConversations(items);
+
+        if (items.length > 0) {
+          await loadConversation(items[0].id);
+        } else {
+          await createConversation();
+        }
+      } finally {
+        if (!disposed) {
+          setHistoryLoading(false);
+        }
+      }
+    };
+
+    bootstrap().catch((err) => {
+      console.error("初始化会话失败:", err);
+      if (!disposed) {
+        setHistoryLoading(false);
+        setMessages([
+          ...createWelcomeMessages(),
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: `加载历史会话失败：${err instanceof Error ? err.message : "未知错误"}`,
+            timestamp: Date.now(),
+          },
+        ]);
+      }
+    });
+
+    return () => {
+      disposed = true;
+    };
+  }, [createConversation, currentUser, loadConversation, router, tenantId]);
+
+  useEffect(() => {
+    if (!activeConversationId || loading || historyLoading) return;
+
+    const persistedMessages = toPersistedMessages(messages);
+    const signature = JSON.stringify(persistedMessages);
+    if (signature === lastSavedSignatureRef.current) return;
+
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        const saved = await request<ChatConversation>(`/tenants/${tenantId}/chat-conversations/${activeConversationId}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            title: buildConversationTitle(persistedMessages),
+            messages: persistedMessages,
+          }),
+        });
+        lastSavedSignatureRef.current = JSON.stringify(saved.messages);
+        upsertConversationSummary(summaryFromConversation(saved));
+      } catch (err) {
+        console.error("保存会话失败:", err);
+      }
+    }, 500);
+
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    };
+  }, [activeConversationId, historyLoading, loading, messages, tenantId, upsertConversationSummary]);
+
   const sendToAI = useCallback(async (question: string) => {
     const user = getCurrentUser();
     if (!user) {
       router.push("/auth/login");
       return;
+    }
+
+    let conversationId = activeConversationId;
+    if (!conversationId) {
+      const conversation = await createConversation();
+      conversationId = conversation.id;
     }
 
     const userMsgId = crypto.randomUUID();
@@ -279,10 +452,9 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
 
       try {
         const dsConfig = JSON.parse(dsMatch[1]);
-        const tenantId = user?.id || "demo-tenant";
         const token = getAccessToken();
         const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (token) headers["Authorization"] = `Bearer ${token}`;
+        if (token) headers.Authorization = `Bearer ${token}`;
 
         const dsRes = await fetch(`/api/tenants/${tenantId}/data-sources`, {
           method: "POST",
@@ -298,7 +470,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsgId
-                ? { ...m, content: cleanContent + `\n\n**数据源配置失败**：${errMsg}\n\n请检查连接信息是否正确，或前往 [数据源管理](/data-sources) 页面手动配置。` }
+                ? { ...m, content: `${cleanContent}\n\n**数据源配置失败**：${errMsg}\n\n请检查连接信息是否正确，或前往 [数据源管理](/data-sources) 页面手动配置。` }
                 : m
             )
           );
@@ -312,8 +484,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
               ? {
                   ...m,
                   content:
-                    cleanContent +
-                    `\n\n数据源「${created.name || dsConfig.name}」已自动配置成功！\n\n` +
+                    `${cleanContent}\n\n数据源「${created.name || dsConfig.name}」已自动配置成功！\n\n` +
                     `**连接详情**：\n` +
                     `- 类型：${(dsConfig.type || "").toUpperCase()}\n` +
                     `- 主机：${dsConfig.connection?.host}:${dsConfig.connection?.port}\n` +
@@ -333,23 +504,12 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
 
     setMessages((prev) => [
       ...prev,
-      {
-        id: userMsgId,
-        role: "user",
-        content: question,
-        timestamp: Date.now(),
-      },
-      {
-        id: assistantMsgId,
-        role: "assistant",
-        content: "",
-        timestamp: Date.now(),
-      },
+      { id: userMsgId, role: "user", content: question, timestamp: Date.now() },
+      { id: assistantMsgId, role: "assistant", content: "", timestamp: Date.now() },
     ]);
 
     setLoading(true);
     try {
-      const tenantId = user?.id || "demo-tenant";
       const token = getAccessToken();
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) {
@@ -444,12 +604,12 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
         body: JSON.stringify({
           messages: [{ role: "user", content: question }],
           dataSummary: dataSummary || undefined,
-          companyProfile: user?.companyProfile,
+          companyProfile: user.companyProfile,
           tenantId,
+          conversationId,
         }),
       });
 
-      // 兼容非流式（如 demo 模式）
       const contentType = res.headers.get("content-type") || "";
       if (!res.ok) {
         let errText = `请求失败：${res.status}`;
@@ -459,20 +619,18 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
         }
         throw new Error(errText);
       }
+
       if (contentType.includes("application/json")) {
         const data = await res.json();
         const content = data.content || data.error || "无回复";
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMsgId ? { ...m, content } : m
-          )
-        );
+        setMessages((prev) => prev.map((m) => (m.id === assistantMsgId ? { ...m, content } : m)));
         await createDataSourceFromResponse(content);
         return;
       }
 
       const reader = res.body?.getReader();
       if (!reader) throw new Error("无法读取响应流");
+
       const decoder = new TextDecoder();
       let buffer = "";
       let fullContent = "";
@@ -481,6 +639,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
         const { value, done } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
+
         let idx;
         while ((idx = buffer.indexOf("\n\n")) !== -1) {
           const raw = buffer.slice(0, idx).trim();
@@ -488,67 +647,50 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           if (!raw.startsWith("data:")) continue;
           const jsonStr = raw.replace(/^data:\s*/, "");
           if (!jsonStr) continue;
+
           const evt = JSON.parse(jsonStr) as
             | { type: "delta"; content: string }
-            | { type: "meta"; analysis?: any; model?: string }
             | { type: "done" }
             | { type: "error"; error?: string };
 
           if (evt.type === "delta") {
             fullContent += evt.content || "";
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantMsgId
-                  ? { ...m, content: fullContent }
-                  : m
-              )
-            );
+            setMessages((prev) => prev.map((m) => (m.id === assistantMsgId ? { ...m, content: fullContent } : m)));
           } else if (evt.type === "error") {
             throw new Error(evt.error || "流式响应错误");
           }
         }
       }
 
-      // 流式完成后处理数据源配置
       if (fullContent) {
         await createDataSourceFromResponse(fullContent);
       }
     } catch (err) {
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === assistantMsgId
-            ? {
-                ...m,
-                content: `请求失败：${err instanceof Error ? err.message : "网络错误"}`,
-              }
-            : m
+          m.id === assistantMsgId ? { ...m, content: `请求失败：${err instanceof Error ? err.message : "网络错误"}` } : m
         )
       );
     } finally {
       setLoading(false);
     }
-  }, [dataSummary, router]);
+  }, [activeConversationId, createConversation, dataSummary, router, tenantId]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     const formData = new FormData();
     formData.append("file", file);
+
     try {
-      const res = await fetch("/api/parse-data", {
-        method: "POST",
-        body: formData,
-      });
+      const res = await fetch("/api/parse-data", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "解析失败");
 
       const summary = data.summary as string;
       setDataSummary((prev) => (prev ? `${prev}\n\n${summary}` : summary));
-      setUploadedFiles((prev) => [
-        ...prev,
-        { name: file.name, summary: data.summary?.slice(0, 200) },
-      ]);
-
+      setUploadedFiles((prev) => [...prev, { name: file.name, summary: data.summary?.slice(0, 200) }]);
       setMessages((prev) => [
         ...prev,
         {
@@ -572,6 +714,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
         },
       ]);
     }
+
     e.target.value = "";
   };
 
@@ -579,7 +722,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     const text = input.trim();
     if (!text || loading) return;
     setInput("");
-    sendToAI(text);
+    void sendToAI(text);
   };
 
   const handleLogout = () => {
@@ -587,131 +730,313 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     router.replace("/auth/login");
   };
 
-  const suggestedQuestions = [
-    "上周销售额是多少？环比增长如何？",
-    "本月营收趋势分析",
-    "哪个产品卖得最好？",
-    "预测下个月的销售额",
-    "请基于已上传数据，生成一个可落地的数据大屏方案",
-  ];
+  const handleNewConversation = async () => {
+    setSidebarBusyId("new");
+    try {
+      await createConversation();
+    } finally {
+      setSidebarBusyId(null);
+    }
+  };
 
-  const showWelcome = messages.length === 1;
+  const handleDeleteConversation = async (conversationId: string) => {
+    if (!window.confirm("确认删除这条历史对话吗？删除后不可恢复。")) return;
+    setSidebarBusyId(conversationId);
+    try {
+      await request(`/tenants/${tenantId}/chat-conversations/${conversationId}`, { method: "DELETE" });
+      const remaining = conversations.filter((item) => item.id !== conversationId);
+      setConversations(remaining);
+
+      if (activeConversationId === conversationId) {
+        if (remaining.length > 0) {
+          await loadConversation(remaining[0].id);
+        } else {
+          await createConversation();
+        }
+      }
+    } finally {
+      setSidebarBusyId(null);
+    }
+  };
+
+  const handleStartRename = (conversation: ChatConversationSummary) => {
+    setEditingConversationId(conversation.id);
+    setEditingTitle(conversation.title || "新对话");
+  };
+
+  const handleRenameConversation = async (conversationId: string) => {
+    const title = editingTitle.trim();
+    if (!title) return;
+    setSidebarBusyId(conversationId);
+    try {
+      const updated = await request<ChatConversationSummary>(`/tenants/${tenantId}/chat-conversations/${conversationId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title }),
+      });
+      upsertConversationSummary(updated);
+      setEditingConversationId(null);
+      setEditingTitle("");
+    } finally {
+      setSidebarBusyId(null);
+    }
+  };
+
+  const handleCancelRename = () => {
+    setEditingConversationId(null);
+    setEditingTitle("");
+  };
+
+  const suggestedQuestions = useMemo(
+    () => [
+      "上周销售额是多少？环比增长如何？",
+      "本月营收趋势分析",
+      "哪个产品卖得最好？",
+      "预测下个月的销售额",
+      "请基于已上传数据，生成一个可落地的数据大屏方案",
+    ],
+    []
+  );
+
   const latestAssistantMessage = [...messages].reverse().find((m) => m.role === "assistant");
   const showThinkingIndicator = loading && !latestAssistantMessage?.content.trim();
+  const showWelcome = toPersistedMessages(messages).length === 0;
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      {/* ===== 滚动区域：包含顶部导航和消息列表 ===== */}
-      <div ref={scrollContainerRef} className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col">
-        {/* 顶部导航 */}
-        <AppHeader
-          title="AI 数据分析师"
-          subtitle={
-            (currentUser?.name ? currentUser.name : "智能洞察与分析建议") +
-            (uploadedFiles.length > 0 ? ` | ${uploadedFiles.length} 个数据文件` : "")
-          }
-          showOnlineStatus
-        />
+    <div className="flex h-full min-h-0 flex-col lg:flex-row">
+      <aside className="w-full shrink-0 border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-xl lg:w-80 lg:border-b-0 lg:border-r">
+        <div className="flex items-center justify-between border-b border-zinc-800/60 px-4 py-4">
+          <div>
+            <p className="text-sm font-semibold text-zinc-100">历史对话</p>
+            <p className="text-xs text-zinc-500">保存你的分析上下文</p>
+          </div>
+          <button
+            onClick={() => void handleNewConversation()}
+            disabled={loading || historyLoading}
+            className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-xs font-medium text-indigo-200 transition hover:bg-indigo-500/20 disabled:opacity-50"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            {sidebarBusyId === "new" ? "创建中" : "新对话"}
+          </button>
+        </div>
 
-        {/* 消息区域 */}
-        <div className="flex-1 min-h-0 pt-6">
-          <div className="max-w-3xl mx-auto px-4 py-6 pb-12">
-            {/* 欢迎页 */}
-            {showWelcome && (
-              <WelcomeScreen questions={suggestedQuestions} onSelect={sendToAI} />
-            )}
-
-            {/* 对话消息 */}
-            <div className={`space-y-5 ${showWelcome ? "hidden" : ""}`}>
-              {messages.map((m) => {
-                if (m.id === "welcome") return null;
-                if (m.role === "assistant" && !m.content.trim()) return null;
-                return <MessageBubble key={m.id} message={m} userName={currentUser?.name} />;
-              })}
-
-              {/* 思考中 */}
-              {showThinkingIndicator && <ThinkingIndicator />}
+        <div className="flex gap-3 overflow-x-auto px-3 py-3 lg:block lg:h-[calc(100vh-88px)] lg:overflow-x-hidden lg:overflow-y-auto">
+          <div className="min-w-[240px] lg:mb-3 lg:min-w-0">
+            <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/35 px-3 py-3">
+              <div className="flex items-center gap-2 rounded-xl border border-zinc-800/70 bg-zinc-950/70 px-3 py-2">
+                <svg className="h-4 w-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+                </svg>
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="搜索历史对话"
+                  className="w-full bg-transparent text-sm text-zinc-100 placeholder-zinc-600 outline-none"
+                />
+              </div>
             </div>
+          </div>
 
-            <div ref={messagesEndRef} />
+          {historyLoading ? (
+            <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 px-4 py-5 text-sm text-zinc-500">正在加载历史对话...</div>
+          ) : null}
+
+          {!historyLoading && conversations.length === 0 ? (
+            <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 px-4 py-5 text-sm text-zinc-500">还没有历史对话，开始提问吧。</div>
+          ) : null}
+
+          {!historyLoading && conversations.length > 0 && filteredConversations.length === 0 ? (
+            <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 px-4 py-5 text-sm text-zinc-500">没有匹配的历史对话。</div>
+          ) : null}
+
+          {filteredConversations.map((item) => {
+            const active = item.id === activeConversationId;
+            const isEditing = item.id === editingConversationId;
+            return (
+              <div key={item.id} className="min-w-[240px] lg:min-w-0 lg:mb-3">
+                <div
+                  className={`group rounded-2xl border p-3 transition ${
+                    active
+                      ? "border-indigo-500/40 bg-indigo-500/10 shadow-lg shadow-indigo-500/10"
+                      : "border-zinc-800/60 bg-zinc-900/35 hover:border-zinc-700/80 hover:bg-zinc-900/60"
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      {isEditing ? (
+                        <div className="space-y-2">
+                          <input
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") void handleRenameConversation(item.id);
+                              if (e.key === "Escape") handleCancelRename();
+                            }}
+                            className="w-full rounded-xl border border-indigo-500/30 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none"
+                            autoFocus
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => void handleRenameConversation(item.id)}
+                              disabled={!editingTitle.trim() || sidebarBusyId === item.id}
+                              className="rounded-lg bg-indigo-500/15 px-2.5 py-1.5 text-xs text-indigo-200 transition hover:bg-indigo-500/25 disabled:opacity-50"
+                            >
+                              保存
+                            </button>
+                            <button
+                              onClick={handleCancelRename}
+                              className="rounded-lg bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-300 transition hover:bg-zinc-700"
+                            >
+                              取消
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button className="w-full text-left" onClick={() => void loadConversation(item.id)}>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="truncate text-sm font-medium text-zinc-100">{item.title || "新对话"}</p>
+                            <span className="shrink-0 text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                              {formatHistoryDate(item.lastMessageAt || item.updatedAt)}
+                            </span>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-500">{item.preview || "等待第一条消息"}</p>
+                        </button>
+                      )}
+                    </div>
+                    {!isEditing ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleStartRename(item)}
+                          disabled={sidebarBusyId === item.id}
+                          className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-indigo-300 disabled:opacity-50"
+                          title="重命名对话"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487a2.25 2.25 0 1 1 3.182 3.182L7.5 20.212 3 21l.788-4.5L16.862 4.487Z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => void handleDeleteConversation(item.id)}
+                          disabled={sidebarBusyId === item.id}
+                          className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-rose-300 disabled:opacity-50"
+                          title="删除对话"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5h12m-10.5 0v10.125A1.875 1.875 0 0 0 9.375 19.5h5.25A1.875 1.875 0 0 0 16.5 17.625V7.5m-6 3v5.25m3-5.25v5.25M9.75 7.5V5.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V7.5" />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </aside>
+
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+          <AppHeader
+            title="AI 数据分析师"
+            subtitle={
+              (currentUser?.name ? currentUser.name : "智能洞察与分析建议") +
+              (uploadedFiles.length > 0 ? ` | ${uploadedFiles.length} 个数据文件` : "")
+            }
+            actions={
+              <button
+                onClick={handleLogout}
+                className="rounded-xl border border-zinc-700/50 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-800/60"
+              >
+                退出
+              </button>
+            }
+            showOnlineStatus
+          />
+
+          <div className="flex-1 min-h-0 pt-6">
+            <div className="max-w-3xl mx-auto px-4 py-6 pb-12">
+              {showWelcome ? <WelcomeScreen questions={suggestedQuestions} onSelect={(q) => void sendToAI(q)} /> : null}
+
+              <div className={`space-y-5 ${showWelcome ? "hidden" : ""}`}>
+                {messages.map((m) => {
+                  if (m.id === "welcome") return null;
+                  if (m.role === "assistant" && !m.content.trim()) return null;
+                  return <MessageBubble key={m.id} message={m} userName={currentUser?.name} />;
+                })}
+                {showThinkingIndicator ? <ThinkingIndicator /> : null}
+              </div>
+
+              <div ref={messagesEndRef} />
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* ===== 底部输入区 ===== */}
-      <div className="shrink-0 border-t border-zinc-800/30 bg-zinc-900/40 backdrop-blur-xl">
-        {/* 顶部微光线 */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2/3 h-px bg-gradient-to-r from-transparent via-indigo-500/15 to-transparent" />
+        <div className="shrink-0 border-t border-zinc-800/30 bg-zinc-900/40 backdrop-blur-xl">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2/3 h-px bg-gradient-to-r from-transparent via-indigo-500/15 to-transparent" />
 
-        <div className="max-w-3xl mx-auto px-4 py-4 pb-6">
+          <div className="max-w-3xl mx-auto px-4 py-4 pb-6">
+            {uploadedFiles.length > 0 ? (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {uploadedFiles.map((f) => (
+                  <span
+                    key={`${f.name}-${f.summary || ""}`}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-indigo-500/10 text-indigo-300 border border-indigo-500/20"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                    </svg>
+                    {f.name}
+                  </span>
+                ))}
+              </div>
+            ) : null}
 
-          {/* 已上传文件标签 */}
-          {uploadedFiles.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-3">
-              {uploadedFiles.map((f) => (
-                <span
-                  key={f.name}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-indigo-500/10 text-indigo-300 border border-indigo-500/20"
-                >
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-                  </svg>
-                  {f.name}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* 输入行 */}
-          <div className="flex items-center gap-2.5">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,.txt,.json,.xlsx,.xls"
-              className="hidden"
-              onChange={handleUpload}
-            />
-
-            {/* 上传按钮 */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="shrink-0 p-2.5 rounded-xl text-zinc-500 hover:text-indigo-400 hover:bg-indigo-500/10 border border-transparent hover:border-indigo-500/20 transition-all"
-              title="上传数据文件"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
-              </svg>
-            </button>
-
-            {/* 输入框容器 */}
-            <div className="flex-1 input-glow rounded-xl bg-zinc-800/50 border border-zinc-700/30 focus-within:border-indigo-500/40 transition-all duration-300">
+            <div className="flex items-center gap-2.5">
               <input
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-                placeholder="描述你的数据分析需求..."
-                className="w-full bg-transparent px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none"
-                autoFocus
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.txt,.json,.xlsx,.xls"
+                className="hidden"
+                onChange={handleUpload}
               />
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="shrink-0 p-2.5 rounded-xl text-zinc-500 hover:text-indigo-400 hover:bg-indigo-500/10 border border-transparent hover:border-indigo-500/20 transition-all"
+                title="上传数据文件"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
+                </svg>
+              </button>
+
+              <div className="flex-1 input-glow rounded-xl bg-zinc-800/50 border border-zinc-700/30 focus-within:border-indigo-500/40 transition-all duration-300">
+                <input
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+                  placeholder="描述你的数据分析需求..."
+                  className="w-full bg-transparent px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none"
+                  autoFocus
+                />
+              </div>
+
+              <button
+                onClick={handleSend}
+                disabled={loading || !input.trim() || historyLoading}
+                className="shrink-0 p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 btn-ripple disabled:shadow-none"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+                </svg>
+              </button>
             </div>
 
-            {/* 发送按钮 */}
-            <button
-              onClick={handleSend}
-              disabled={loading || !input.trim()}
-              className="shrink-0 p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 btn-ripple disabled:shadow-none"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
-              </svg>
-            </button>
+            <p className="mt-2.5 text-center text-[10px] text-zinc-700 select-none">AI 分析结果仅供参考，请结合实际业务场景验证</p>
           </div>
-
-          {/* 底部提示 */}
-          <p className="mt-2.5 text-center text-[10px] text-zinc-700 select-none">
-            AI 分析结果仅供参考，请结合实际业务场景验证
-          </p>
         </div>
       </div>
     </div>

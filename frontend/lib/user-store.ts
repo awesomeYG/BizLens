@@ -73,6 +73,7 @@ export function saveCurrentUser(user: UserSessionWithAuth): void {
     // Token 已经由 api.ts 管理，这里只保存用户基本信息
     const session: UserSession = {
       id: user.id,
+      tenantId: user.tenantId,
       name: user.name,
       email: user.email,
       createdAt: user.createdAt,
@@ -95,6 +96,7 @@ export async function loginUser(email: string, password: string): Promise<UserSe
     
     const user: UserSessionWithAuth = {
       id: response.user.id,
+      tenantId: response.user.tenantId,
       name: response.user.name,
       email: response.user.email,
       createdAt: new Date(response.user.createdAt).getTime(),
@@ -215,6 +217,7 @@ export async function syncCurrentUser(): Promise<UserSessionWithAuth | null> {
     const user = await fetchCurrentUser();
     const session: UserSessionWithAuth = {
       id: user.id,
+      tenantId: user.tenantId,
       name: user.name,
       email: user.email,
       createdAt: new Date(user.createdAt).getTime(),

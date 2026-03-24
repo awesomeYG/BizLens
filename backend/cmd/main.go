@@ -102,6 +102,8 @@ func main() {
 	// 报表服务
 	reportService := service.NewReportService(db)
 	reportHandler := handler.NewReportHandler(reportService)
+	chatService := service.NewChatService(db)
+	chatHandler := handler.NewChatHandler(chatService)
 
 	// 初始化系统预置模板
 	if err := dashboardTemplateService.InitSystemTemplates(); err != nil {
@@ -469,6 +471,12 @@ func main() {
 		// /api/tenants/{tenantId}/reports[/{reportId}[/{action}]]
 		if len(parts) >= 2 && parts[1] == "reports" {
 			reportHandler.HandleReports(w, r)
+			return
+		}
+
+		// /api/tenants/{tenantId}/chat-conversations[/{conversationId}]
+		if len(parts) >= 2 && parts[1] == "chat-conversations" {
+			chatHandler.HandleConversations(w, r)
 			return
 		}
 
