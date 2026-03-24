@@ -24,57 +24,50 @@ export default function SettingsLayout({
   readonly children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const currentNav = SETTINGS_NAV.find((item) => item.href === pathname);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/40">
-      <header className="sticky top-0 z-20 border-b border-white/70 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-sm">
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-900">设置中心</p>
-              <p className="text-xs text-slate-500">{currentNav?.description ?? "管理系统配置"}</p>
-            </div>
-          </div>
-          <Link
-            href="/chat"
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+    <div className="min-h-screen bg-zinc-950 bg-grid">
+      {/* 顶部导航 - 与项目其他页面一致 */}
+      <nav className="flex items-center justify-between px-6 py-3 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-md sticky top-0 z-40">
+        <div className="flex items-center gap-4">
+          <Link href="/" className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
             </svg>
-            返回分析页
+            <span className="font-medium text-sm bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">BizLens</span>
           </Link>
+          <span className="text-zinc-700">/</span>
+          <span className="text-sm font-medium text-zinc-300">设置中心</span>
         </div>
-      </header>
+        <div className="flex gap-1 items-center">
+          <Link href="/chat" className="btn-ghost text-sm">AI 对话</Link>
+          <Link href="/alerts" className="btn-ghost text-sm">智能告警</Link>
+        </div>
+      </nav>
 
-      <div className="mx-auto flex w-full max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-7xl gap-6 px-6 py-6">
         {/* 侧边导航 */}
-        <aside className="hidden w-72 self-start rounded-2xl border border-slate-200/80 bg-white/85 p-5 shadow-sm lg:block">
-          <div className="mb-4 border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-semibold text-slate-900">系统设置</h2>
-            <p className="mt-1 text-xs text-slate-500">管理 AI 与数据文件能力</p>
-          </div>
-          <nav className="space-y-2">
+        <aside className="hidden w-64 self-start lg:block">
+          <div className="glass-card rounded-xl p-4">
+            <div className="mb-4 pb-4 border-b border-zinc-800/60">
+              <h2 className="text-sm font-semibold text-zinc-200">系统设置</h2>
+              <p className="mt-1 text-xs text-zinc-500">管理 AI 与数据文件能力</p>
+            </div>
+            <nav className="space-y-1">
               {SETTINGS_NAV.map((item) => {
                 const isActive = pathname === item.href;
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all ${
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all ${
                       isActive
-                        ? "border border-blue-200 bg-blue-50 text-blue-700 shadow-sm"
-                        : "border border-transparent text-slate-700 hover:bg-slate-50"
+                        ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+                        : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5 border border-transparent"
                     }`}
                   >
                     <svg
-                      className={`h-5 w-5 flex-shrink-0 ${isActive ? "text-blue-600" : "text-slate-400"}`}
+                      className={`h-4 w-4 flex-shrink-0 ${isActive ? "text-indigo-400" : "text-zinc-500"}`}
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -87,8 +80,8 @@ export default function SettingsLayout({
                       />
                     </svg>
                     <div>
-                      <div className="font-medium text-sm">{item.label}</div>
-                      <div className={`text-xs ${isActive ? "text-blue-600" : "text-slate-500"}`}>
+                      <div className="text-sm font-medium">{item.label}</div>
+                      <div className={`text-xs ${isActive ? "text-indigo-400/70" : "text-zinc-600"}`}>
                         {item.description}
                       </div>
                     </div>
@@ -96,6 +89,7 @@ export default function SettingsLayout({
                 );
               })}
             </nav>
+          </div>
         </aside>
 
         {/* 主内容 */}
