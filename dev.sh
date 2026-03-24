@@ -145,6 +145,13 @@ start_postgres() {
         log_error "Docker 未安装，无法启动 PostgreSQL"
         exit 1
     fi
+
+    # 检查 Docker daemon 是否可用
+    if ! docker info >/dev/null 2>&1; then
+        log_error "Docker daemon 未运行，无法启动 PostgreSQL"
+        log_info "请先启动 Docker Desktop（或 Docker 服务）后重试：./dev.sh --postgres"
+        exit 1
+    fi
     
     # 检查容器是否已运行
     if docker ps | grep -q ai-bi-postgres; then
