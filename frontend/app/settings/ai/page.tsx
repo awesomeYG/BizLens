@@ -225,7 +225,7 @@ export default function SettingsPage() {
 
       <div className="space-y-5">
         {/* 模型服务商选择 */}
-        <div className="glass-card rounded-xl p-5">
+        <div className={`glass-card rounded-xl p-5 relative ${providerOpen ? "z-40" : ""}`}>
           <div className="flex items-center gap-3 mb-4">
             <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-500/15 text-indigo-400">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -261,9 +261,10 @@ export default function SettingsPage() {
                 </svg>
               </button>
 
-              {providerOpen && (
-                <div className="absolute z-30 mt-2 w-full rounded-xl bg-zinc-900 border border-zinc-700/60 shadow-2xl shadow-black/40 overflow-hidden animate-fade-in">
-                  <div className="p-1.5 space-y-0.5 max-h-[320px] overflow-y-auto">
+                {providerOpen && (
+                  <div className="absolute z-50 mt-2 w-full rounded-xl bg-zinc-900 border border-zinc-700/60 shadow-2xl shadow-black/40 overflow-hidden animate-fade-in">
+                    <div className="p-1.5 space-y-0.5 max-h-[320px] overflow-y-auto">
+
                     {MODEL_OPTIONS.map((option) => {
                       const isSelected = aiConfig.modelType === option.value;
                       const colors = COLOR_MAP[option.color];
@@ -307,7 +308,7 @@ export default function SettingsPage() {
         </div>
 
         {/* API 配置 */}
-        <div className="glass-card rounded-xl p-5">
+        <div className={`glass-card rounded-xl p-5 relative ${modelOpen ? "z-40" : ""}`}>
           <div className="flex items-center gap-3 mb-5">
             <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-purple-500/15 text-purple-400">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -395,7 +396,7 @@ export default function SettingsPage() {
                 </button>
 
                 {modelOpen && (
-                  <div className="absolute z-30 mt-2 w-full rounded-xl bg-zinc-900 border border-zinc-700/60 shadow-2xl shadow-black/40 overflow-hidden animate-fade-in">
+                  <div className="absolute z-50 mt-2 w-full rounded-xl bg-zinc-900 border border-zinc-700/60 shadow-2xl shadow-black/40 overflow-hidden animate-fade-in">
                     <div className="p-1.5 space-y-0.5">
                       {MODEL_OPTIONS.find((o) => o.value === aiConfig.modelType)?.models.map((model) => {
                         const isSelected = aiConfig.model === model;
