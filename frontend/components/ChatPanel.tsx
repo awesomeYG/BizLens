@@ -125,7 +125,10 @@ function extractDashboardConfig(content: string): { sections: DashboardSection[]
 
 /** 从内容中移除 dashboard_config 代码块 */
 function removeDashboardConfigBlock(content: string): string {
-  return content.replace(/```dashboard_config\s*\n[\s\S]*?\n```/g, "").trim();
+  return content
+    .replace(/```dashboard_config\s*\n[\s\S]*?\n```/g, "")
+    .replace(/```datasource_config\s*\n[\s\S]*?\n```/g, "")
+    .trim();
 }
 
 /** 内联大屏预览组件 */
@@ -348,7 +351,7 @@ export default function ChatPanel({
       try {
         const reportConfig = JSON.parse(reportMatch[1]);
         const user = getCurrentUser();
-        const tenantId = user?.id?.split("@")[0] || "demo";
+        const tenantId = user?.id || "demo-tenant";
 
         const created = await request<Report>(
           `/tenants/${tenantId}/reports`,
@@ -373,6 +376,7 @@ export default function ChatPanel({
         );
 
         const cleanContent = rawContent.replace(reportRegex, "").trim();
+
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
@@ -392,17 +396,77 @@ export default function ChatPanel({
       }
     };
 
+    const createDataSourceFromResponse = async (rawContent: string) => {
+      const dsRegex = /```datasource_config\s*\n([\s\S]*?)\n```/;
+      const dsMatch = dsRegex.exec(rawContent);
+      if (!dsMatch) return false;
+
+      try {
+        const dsConfig = JSON.parse(dsMatch[1]);
+        const user = getCurrentUser();
+        const tenantId = user?.id || "demo-tenant";
+        const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const dsRes = await fetch(`/api/tenants/${tenantId}/data-sources`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(dsConfig),
+        });
+
+        const cleanContent = rawContent.replace(dsRegex, "").trim();
+
+        if (!dsRes.ok) {
+          const errData = await dsRes.json().catch(() => null);
+          const errMsg = errData?.error || `HTTP ${dsRes.status}`;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? { ...m, content: cleanContent + `\n\n**数据源配置失败**：${errMsg}\n\n请检查连接信息是否正确，或前往 [数据源管理](/data-sources) 页面手动配置。` }
+                : m
+            )
+          );
+          return false;
+        }
+
+        const created = await dsRes.json();
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  content:
+                    cleanContent +
+                    `\n\n数据源「${created.name || dsConfig.name}」已自动配置成功！\n\n` +
+                    `**连接详情**：\n` +
+                    `- 类型：${(dsConfig.type || "").toUpperCase()}\n` +
+                    `- 主机：${dsConfig.connection?.host}:${dsConfig.connection?.port}\n` +
+                    `- 数据库：${dsConfig.connection?.database}\n` +
+                    `- 状态：已连接\n\n` +
+                    `你可以前往 [数据源管理](/data-sources) 页面查看详情，或直接开始数据分析。`,
+                }
+              : m
+          )
+        );
+        return true;
+      } catch (err) {
+        console.error("创建数据源失败:", err);
+        return false;
+      }
+    };
+
     setLoading(true);
 
     // 先追加用户消息和空的 assistant 占位
     setMessages((prev) => [
       ...prev,
-      ...(appendUser
+      ...(appendUser && input.trim()
         ? [
             {
               id: crypto.randomUUID(),
               role: "user" as const,
-              content: input,
+              content: input.trim(),
               timestamp: Date.now(),
             },
           ]
@@ -454,6 +518,7 @@ export default function ChatPanel({
         await createAlertFromResponse(content);
         await createNotificationRuleFromResponse(content);
         await createReportFromResponse(content);
+        await createDataSourceFromResponse(content);
         return;
       }
 
@@ -503,11 +568,12 @@ export default function ChatPanel({
         }
       }
 
-      // 流式完成后处理告警/通知规则/报表
+      // 流式完成后处理告警/通知规则/报表/数据源配置
       if (fullContent) {
         await createAlertFromResponse(fullContent);
         await createNotificationRuleFromResponse(fullContent);
         await createReportFromResponse(fullContent);
+        await createDataSourceFromResponse(fullContent);
       }
     } catch (err) {
       setMessages((prev) =>
