@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import TemplateSelectorModal, { DashboardTemplate } from "@/components/dashboard/TemplateSelectorModal";
 import { getCurrentUser } from "@/lib/user-store";
+import AppHeader from "@/components/AppHeader";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
@@ -78,36 +79,19 @@ export default function DashboardsPage() {
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#0b0b10] via-[#0f1020] to-[#0b0b10] text-white">
       {/* 顶部导航 */}
-      <nav className="sticky top-0 z-20 border-b border-white/5 bg-zinc-950/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <a href="/" className="text-sm text-zinc-400 hover:text-white transition">AI BI</a>
-            <span className="text-zinc-700">/</span>
-            <span className="text-sm text-white">数据大屏</span>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <a href="/chat" className="btn-ghost">AI 对话</a>
-            <a href="/dashboards" className="px-4 py-2 rounded-lg bg-indigo-600/20 text-indigo-200 border border-indigo-500/30 shadow-lg shadow-indigo-500/15">数据大屏</a>
-            <a
-              href="/im/settings"
-              className="btn-ghost flex items-center gap-1"
-              title="IM 集成与通知"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-              </svg>
-              集成
-            </a>
-            <button
-              onClick={() => setShowTemplateModal(true)}
-              disabled={loading}
-              className="btn-primary shadow-indigo-500/25 disabled:opacity-60"
-            >
-              {loading ? "创建中..." : "＋ 新建大屏"}
-            </button>
-          </div>
-        </div>
-      </nav>
+      <AppHeader
+        title="数据大屏"
+        breadcrumb={["BizLens", "数据大屏"]}
+        actions={
+          <button
+            onClick={() => setShowTemplateModal(true)}
+            disabled={loading}
+            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-lg shadow-indigo-500/30 disabled:opacity-60"
+          >
+            {loading ? "创建中..." : "+ 新建大屏"}
+          </button>
+        }
+      />
 
       {/* 主体 */}
       <main className="flex-1 px-6 pb-12">

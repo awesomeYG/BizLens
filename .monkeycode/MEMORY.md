@@ -142,3 +142,15 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 前端上传/列表/删除请求需要从 localStorage 获取 token 并附加到 Authorization header
   - 上传文件在测试环境下临时存储在 `backend/uploads/` 目录（已加 .gitignore 忽略上传内容）
   - data-sources/clean/page.tsx 中仍存在硬编码的 X-Tenant-ID/X-User-ID，待后续统一修改
+
+### 统一 AppHeader 组件
+- Date: 2026-03-24
+- Context: Agent 在执行 header 统一重构时发现
+- Category: 代码模式
+- Instructions:
+  - 全站统一使用 `frontend/components/AppHeader.tsx` 作为顶部导航组件
+  - AppHeader 基于 Chat 页面的 header 风格：毛玻璃背景、底部微光线、AI 头像、标准导航项
+  - 支持 props：title, subtitle, backHref, backLabel, breadcrumb, actions, showNav, showLogout, showOnlineStatus, navItems
+  - 默认导航项：AI 对话、数据源、报表、告警 + 集成（紫色按钮）+ 设置（齿轮图标）+ 退出
+  - 当前路径自动高亮对应导航项（indigo 高亮样式）
+  - 品牌名统一为 "BizLens"（之前首页用 "DataMind"、其他页面混用 "BizLens"/"AI BI"）

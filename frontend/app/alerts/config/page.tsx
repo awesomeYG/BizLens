@@ -12,6 +12,7 @@ import {
   type AlertEventCreateRequest,
   type IMPlatformConfig,
 } from "@/lib/im";
+import AppHeader from "@/components/AppHeader";
 
 export default function AlertConfigPage() {
   const router = useRouter();
@@ -88,15 +89,16 @@ export default function AlertConfigPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 bg-grid">
-      <nav className="flex items-center justify-between px-6 py-3 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-md sticky top-0 z-40">
-        <Link href="/alerts" className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 transition-colors">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-          </svg>
-          <span className="text-sm">智能告警</span>
-        </Link>
-        <button onClick={openNew} className="btn-primary text-sm">+ 新建规则</button>
-      </nav>
+      <AppHeader
+        title="告警规则配置"
+        backHref="/alerts"
+        backLabel="智能告警"
+        actions={
+          <button onClick={openNew} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-lg shadow-indigo-500/30">
+            + 新建规则
+          </button>
+        }
+      />
 
       <main className="p-6 max-w-3xl mx-auto space-y-3">
         {events.length === 0 && (

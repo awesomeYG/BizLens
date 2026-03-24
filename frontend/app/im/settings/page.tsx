@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/lib/user-store";
 import { IM_PLATFORMS_LIST, type IMPlatformConfig, type IMPlatformType, type IMConfigCreateRequest } from "@/lib/im";
 import IMPlatformCard from "@/components/IMPlatformCard";
 import IMPlatformForm from "@/components/IMPlatformForm";
+import AppHeader from "@/components/AppHeader";
 
 export default function IMSettingsPage() {
   const router = useRouter();
@@ -102,28 +103,26 @@ export default function IMSettingsPage() {
   return (
     <div className="min-h-screen bg-zinc-950 bg-grid">
       {/* Navigation */}
-      <nav className="flex items-center justify-between px-6 py-3 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-md sticky top-0 z-40">
-        <Link href="/" className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 transition-colors">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-          </svg>
-          <span className="font-medium text-sm bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">BizLens</span>
-        </Link>
-        <div className="flex gap-3 items-center">
-          <Link href="/im/notifications" className="btn-ghost text-sm">通知中心</Link>
-          <button
-            onClick={() => setShowForm(true)}
-            className="group relative inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-zinc-100 transition-all duration-200 bg-zinc-900/80 border border-zinc-700/60 hover:border-indigo-500/50 hover:bg-zinc-800/90 hover:shadow-lg hover:shadow-indigo-500/10 active:scale-[0.97]"
-          >
-            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-indigo-500/15 text-indigo-400 transition-colors group-hover:bg-indigo-500/25">
+      <AppHeader
+        title="IM 平台集成"
+        backHref="/"
+        actions={
+          <>
+            <Link href="/im/notifications" className="px-3 py-1.5 text-xs rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/70 transition-all">
+              通知中心
+            </Link>
+            <button
+              onClick={() => setShowForm(true)}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-lg shadow-indigo-500/30 flex items-center gap-1.5"
+            >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
-            </span>
-            添加平台
-          </button>
-        </div>
-      </nav>
+              添加平台
+            </button>
+          </>
+        }
+      />
 
       {/* Hero Section */}
       <div className="relative overflow-hidden border-b border-zinc-800/50">

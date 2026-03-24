@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import AppHeader from "@/components/AppHeader";
 
 const SETTINGS_NAV = [
   {
@@ -27,23 +28,11 @@ export default function SettingsLayout({
 
   return (
     <div className="min-h-screen bg-zinc-950 bg-grid">
-      {/* 顶部导航 - 与项目其他页面一致 */}
-      <nav className="flex items-center justify-between px-6 py-3 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-md sticky top-0 z-40">
-        <div className="flex items-center gap-4">
-          <Link href="/" className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 transition-colors">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-            </svg>
-            <span className="font-medium text-sm bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">BizLens</span>
-          </Link>
-          <span className="text-zinc-700">/</span>
-          <span className="text-sm font-medium text-zinc-300">设置中心</span>
-        </div>
-        <div className="flex gap-1 items-center">
-          <Link href="/chat" className="btn-ghost text-sm">AI 对话</Link>
-          <Link href="/alerts" className="btn-ghost text-sm">智能告警</Link>
-        </div>
-      </nav>
+      {/* 顶部导航 - 统一 AppHeader */}
+      <AppHeader
+        breadcrumb={["BizLens", "设置中心"]}
+        backHref="/"
+      />
 
       <div className="mx-auto flex w-full max-w-7xl gap-6 px-6 py-6">
         {/* 侧边导航 */}
