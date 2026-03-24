@@ -18,6 +18,8 @@ function DataSourcePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab") === "files" ? "files" : "databases";
+  const returnTo = searchParams.get("returnTo");
+  const isFromOnboarding = returnTo === "/onboarding";
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [ready, setReady] = useState(false);
 
@@ -38,9 +40,9 @@ function DataSourcePageContent() {
     <div className="min-h-screen bg-zinc-950 bg-grid">
       <AppHeader
         title="数据源管理"
-        subtitle="统一管理所有数据来源"
-        backHref="/chat"
-        backLabel="BizLens"
+        subtitle={isFromOnboarding ? "先补齐数据源，再回到初始化继续" : "统一管理所有数据来源"}
+        backHref={isFromOnboarding ? "/onboarding" : "/chat"}
+        backLabel={isFromOnboarding ? "返回初始化" : "BizLens"}
         showNav={true}
       />
 
@@ -54,6 +56,17 @@ function DataSourcePageContent() {
           <p className="mt-2 max-w-2xl text-zinc-400">
             在这里统一管理数据库连接和上传文件，所有数据来源都可供 AI 分析使用。
           </p>
+          {isFromOnboarding ? (
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-3 text-sm text-cyan-100">
+              <span>保存好数据源后，可以直接回到初始化页继续完成基础信息。</span>
+              <button
+                onClick={() => router.push("/onboarding")}
+                className="rounded-xl border border-cyan-500/40 px-3 py-1.5 font-medium text-cyan-200 transition hover:border-cyan-400 hover:bg-cyan-500/10"
+              >
+                返回初始化
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {/* Tab 切换栏 */}

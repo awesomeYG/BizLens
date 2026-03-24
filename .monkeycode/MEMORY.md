@@ -216,3 +216,10 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - ChatPanel (`frontend/components/ChatPanel.tsx`) 在流式/非流式响应完成后依次调用 create*FromResponse 函数
   - SimpleChatPanel (`frontend/components/SimpleChatPanel.tsx`) 是简化版聊天，也支持 datasource_config 自动执行
   - 新增 action block 的标准流程：1) System Prompt 加引导格式 2) ChatPanel 加解析+API调用函数 3) 渲染时过滤 JSON 块 4) SimpleChatPanel 同步
+
+### Onboarding 数据源非必填
+- Date: 2026-03-24
+- Context: 用户在调整新用户引导流程时明确说明
+- Instructions:
+  - onboarding 页面完成初始化时不应强制要求用户至少添加一个数据源
+  - 数据源在引导流程中属于可选项，用户可稍后再去 `/data-sources` 补充

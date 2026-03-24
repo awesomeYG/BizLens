@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CompanyInfo, CompanyProfile, DataSourceConfig } from "@/lib/types";
+import { getAccessToken } from "@/lib/auth/api";
 import { completeOnboarding, getCurrentUser, MOCK_DATA, saveOnboardingDraft } from "@/lib/user-store";
 
 export default function OnboardingPage() {
@@ -56,6 +57,28 @@ export default function OnboardingPage() {
 
     setDataSources(user.dataSources ?? []);
     setReady(true);
+
+    const syncDataSources = async () => {
+      try {
+        const token = getAccessToken();
+        const response = await fetch(`/api/tenants/${user.id}/data-sources`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const savedDataSources = (await response.json()) as DataSourceConfig[];
+        const normalizedDataSources = Array.isArray(savedDataSources) ? savedDataSources : [];
+        setDataSources(normalizedDataSources);
+        saveOnboardingDraft({ dataSources: normalizedDataSources });
+      } catch {
+        // ignore data source sync failure and keep local draft
+      }
+    };
+
+    void syncDataSources();
   }, [router]);
 
   const updateFocus = (index: number, value: string) => {
@@ -94,15 +117,10 @@ export default function OnboardingPage() {
       businessModel: companyInfo.businessModel.trim(),
       coreGoals: companyInfo.coreGoals.trim(),
     };
-    const currentDataSources = currentUser?.dataSources ?? dataSources;
+    const currentDataSources = dataSources.length ? dataSources : currentUser?.dataSources ?? [];
 
     if (Object.values(normalizedCompanyInfo).some((value) => !value)) {
       setError("请完整填写公司信息。");
-      return;
-    }
-
-    if (!currentDataSources.length) {
-      setError("请先前往数据源页面，至少添加一个数据源。");
       return;
     }
 
@@ -160,7 +178,7 @@ export default function OnboardingPage() {
           </div>
           <h1 className="mt-4 text-4xl font-semibold tracking-tight">先完成初始化，再进入数据大屏</h1>
           <p className="mt-3 max-w-2xl text-zinc-400">
-            公司信息和分析偏好在这里填写，数据源统一在独立的数据源页面维护，避免两套表单重复和不一致。
+            公司信息和分析偏好在这里填写。数据源统一在独立的数据源页面维护，属于可选项，后续随时都能补充。
           </p>
         </div>
 
@@ -203,13 +221,13 @@ export default function OnboardingPage() {
                 <div>
                   <h2 className="text-lg font-medium">2. 数据源</h2>
                   <p className="mt-2 text-sm text-zinc-400">
-                    数据源统一在独立页面填写，支持连续添加多种类型，避免初始化页承载过多细节。
+                    数据源统一在独立页面填写，支持连续添加多种类型；这一步不是必填，你也可以稍后再补充。
                   </p>
                 </div>
                 <button
                   onClick={() => {
                     saveDraftBeforeNavigate();
-                    router.push("/data-sources");
+                    router.push("/data-sources?returnTo=/onboarding");
                   }}
                   className="rounded-xl border border-cyan-500/40 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:border-cyan-400 hover:bg-cyan-500/10"
                 >
@@ -232,9 +250,9 @@ export default function OnboardingPage() {
                     {source.description ? <p className="mt-3 text-sm text-zinc-400">{source.description}</p> : null}
                   </div>
                 )) : (
-                  <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950/50 p-4 text-sm text-zinc-400 md:col-span-2">
-                    还没有已保存的数据源。请先进入数据源页面添加至少一个数据源，再返回这里完成初始化。
-                  </div>
+                    <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950/50 p-4 text-sm text-zinc-400 md:col-span-2">
+                     还没有已保存的数据源。你可以先完成初始化，后续再到数据源页面继续补充。
+                   </div>
                 )}
               </div>
             </section>
@@ -266,18 +284,18 @@ export default function OnboardingPage() {
             <section className="rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 to-sky-500/5 p-6">
               <h2 className="text-xl font-medium">完成初始化</h2>
               <p className="mt-3 text-sm text-zinc-300">
-                提交后我会读取已保存的数据源，生成一份初始画像，并把当前账号标记为已完成 onboarding。
+                提交后我会结合你当前填写的信息生成一份初始画像，并把当前账号标记为已完成 onboarding；如果已经配置了数据源，也会一并纳入分析。
               </p>
               {error ? <p className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</p> : null}
               <div className="mt-6 flex flex-col gap-3">
                 <button
                   onClick={() => {
                     saveDraftBeforeNavigate();
-                    router.push("/data-sources");
+                    router.push("/data-sources?returnTo=/onboarding");
                   }}
                   className="rounded-xl border border-cyan-500/40 px-5 py-3 font-medium text-cyan-200 transition hover:border-cyan-400 hover:bg-cyan-500/10"
                 >
-                  配置数据源
+                  现在去配置数据源
                 </button>
                 <button
                   onClick={handleComplete}
@@ -302,7 +320,7 @@ export default function OnboardingPage() {
               <h2 className="text-lg font-medium text-zinc-100">填写建议</h2>
               <ul className="mt-4 space-y-3">
                 <li>公司信息尽量写业务语言，便于后续 AI 生成更贴近场景的分析建议。</li>
-                <li>数据源统一去独立页面配置，可以连续补充多个来源。</li>
+                <li>数据源不是必填项，可以先完成初始化，后续再去独立页面补充。</li>
                 <li>分析偏好会直接影响默认大屏和告警的方向。</li>
               </ul>
             </section>
