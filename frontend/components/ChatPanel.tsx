@@ -9,10 +9,12 @@ import { saveDashboard } from "@/lib/dashboard-store";
 import { DASHBOARD_TEMPLATES } from "@/lib/templates";
 import { DEFAULT_DASHBOARD_DATA, mapSampleToDashboard } from "@/lib/data-mapper";
 import { getCurrentUser } from "@/lib/user-store";
+import DashboardView from "@/components/DashboardView";
 import type {
   ChatMessage,
   CompanyProfile,
   DashboardData,
+  DashboardSection,
   DashboardTemplateId,
 } from "@/lib/types";
 
@@ -101,6 +103,53 @@ function formatFrequency(freq?: string): string {
     realtime: "实时",
   };
   return map[freq] || freq;
+}
+
+/** 从 AI 回复内容中提取 dashboard_config JSON 块 */
+function extractDashboardConfig(content: string): { sections: DashboardSection[]; title?: string } | null {
+  const regex = /```dashboard_config\s*\n([\s\S]*?)\n```/;
+  const match = regex.exec(content);
+  if (!match) return null;
+  try {
+    const config = JSON.parse(match[1]);
+    if (config.sections && Array.isArray(config.sections)) {
+      return { sections: config.sections, title: config.title };
+    }
+  } catch {
+    // JSON 解析失败
+  }
+  return null;
+}
+
+/** 从内容中移除 dashboard_config 代码块 */
+function removeDashboardConfigBlock(content: string): string {
+  return content.replace(/```dashboard_config\s*\n[\s\S]*?\n```/g, "").trim();
+}
+
+/** 内联大屏预览组件 */
+function InlineDashboardPreview({ content }: { content: string }) {
+  const config = extractDashboardConfig(content);
+  if (!config) return null;
+
+  return (
+    <div className="mt-3 rounded-xl border border-indigo-500/20 bg-gradient-to-br from-slate-900/80 via-[#0f1020] to-black overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-white/5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+          <span className="text-xs font-medium text-zinc-300">
+            {config.title || "AI 生成大屏"}
+          </span>
+          <span className="text-[10px] text-zinc-500">{config.sections.length} 个区块</span>
+        </div>
+        <span className="text-[10px] text-zinc-500 px-2 py-0.5 rounded-full bg-white/5 border border-white/10">
+          预览
+        </span>
+      </div>
+      <div className="p-3">
+        <DashboardView sections={config.sections} />
+      </div>
+    </div>
+  );
 }
 
 export default function ChatPanel({
@@ -498,11 +547,14 @@ export default function ChatPanel({
                 {m.role === "user" ? (
                   <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{m.content}</pre>
                 ) : (
-                  <div className="prose-chat prose-invert max-w-none text-sm leading-relaxed">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-                      {m.content}
-                    </ReactMarkdown>
-                  </div>
+                  <>
+                    <div className="prose-chat prose-invert max-w-none text-sm leading-relaxed">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                        {removeDashboardConfigBlock(m.content)}
+                      </ReactMarkdown>
+                    </div>
+                    <InlineDashboardPreview content={m.content} />
+                  </>
                 )}
               </div>
             </div>
