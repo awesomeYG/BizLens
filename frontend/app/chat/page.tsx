@@ -21,13 +21,13 @@ export default function ChatPage() {
   if (!ready) return <div className="min-h-screen bg-zinc-950" />;
 
   return (
-    <div className="h-screen flex flex-col bg-zinc-950 relative overflow-auto">
+    <div className="min-h-screen flex flex-col bg-zinc-950 relative overflow-hidden">
       {/* 背景装饰 */}
       <div className="pointer-events-none absolute inset-0">
         {/* 左上光晕 */}
-        <div className="absolute -top-32 -left-32 w-96 h-96 bg-indigo-600/[0.04] rounded-full blur-3xl" />
+        <div className="absolute top-0 left-0 w-80 h-80 bg-indigo-600/[0.04] rounded-full blur-3xl" />
         {/* 右下光晕 */}
-        <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-purple-600/[0.03] rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-purple-600/[0.03] rounded-full blur-3xl" />
         {/* 微网格 */}
         <div className="absolute inset-0 bg-grid opacity-30" />
       </div>
