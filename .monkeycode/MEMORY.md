@@ -154,3 +154,17 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 默认导航项：AI 对话、数据源、报表、告警 + 集成（紫色按钮）+ 设置（齿轮图标）+ 退出
   - 当前路径自动高亮对应导航项（indigo 高亮样式）
   - 品牌名统一为 "BizLens"（之前首页用 "DataMind"、其他页面混用 "BizLens"/"AI BI"）
+
+### 数据大屏模板引擎架构
+- Date: 2026-03-24
+- Context: Agent 在执行数据大屏模板重构时发现
+- Category: 代码结构
+- Instructions:
+  - 模板配置定义在 `frontend/lib/dashboard-templates.ts`，包含 8 个行业预置模板 + 1 个自定义模板
+  - 通用渲染引擎为 `frontend/components/dashboard/SectionRenderer.tsx`，根据 `section.type` 渲染对应图表
+  - `DashboardView.tsx` 已重构为配置驱动，支持 3 种输入：template / sections / 旧版 config（向后兼容）
+  - 泛化数据模型定义在 `frontend/lib/types.ts`：SectionData、KpiItem、SeriesData、PieItem、FunnelItem 等
+  - 新增模板只需在 `dashboard-templates.ts` 中添加 JSON 配置，零代码
+  - 支持的区块类型：kpi、line、area、bar、pie、funnel、ranking、gauge、table
+  - AI 对话中用户说"生成大屏"时，AI 输出 `dashboard_config` JSON 块，ChatPanel 自动解析并内联预览
+  - 旧的 `frontend/lib/templates.ts` 已改为重导出 `dashboard-templates.ts`，保持向后兼容
