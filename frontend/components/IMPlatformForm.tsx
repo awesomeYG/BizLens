@@ -1,6 +1,7 @@
 "use client";
 
 import { IM_PLATFORMS_LIST, type IMPlatformType, type IMConfigCreateRequest } from "@/lib/im";
+import { useEffect, useRef, useState } from "react";
 
 interface IMPlatformFormProps {
   editingId: string | null;
@@ -20,6 +21,20 @@ export default function IMPlatformForm({
   onClose,
 }: IMPlatformFormProps) {
   const selectedPlatform = IM_PLATFORMS_LIST.find((p) => p.type === formData.type);
+  const [typeMenuOpen, setTypeMenuOpen] = useState(false);
+  const typeMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (typeMenuRef.current && !typeMenuRef.current.contains(event.target as Node)) {
+        setTypeMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center px-4 py-8 sm:px-6 z-50 animate-fade-in overflow-y-auto">
@@ -48,26 +63,93 @@ export default function IMPlatformForm({
         {!editingId && (
           <div className="space-y-2">
             <label className="block text-xs text-zinc-500">选择平台类型</label>
-            <div className="relative">
-              <select
-                value={formData.type ?? ""}
-                onChange={(e) => onFormDataChange({ ...formData, type: e.target.value as IMPlatformType })}
-                className="w-full appearance-none rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200 shadow-inner focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition"
+            <div className="relative" ref={typeMenuRef}>
+              <button
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={typeMenuOpen}
+                onClick={() => setTypeMenuOpen((open) => !open)}
+                className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 ${
+                  typeMenuOpen
+                    ? "border-indigo-500/60 bg-zinc-900/70 shadow-[0_0_0_1px_rgba(99,102,241,0.25)]"
+                    : "border-zinc-800 bg-zinc-900/60 hover:border-zinc-700"
+                }`}
               >
-                <option value="" disabled>
-                  请选择要接入的平台
-                </option>
-                {IM_PLATFORMS_LIST.map((platform) => (
-                  <option key={platform.type} value={platform.type}>
-                    {platform.label} · {platform.description}
-                  </option>
-                ))}
-              </select>
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500">
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-950">
+                  {selectedPlatform ? (
+                    <span className="text-sm font-bold" style={{ color: selectedPlatform.color }}>
+                      {selectedPlatform.label.charAt(0)}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-zinc-500">IM</span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[15px] font-medium text-zinc-100">
+                    {selectedPlatform ? selectedPlatform.label : "请选择要接入的平台"}
+                  </div>
+                  <div className="truncate text-xs text-zinc-500">
+                    {selectedPlatform ? selectedPlatform.description : "钉钉 / 飞书 / 企业微信 / Slack / Telegram / Discord"}
+                  </div>
+                </div>
+                <svg
+                  className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-200 ${typeMenuOpen ? "rotate-180 text-indigo-400" : ""}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
                   <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-              </span>
+              </button>
+
+              {typeMenuOpen ? (
+                <div
+                  role="listbox"
+                  className="absolute z-20 mt-2 max-h-[18rem] w-full overflow-auto rounded-xl border border-zinc-800/80 bg-zinc-950/95 py-1 shadow-2xl shadow-black/60 ring-1 ring-white/[0.05]"
+                >
+                  {IM_PLATFORMS_LIST.map((platform) => {
+                    const selected = platform.type === formData.type;
+                    return (
+                      <button
+                        key={platform.type}
+                        type="button"
+                        role="option"
+                        aria-selected={selected}
+                        onClick={() => {
+                          onFormDataChange({ ...formData, type: platform.type as IMPlatformType });
+                          setTypeMenuOpen(false);
+                        }}
+                        className={`flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition ${
+                          selected
+                            ? "bg-indigo-500/10 text-indigo-100"
+                            : "text-zinc-100 hover:bg-white/5"
+                        }`}
+                      >
+                        <span
+                          className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800"
+                          style={{ backgroundColor: `${platform.color}15` }}
+                        >
+                          <span className="text-sm font-bold" style={{ color: platform.color }}>
+                            {platform.label.charAt(0)}
+                          </span>
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium">{platform.label}</div>
+                          <div className="truncate text-xs text-zinc-500">{platform.description}</div>
+                        </div>
+                        {selected ? (
+                          <svg className="h-4 w-4 shrink-0 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <span className="h-4 w-4" aria-hidden />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2 text-[11px] text-zinc-500">
               {IM_PLATFORMS_LIST.map((platform) => (
