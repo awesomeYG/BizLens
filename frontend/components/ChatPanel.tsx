@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import { saveDashboard } from "@/lib/dashboard-store";
+import { createDashboardInstance } from "@/lib/dashboard-store";
 import { DASHBOARD_TEMPLATES } from "@/lib/templates";
 import { DEFAULT_DASHBOARD_DATA, mapSampleToDashboard } from "@/lib/data-mapper";
 import { getCurrentUser } from "@/lib/user-store";
@@ -131,8 +131,14 @@ function removeDashboardConfigBlock(content: string): string {
     .trim();
 }
 
-/** 内联大屏预览组件 */
-function InlineDashboardPreview({ content }: { content: string }) {
+/** 内联大屏预览组件（附带保存入口） */
+function InlineDashboardPreview({
+  content,
+  onSave,
+}: {
+  content: string;
+  onSave?: (payload: { title?: string; sections: DashboardSection[] }) => void;
+}) {
   const config = extractDashboardConfig(content);
   if (!config) return null;
 
@@ -146,9 +152,18 @@ function InlineDashboardPreview({ content }: { content: string }) {
           </span>
           <span className="text-[10px] text-zinc-500">{config.sections.length} 个区块</span>
         </div>
-        <span className="text-[10px] text-zinc-500 px-2 py-0.5 rounded-full bg-white/5 border border-white/10">
-          预览
-        </span>
+        {onSave ? (
+          <button
+            onClick={() => onSave({ title: config.title, sections: config.sections })}
+            className="text-[11px] text-indigo-100 px-3 py-1 rounded-lg bg-indigo-500/20 border border-indigo-500/30 hover:bg-indigo-500/30"
+          >
+            保存为大屏
+          </button>
+        ) : (
+          <span className="text-[10px] text-zinc-500 px-2 py-0.5 rounded-full bg-white/5 border border-white/10">
+            预览
+          </span>
+        )}
       </div>
       <div className="p-3">
         <DashboardView sections={config.sections} />
@@ -180,6 +195,7 @@ export default function ChatPanel({
     DASHBOARD_TEMPLATES[0]?.id ?? "sales"
   );
   const [dashboardTitle, setDashboardTitle] = useState("AI 数据大屏");
+  const [lastDashboardSections, setLastDashboardSections] = useState<DashboardSection[]>([]);
   const [dataSourceLabel, setDataSourceLabel] = useState<string | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; summary?: string }[]>([]);
   const [analysisEvaluation, setAnalysisEvaluation] = useState<AnalysisEvaluation | null>(null);
@@ -281,6 +297,8 @@ export default function ChatPanel({
     msgList: { role: string; content: string }[],
     appendUser = true
   ) => {
+    // 将最新的大屏 sections 作为上下文传给后端，便于 AI 增量生成
+    const dashboardContext = lastDashboardSections.length > 0 ? { sections: lastDashboardSections } : undefined;
     const assistantMsgId = crypto.randomUUID();
 
     const createAlertFromResponse = async (rawContent: string) => {
@@ -501,13 +519,15 @@ export default function ChatPanel({
         method: "POST",
         headers,
         signal: abortController.signal,
-        body: JSON.stringify({
-          messages: msgList,
-          dataSummary: dataSummary || undefined,
-          dashboardData: draftData,
-          companyProfile,
-        }),
-      });
+          body: JSON.stringify({
+            messages: msgList,
+            dataSummary: dataSummary || undefined,
+            dashboardData: draftData,
+            dashboardContext,
+            companyProfile,
+          }),
+        });
+
 
       const contentType = res.headers.get("content-type") || "";
 
@@ -640,20 +660,20 @@ export default function ChatPanel({
     sendToAI(newMessages);
   };
 
-  const handleGenerateDashboard = () => {
+  const handleGenerateDashboard = async () => {
     const template =
       DASHBOARD_TEMPLATES.find((t) => t.id === selectedTemplate) || DASHBOARD_TEMPLATES[0];
     if (!template) return;
-    const id = crypto.randomUUID();
-    saveDashboard({
-      id,
-      title: dashboardTitle || template.name,
-      templateId: template.id,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      data: draftData,
-    });
-    router.push(`/dashboards?id=${id}`);
+    try {
+      const saved = await createDashboardInstance({
+        title: dashboardTitle || template.name,
+        templateId: template.id,
+        sections: template.sections || [],
+      });
+      router.push(`/dashboards?id=${saved.id}`);
+    } catch (err) {
+      console.error("保存大屏失败", err);
+    }
   };
 
   const handleKpiChange = (
@@ -712,13 +732,52 @@ export default function ChatPanel({
                 ) : (
                   <>
                     <div className="prose-chat prose-invert max-w-full min-w-0 overflow-x-auto text-sm leading-relaxed">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-                        {removeDashboardConfigBlock(m.content)}
-                      </ReactMarkdown>
-                    </div>
-                    <InlineDashboardPreview content={m.content} />
-                  </>
-                )}
+                     <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                         {removeDashboardConfigBlock(m.content)}
+                       </ReactMarkdown>
+                     </div>
+                    <InlineDashboardPreview
+                      content={m.content}
+                      onSave={async (payload) => {
+                        try {
+                          const saved = await createDashboardInstance({
+                            title: payload.title || dashboardTitle,
+                            sections: payload.sections,
+                          });
+                          setLastDashboardSections(payload.sections);
+                          setMessages((prev) =>
+                            prev.map((x) =>
+                              x.id === m.id
+                                ? {
+                                    ...x,
+                                    content:
+                                      removeDashboardConfigBlock(x.content) +
+                                      `\n\n[check] 大屏「${saved.title}」已保存，可前往 /dashboards?id=${saved.id} 查看。`,
+                                  }
+                                : x
+                            )
+                          );
+                        } catch (err) {
+                          setMessages((prev) =>
+                            prev.map((x) =>
+                              x.id === m.id
+                                ? {
+                                    ...x,
+                                    content:
+                                      removeDashboardConfigBlock(x.content) +
+                                      `\n\n[error] 保存大屏失败：${err instanceof Error ? err.message : "未知错误"}`,
+                                  }
+                                : x
+                            )
+                          );
+                        }
+                      }}
+                    />
+                   </>
+                 ) : (
+                   <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">{m.content}</pre>
+                 )}
+
               </div>
             </div>
           ))}

@@ -4,91 +4,107 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import DashboardView from "./DashboardView";
 import DashboardThumbnail from "./DashboardThumbnail";
-import { getDashboards, saveDashboard, deleteDashboard } from "@/lib/dashboard-store";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import DashboardView from "./DashboardView";
+import DashboardThumbnail from "./DashboardThumbnail";
+import { listDashboards, createDashboardInstance, deleteDashboard, type DashboardInstanceView } from "@/lib/dashboard-store";
 import { DASHBOARD_TEMPLATES } from "@/lib/templates";
-import { DEFAULT_DASHBOARD_DATA } from "@/lib/data-mapper";
-import type { DashboardConfig } from "@/lib/types";
 
 export default function DashboardTabs() {
   const searchParams = useSearchParams();
   const idFromUrl = searchParams.get("id");
-  const [dashboards, setDashboards] = useState<DashboardConfig[]>(() =>
-    getDashboards()
-  );
-  const [activeId, setActiveId] = useState<string | null>(
-    idFromUrl ?? dashboards[0]?.id ?? null
-  );
+  const [dashboards, setDashboards] = useState<DashboardInstanceView[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (idFromUrl && getDashboards().some((d) => d.id === idFromUrl)) {
-      setActiveId(idFromUrl);
-    }
+    const bootstrap = async () => {
+      setLoading(true);
+      const data = await listDashboards().catch(() => []);
+      setDashboards(data);
+      if (idFromUrl && data.some((d) => d.id === idFromUrl)) {
+        setActiveId(idFromUrl);
+      } else {
+        setActiveId(data[0]?.id ?? null);
+      }
+      setLoading(false);
+    };
+    bootstrap();
   }, [idFromUrl]);
-  const [showNewModal, setShowNewModal] = useState(false);
 
   const active = dashboards.find((d) => d.id === activeId);
 
-  const addDashboard = (templateId: string) => {
-    const id = crypto.randomUUID();
+  const addDashboard = async (templateId: string) => {
     const template = DASHBOARD_TEMPLATES.find((t) => t.id === templateId);
-    const config: DashboardConfig = {
-      id,
-      title: template?.name || "新大屏",
-      templateId,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      data: { ...DEFAULT_DASHBOARD_DATA },
-    };
-    saveDashboard(config);
-    setDashboards(getDashboards());
-    setActiveId(id);
+    if (!template) return;
+    setLoading(true);
+    const saved = await createDashboardInstance({
+      title: template.name,
+      templateId: template.id,
+      sections: template.sections || [],
+    }).catch(() => null);
+    const data = await listDashboards().catch(() => []);
+    setDashboards(data);
+    setActiveId(saved?.id || data[0]?.id || null);
     setShowNewModal(false);
+    setLoading(false);
   };
 
-  const removeDashboard = (id: string, e: React.MouseEvent) => {
+  const removeDashboard = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    deleteDashboard(id);
-    const next = getDashboards();
+    setLoading(true);
+    await deleteDashboard(id).catch(() => undefined);
+    const next = await listDashboards().catch(() => []);
     setDashboards(next);
     setActiveId(next[0]?.id ?? null);
+    setLoading(false);
   };
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex flex-col border-b border-slate-700/50 bg-slate-800/80">
         <div className="flex items-center gap-1 px-4 py-2 overflow-x-auto">
-        {dashboards.map((d) => (
-          <div
-            key={d.id}
-            onClick={() => setActiveId(d.id)}
-            className={`group flex items-center gap-2 px-4 py-2 rounded-t-lg cursor-pointer min-w-[140px] max-w-[200px] ${
-              activeId === d.id
-                ? "bg-slate-700 text-cyan-400"
-                : "bg-slate-800/50 text-slate-400 hover:bg-slate-700/50"
-            }`}
-          >
-            <span className="truncate text-sm font-medium">{d.title}</span>
-            <button
-              onClick={(e) => removeDashboard(d.id, e)}
-              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-slate-600 text-slate-400"
+          {dashboards.map((d) => (
+            <div
+              key={d.id}
+              onClick={() => setActiveId(d.id)}
+              className={`group flex items-center gap-2 px-4 py-2 rounded-t-lg cursor-pointer min-w-[140px] max-w-[200px] ${
+                activeId === d.id
+                  ? "bg-slate-700 text-cyan-400"
+                  : "bg-slate-800/50 text-slate-400 hover:bg-slate-700/50"
+              }`}
             >
-              ×
-            </button>
-          </div>
-        ))}
-        <button
-          onClick={() => setShowNewModal(true)}
-          className="px-4 py-2 rounded-t-lg bg-slate-800/50 text-slate-500 hover:bg-slate-700/50 hover:text-cyan-400 text-lg"
-        >
-          +
-        </button>
+              <span className="truncate text-sm font-medium">{d.title}</span>
+              <button
+                onClick={(e) => removeDashboard(d.id, e)}
+                className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-slate-600 text-slate-400"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() => setShowNewModal(true)}
+            className="px-4 py-2 rounded-t-lg bg-slate-800/50 text-slate-500 hover:bg-slate-700/50 hover:text-cyan-400 text-lg"
+          >
+            +
+          </button>
         </div>
         {dashboards.length > 0 && (
           <div className="flex gap-2 px-4 pb-2 overflow-x-auto">
             {dashboards.map((d) => (
               <DashboardThumbnail
                 key={d.id}
-                config={d}
+                config={{
+                  id: d.id,
+                  title: d.title,
+                  templateId: (d.templateId as any) || "custom",
+                  createdAt: d.createdAt,
+                  updatedAt: d.updatedAt,
+                  data: DEFAULT_DASHBOARD_DATA,
+                }}
                 active={activeId === d.id}
                 onClick={() => setActiveId(d.id)}
               />
@@ -112,7 +128,7 @@ export default function DashboardTabs() {
           </div>
         )}
         {active ? (
-          <DashboardView config={active} />
+          <DashboardView sections={active.sections} />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-slate-500">
             <p className="text-lg mb-4">暂无大屏</p>
