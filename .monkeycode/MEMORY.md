@@ -293,4 +293,6 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 分析偏好预设值定义在 `DEFAULT_COMPANY_PROFILE` 常量中（analysisFocuses + recommendedMetrics）
   - 当前预设：长亭科技 / 互联网 / 8人 / 全球 / 企业级 AI 开发平台 / 收支平衡 / 分析偏好：注册用户增量、用户粘度
   - MOCK_DATA（快速测试数据）也同步更新为相同配置
+  - `loginUser` 和 `syncCurrentUser` 已改造：对新用户（非同一人）主动使用 `EMPTY_COMPANY_INFO` 和 `DEFAULT_COMPANY_PROFILE` 而非 `undefined`，确保预设值在登录时即持久化到 localStorage
+  - `onboarding/page.tsx` 的 `useEffect` 中调用 `saveOnboardingDraft` 将预设值立即持久化，避免用户跳转到设置中心时数据丢失
   - 如需修改默认公司信息，编辑上述两个常量即可

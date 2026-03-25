@@ -10,6 +10,7 @@ import {
   finishOnboarding,
   getCurrentUser,
   completeOnboarding,
+  saveOnboardingDraft,
 } from "@/lib/user-store";
 import { getAccessToken } from "@/lib/auth/api";
 
@@ -35,9 +36,15 @@ export default function OnboardingPage() {
       return;
     }
 
-    setCompanyInfo(user.companyInfo ?? EMPTY_COMPANY_INFO);
-    setCompanyProfile(user.companyProfile ?? DEFAULT_COMPANY_PROFILE);
+    const effectiveCompanyInfo = user.companyInfo ?? EMPTY_COMPANY_INFO;
+    const effectiveCompanyProfile = user.companyProfile ?? DEFAULT_COMPANY_PROFILE;
+    setCompanyInfo(effectiveCompanyInfo);
+    setCompanyProfile(effectiveCompanyProfile);
     setDataSources(user.dataSources ?? []);
+
+    // 将预设值立即持久化到 localStorage，避免跳转设置中心时数据丢失
+    saveOnboardingDraft({ companyInfo: effectiveCompanyInfo, companyProfile: effectiveCompanyProfile });
+
     setReady(true);
 
     const syncDataSources = async () => {

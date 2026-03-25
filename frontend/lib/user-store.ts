@@ -123,9 +123,9 @@ export async function loginUser(email: string, password: string): Promise<UserSe
       accessToken: response.tokens.accessToken,
       refreshToken: response.tokens.refreshToken,
       tokenExpiresAt: Date.now() + response.tokens.expiresIn * 1000,
-      companyInfo: isSameUser ? existing?.companyInfo : undefined,
+      companyInfo: isSameUser ? existing?.companyInfo : EMPTY_COMPANY_INFO,
       dataSources: isSameUser ? existing?.dataSources : undefined,
-      companyProfile: isSameUser ? existing?.companyProfile : undefined,
+      companyProfile: isSameUser ? existing?.companyProfile : DEFAULT_COMPANY_PROFILE,
     };
     
     saveCurrentUser(user);
@@ -249,9 +249,9 @@ export async function syncCurrentUser(): Promise<UserSessionWithAuth | null> {
       isOnboarded: isSameUser ? inferredOnboarded : false,
       accessToken: getAccessToken() || undefined,
       refreshToken: getRefreshToken() || undefined,
-      companyInfo: isSameUser ? existing?.companyInfo : undefined,
+      companyInfo: isSameUser ? existing?.companyInfo : EMPTY_COMPANY_INFO,
       dataSources: isSameUser ? existing?.dataSources : undefined,
-      companyProfile: isSameUser ? existing?.companyProfile : undefined,
+      companyProfile: isSameUser ? existing?.companyProfile : DEFAULT_COMPANY_PROFILE,
     };
     
     saveCurrentUser(session);
