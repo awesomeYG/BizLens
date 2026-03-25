@@ -543,3 +543,25 @@ body {
   border-top: 1px solid rgba(63, 63, 70, 0.5);
   margin: 1em 0;
 }
+
+/* 思考过程折叠区域 */
+.thinking-block {
+  border-bottom: 1px solid rgba(63, 63, 70, 0.3);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.thinking-block .thinking-spinner {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-width: 1.5px;
+}
+
+.thinking-block .thinking-content .prose-chat p {
+  margin-bottom: 0.25em;
+}
+
+.thinking-block .thinking-content .prose-chat p:last-child {
+  margin-bottom: 0;
+}

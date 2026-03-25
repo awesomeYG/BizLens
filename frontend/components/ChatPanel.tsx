@@ -10,6 +10,7 @@ import { DASHBOARD_TEMPLATES } from "@/lib/templates";
 import { DEFAULT_DASHBOARD_DATA, mapSampleToDashboard } from "@/lib/data-mapper";
 import { getCurrentUser } from "@/lib/user-store";
 import DashboardView from "@/components/DashboardView";
+import { parseThinkContent, ThinkingBlock } from "@/components/ThinkingBlock";
 import type {
   ChatMessage,
   CompanyProfile,
@@ -837,11 +838,22 @@ export default function ChatPanel({
                   <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">{m.content}</pre>
                 ) : (
                   <>
-                    <div className="prose-chat prose-invert max-w-full min-w-0 overflow-x-auto text-sm leading-relaxed">
-                     <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-                         {removeDashboardConfigBlock(m.content)}
-                       </ReactMarkdown>
-                     </div>
+                    {(() => {
+                      const cleaned = removeDashboardConfigBlock(m.content);
+                      const { thinking, content, isThinking } = parseThinkContent(cleaned);
+                      return (
+                        <>
+                          <ThinkingBlock thinking={thinking} isThinking={isThinking} />
+                          {content && (
+                            <div className="prose-chat prose-invert max-w-full min-w-0 overflow-x-auto text-sm leading-relaxed">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                                {content}
+                              </ReactMarkdown>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                     <InlineDashboardPreview
                       content={m.content}
                       onSave={async (payload) => {

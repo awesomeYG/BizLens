@@ -11,6 +11,7 @@ import { createDashboardInstance } from "@/lib/dashboard-store";
 import { detectUserIntent } from "@/lib/intent-detection";
 import type { ChatConversation, ChatConversationSummary, ChatMessage, DashboardSection } from "@/lib/types";
 import AppHeader from "@/components/AppHeader";
+import { parseThinkContent, ThinkingBlock } from "@/components/ThinkingBlock";
 
 interface ChatPanelProps {
   onDataSummaryChange?: (summary: string) => void;
@@ -268,11 +269,24 @@ function MessageBubble({
           {isUser ? (
             <p className="whitespace-pre-wrap break-words">{message.content}</p>
           ) : (
-            <div className="prose-chat prose-invert max-w-full min-w-0 overflow-x-auto break-all">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-                {removeActionBlocks(message.content)}
-              </ReactMarkdown>
-            </div>
+            <>
+              {(() => {
+                const cleaned = removeActionBlocks(message.content);
+                const { thinking, content, isThinking } = parseThinkContent(cleaned);
+                return (
+                  <>
+                    <ThinkingBlock thinking={thinking} isThinking={isThinking} />
+                    {content && (
+                      <div className="prose-chat prose-invert max-w-full min-w-0 overflow-x-auto break-all">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                          {content}
+                        </ReactMarkdown>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </>
           )}
 
           {!isUser ? <InlineDashboardPreview content={message.content} onSave={onSaveDashboard} /> : null}
