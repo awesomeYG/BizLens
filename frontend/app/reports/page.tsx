@@ -69,7 +69,11 @@ export default function ReportsPage() {
 
   useEffect(() => {
     const user = getCurrentUser();
-    if (!user?.isOnboarded) {
+    if (!user) {
+      router.replace("/auth/login");
+      return;
+    }
+    if (!user.isOnboarded) {
       router.replace("/onboarding");
       return;
     }
