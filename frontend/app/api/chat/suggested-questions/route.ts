@@ -420,7 +420,7 @@ export async function POST(req: NextRequest) {
       const cleaned = rawContent.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "").trim();
       const parsed = JSON.parse(cleaned);
       if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string")) {
-        questions = parsed.slice(0, 6);
+        questions = parsed.filter((q) => q.trim().length > 0).slice(0, 6);
       } else {
         questions = DEFAULT_QUESTIONS;
       }

@@ -360,7 +360,7 @@ function WelcomeScreen({ questions, onSelect, loading }: { questions: string[]; 
             ))
           : displayQuestions.map((q, i) => (
               <button
-                key={q}
+                key={`suggestion-${i}`}
                 onClick={() => onSelect(q)}
                 className="group relative p-4 rounded-xl bg-zinc-900/40 border border-zinc-800/40 text-left text-sm text-zinc-400 hover:text-zinc-100 hover:border-indigo-500/30 hover:bg-zinc-800/40 transition-all duration-300 hover-lift overflow-hidden"
                 style={{ animationDelay: `${i * 80}ms` }}

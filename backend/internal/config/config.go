@@ -41,7 +41,7 @@ func Load() *Config {
 
 func (c *Config) DSN() string {
 	if c.UseSQLite {
-		return "/workspace/server/ai_bi.db"
+		return "file:/workspace/server/ai_bi.db?cache=shared"
 	}
 	return fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",

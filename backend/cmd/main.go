@@ -42,7 +42,7 @@ func main() {
 
 	if cfg.UseSQLite {
 		log.Println("使用 SQLite 数据库...")
-		db, err = gorm.Open(sqlite.Open("file:/tmp/ai_bi.db?cache=shared"), &gorm.Config{})
+		db, err = gorm.Open(sqlite.Open(cfg.DSN()), &gorm.Config{})
 	} else {
 		log.Println("使用 PostgreSQL 数据库...")
 		db, err = gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
