@@ -105,6 +105,10 @@ func main() {
 	chatService := service.NewChatService(db)
 	chatHandler := handler.NewChatHandler(chatService)
 
+	// 钉钉机器人双向对话服务
+	dingtalkBotService := service.NewDingtalkBotService(db, imService)
+	dingtalkCallbackHandler := handler.NewDingtalkCallbackHandler(dingtalkBotService)
+
 	// 初始化系统预置模板
 	if err := dashboardTemplateService.InitSystemTemplates(); err != nil {
 		log.Printf("警告：系统模板初始化失败：%v", err)
@@ -132,6 +136,9 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
 	})
+
+	// 钉钉机器人回调（免鉴权，由钉钉服务器调用）
+	mux.HandleFunc("/api/webhook/dingtalk", dingtalkCallbackHandler.HandleCallback)
 
 	// 认证路由：/api/auth/[register|login|logout|refresh|me|change-password]
 	mux.HandleFunc("/api/auth/", func(w http.ResponseWriter, r *http.Request) {
