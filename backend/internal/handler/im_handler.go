@@ -40,6 +40,33 @@ func parseTenantID(r *http.Request) string {
 	return ""
 }
 
+// parseTenantIDFromPath 从路径解析 /api/tenants/{id}/...
+func parseTenantIDFromPath(r *http.Request) string {
+	parts := strings.Split(r.URL.Path, "/")
+	for i, p := range parts {
+		if p == "tenants" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	return ""
+}
+
+// parseTenantIDStrict 对需要强租户一致性的接口做校验：
+// - 若 JWT 中 tenantID 与 URL 中 tenantID 同时存在且不一致，则返回 403
+// - 其余情况回落到 parseTenantID 的既有解析逻辑
+func parseTenantIDStrict(r *http.Request) (string, int, string) {
+	pathTenantID := parseTenantIDFromPath(r)
+	if jwtTenantID, ok := r.Context().Value("tenantID").(string); ok && jwtTenantID != "" && pathTenantID != "" && jwtTenantID != pathTenantID {
+		return "", http.StatusForbidden, "租户不匹配"
+	}
+
+	tenantID := parseTenantID(r)
+	if tenantID == "" {
+		return "", http.StatusBadRequest, "缺少租户 ID"
+	}
+	return tenantID, 0, ""
+}
+
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -52,9 +79,9 @@ func writeError(w http.ResponseWriter, status int, message string) {
 
 // ListIMConfigs GET /api/tenants/{id}/im-configs
 func (h *IMHandler) ListIMConfigs(w http.ResponseWriter, r *http.Request) {
-	tenantID := parseTenantID(r)
-	if tenantID == "" {
-		writeError(w, http.StatusBadRequest, "缺少租户 ID")
+	tenantID, code, msg := parseTenantIDStrict(r)
+	if code != 0 {
+		writeError(w, code, msg)
 		return
 	}
 
@@ -68,9 +95,9 @@ func (h *IMHandler) ListIMConfigs(w http.ResponseWriter, r *http.Request) {
 
 // GetIMConfig GET /api/tenants/{id}/im-configs/{configId}
 func (h *IMHandler) GetIMConfig(w http.ResponseWriter, r *http.Request) {
-	tenantID := parseTenantID(r)
-	if tenantID == "" {
-		writeError(w, http.StatusBadRequest, "缺少租户 ID")
+	tenantID, code, msg := parseTenantIDStrict(r)
+	if code != 0 {
+		writeError(w, code, msg)
 		return
 	}
 
@@ -98,9 +125,9 @@ type CreateIMConfigRequest struct {
 
 // CreateIMConfig POST /api/tenants/{id}/im-configs
 func (h *IMHandler) CreateIMConfig(w http.ResponseWriter, r *http.Request) {
-	tenantID := parseTenantID(r)
-	if tenantID == "" {
-		writeError(w, http.StatusBadRequest, "缺少租户 ID")
+	tenantID, code, msg := parseTenantIDStrict(r)
+	if code != 0 {
+		writeError(w, code, msg)
 		return
 	}
 
@@ -134,9 +161,9 @@ func (h *IMHandler) CreateIMConfig(w http.ResponseWriter, r *http.Request) {
 
 // UpdateIMConfig PUT /api/tenants/{id}/im-configs/{configId}
 func (h *IMHandler) UpdateIMConfig(w http.ResponseWriter, r *http.Request) {
-	tenantID := parseTenantID(r)
-	if tenantID == "" {
-		writeError(w, http.StatusBadRequest, "缺少租户 ID")
+	tenantID, code, msg := parseTenantIDStrict(r)
+	if code != 0 {
+		writeError(w, code, msg)
 		return
 	}
 
@@ -164,9 +191,9 @@ func (h *IMHandler) UpdateIMConfig(w http.ResponseWriter, r *http.Request) {
 
 // DeleteIMConfig DELETE /api/tenants/{id}/im-configs/{configId}
 func (h *IMHandler) DeleteIMConfig(w http.ResponseWriter, r *http.Request) {
-	tenantID := parseTenantID(r)
-	if tenantID == "" {
-		writeError(w, http.StatusBadRequest, "缺少租户 ID")
+	tenantID, code, msg := parseTenantIDStrict(r)
+	if code != 0 {
+		writeError(w, code, msg)
 		return
 	}
 
@@ -183,9 +210,9 @@ func (h *IMHandler) DeleteIMConfig(w http.ResponseWriter, r *http.Request) {
 
 // TestIMConfig POST /api/tenants/{id}/im-configs/{configId}/test
 func (h *IMHandler) TestIMConfig(w http.ResponseWriter, r *http.Request) {
-	tenantID := parseTenantID(r)
-	if tenantID == "" {
-		writeError(w, http.StatusBadRequest, "缺少租户 ID")
+	tenantID, code, msg := parseTenantIDStrict(r)
+	if code != 0 {
+		writeError(w, code, msg)
 		return
 	}
 
@@ -222,9 +249,9 @@ type SendNotificationRequest struct {
 
 // SendNotification POST /api/tenants/{id}/notifications/send
 func (h *IMHandler) SendNotification(w http.ResponseWriter, r *http.Request) {
-	tenantID := parseTenantID(r)
-	if tenantID == "" {
-		writeError(w, http.StatusBadRequest, "缺少租户 ID")
+	tenantID, code, msg := parseTenantIDStrict(r)
+	if code != 0 {
+		writeError(w, code, msg)
 		return
 	}
 
@@ -259,9 +286,9 @@ func (h *IMHandler) SendNotification(w http.ResponseWriter, r *http.Request) {
 
 // ListNotifications GET /api/tenants/{id}/notifications
 func (h *IMHandler) ListNotifications(w http.ResponseWriter, r *http.Request) {
-	tenantID := parseTenantID(r)
-	if tenantID == "" {
-		writeError(w, http.StatusBadRequest, "缺少租户 ID")
+	tenantID, code, msg := parseTenantIDStrict(r)
+	if code != 0 {
+		writeError(w, code, msg)
 		return
 	}
 

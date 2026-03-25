@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { request } from "@/lib/auth/api";
 import { getCurrentUser } from "@/lib/user-store";
-import { IM_PLATFORMS_LIST, type IMPlatformConfig, type IMPlatformType, type IMConfigCreateRequest } from "@/lib/im";
+import { IM_PLATFORMS_LIST, type IMPlatformConfig, type IMConfigCreateRequest } from "@/lib/im";
 import IMPlatformCard from "@/components/IMPlatformCard";
 import IMPlatformForm from "@/components/IMPlatformForm";
 import AppHeader from "@/components/AppHeader";
