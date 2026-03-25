@@ -111,7 +111,6 @@ export async function loginUser(email: string, password: string): Promise<UserSe
 
     const existing = getCurrentUser();
     const isSameUser = existing?.id === response.user.id;
-    const inferredOnboarded = hasCompletedOnboarding(existing);
     
     const user: UserSessionWithAuth = {
       id: response.user.id,
@@ -119,7 +118,7 @@ export async function loginUser(email: string, password: string): Promise<UserSe
       name: response.user.name,
       email: response.user.email,
       createdAt: new Date(response.user.createdAt).getTime(),
-      isOnboarded: isSameUser ? inferredOnboarded : false,
+      isOnboarded: true,
       accessToken: response.tokens.accessToken,
       refreshToken: response.tokens.refreshToken,
       tokenExpiresAt: Date.now() + response.tokens.expiresIn * 1000,
@@ -239,14 +238,13 @@ export async function syncCurrentUser(): Promise<UserSessionWithAuth | null> {
     const user = await fetchCurrentUser();
     const existing = getCurrentUser();
     const isSameUser = existing?.id === user.id;
-    const inferredOnboarded = hasCompletedOnboarding(existing);
     const session: UserSessionWithAuth = {
       id: user.id,
       tenantId: user.tenantId,
       name: user.name,
       email: user.email,
       createdAt: new Date(user.createdAt).getTime(),
-      isOnboarded: isSameUser ? inferredOnboarded : false,
+      isOnboarded: true,
       accessToken: getAccessToken() || undefined,
       refreshToken: getRefreshToken() || undefined,
       companyInfo: isSameUser ? existing?.companyInfo : EMPTY_COMPANY_INFO,

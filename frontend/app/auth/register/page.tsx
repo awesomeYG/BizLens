@@ -74,7 +74,7 @@ export default function RegisterPage() {
         name: data.user.name,
         email: data.user.email,
         createdAt: new Date(data.user.createdAt).getTime(),
-        isOnboarded: false,
+        isOnboarded: true,
       };
       
       saveCurrentUser(user);

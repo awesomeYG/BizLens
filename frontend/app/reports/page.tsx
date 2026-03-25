@@ -73,10 +73,6 @@ export default function ReportsPage() {
       router.replace("/auth/login");
       return;
     }
-    if (!user.isOnboarded) {
-      router.replace("/onboarding");
-      return;
-    }
     setTenantId(user.id?.split("@")[0] || "demo");
     setReady(true);
   }, [router]);

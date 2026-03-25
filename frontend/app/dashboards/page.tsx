@@ -41,10 +41,6 @@ function DashboardsContent() {
       router.replace("/auth/login");
       return;
     }
-    if (!user.isOnboarded) {
-      router.replace("/onboarding");
-      return;
-    }
     setReady(true);
   }, [router]);
 
