@@ -110,6 +110,13 @@ func main() {
 	dingtalkBotService := service.NewDingtalkBotService(db, imService)
 	dingtalkStreamService := service.NewDingtalkStreamService(db, imService, dingtalkBotService)
 
+	// 业务健康监控服务
+	baselineService := service.NewBaselineService(db)
+	anomalyService := service.NewAnomalyService(db, baselineService, imService)
+	dailySummaryService := service.NewDailySummaryService(db, anomalyService, imService)
+	schedulerService := service.NewSchedulerService(db, baselineService, anomalyService, dailySummaryService)
+	anomalyHandler := handler.NewAnomalyHandler(anomalyService)
+
 	// 初始化系统预置模板
 	if err := dashboardTemplateService.InitSystemTemplates(); err != nil {
 		log.Printf("警告：系统模板初始化失败：%v", err)
@@ -479,6 +486,20 @@ func main() {
 			return
 		}
 
+		// /api/tenants/{tenantId}/anomalies[/detect]
+		if len(parts) >= 2 && parts[1] == "anomalies" {
+			switch {
+			// GET /api/tenants/{id}/anomalies
+			case len(parts) == 2 && r.Method == http.MethodGet:
+				anomalyHandler.ListAnomalies(w, r)
+				return
+			// POST /api/tenants/{id}/anomalies/detect
+			case len(parts) == 3 && parts[2] == "detect" && r.Method == http.MethodPost:
+				anomalyHandler.TriggerDetection(w, r)
+				return
+			}
+		}
+
 		// /api/tenants/{tenantId}/chat-conversations[/{conversationId}]
 		if len(parts) >= 2 && parts[1] == "chat-conversations" {
 			chatHandler.HandleConversations(w, r)
@@ -590,6 +611,9 @@ func main() {
 			log.Printf("钉钉 Stream 客户端启动失败：%v", err)
 		}
 	}()
+
+	// 启动业务健康监控调度服务
+	schedulerService.Start()
 
 	// 启动服务
 	addr := fmt.Sprintf(":%s", cfg.Port)

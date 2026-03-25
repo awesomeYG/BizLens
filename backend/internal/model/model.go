@@ -57,19 +57,19 @@ const (
 
 // IMConfig IM 平台配置
 type IMConfig struct {
-	ID         string             `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
-	TenantID   string             `gorm:"type:varchar(50);not null;index" json:"tenantId"`
-	Type       IMPlatformType     `gorm:"size:50;not null" json:"type"`
-	Name       string             `gorm:"size:200;not null" json:"name"`
-	Enabled    bool               `gorm:"default:true" json:"enabled"`
-	WebhookURL string             `gorm:"size:500;not null" json:"webhookUrl"`
-	Secret     string             `gorm:"size:500" json:"secret,omitempty"`
+	ID         string         `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID   string         `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	Type       IMPlatformType `gorm:"size:50;not null" json:"type"`
+	Name       string         `gorm:"size:200;not null" json:"name"`
+	Enabled    bool           `gorm:"default:true" json:"enabled"`
+	WebhookURL string         `gorm:"size:500;not null" json:"webhookUrl"`
+	Secret     string         `gorm:"size:500" json:"secret,omitempty"`
 	// Keyword 钉钉自定义机器人「安全设置-自定义关键词」中配置的关键词；发送内容需包含该词，否则钉钉返回 errcode 310000
-	Keyword    string             `gorm:"size:100" json:"keyword,omitempty"`
-	Status     IMConnectionStatus `gorm:"size:50;default:'disconnected'" json:"status"`
-	CreatedAt  time.Time          `json:"createdAt"`
-	UpdatedAt  time.Time          `json:"updatedAt"`
-	DeletedAt  gorm.DeletedAt     `gorm:"index" json:"-"`
+	Keyword   string             `gorm:"size:100" json:"keyword,omitempty"`
+	Status    IMConnectionStatus `gorm:"size:50;default:'disconnected'" json:"status"`
+	CreatedAt time.Time          `json:"createdAt"`
+	UpdatedAt time.Time          `json:"updatedAt"`
+	DeletedAt gorm.DeletedAt     `gorm:"index" json:"-"`
 
 	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
 }
@@ -697,6 +697,75 @@ type ReportSection struct {
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
+// ============ 业务健康监控相关模型 ============
+
+// MetricBaseline 指标基线快照
+type MetricBaseline struct {
+	ID            string    `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID      string    `gorm:"type:varchar(50);not null;index:idx_baseline_tenant_metric" json:"tenantId"`
+	MetricID      string    `gorm:"type:varchar(50);not null;index:idx_baseline_tenant_metric" json:"metricId"`
+	Granularity   string    `gorm:"size:20;not null" json:"granularity"` // hourly/daily/weekly
+	PeriodKey     string    `gorm:"size:50;not null" json:"periodKey"`   // "2026-03-25" 或 "2026-03-25T14"
+	ExpectedValue float64   `json:"expectedValue"`                       // 期望值
+	StdDev        float64   `json:"stdDev"`                              // 标准差
+	UpperBound    float64   `json:"upperBound"`                          // 上界
+	LowerBound    float64   `json:"lowerBound"`                          // 下界
+	SampleCount   int       `json:"sampleCount"`                         // 样本数量
+	Method        string    `gorm:"size:50" json:"method"`               // moving_avg/percentile/stl
+	ComputedAt    time.Time `json:"computedAt"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
+// AnomalySeverity 异常严重度
+type AnomalySeverity string
+
+const (
+	SeverityInfo     AnomalySeverity = "info"
+	SeverityWarning  AnomalySeverity = "warning"
+	SeverityCritical AnomalySeverity = "critical"
+)
+
+// AnomalyStatus 异常状态
+type AnomalyStatus string
+
+const (
+	AnomalyOpen          AnomalyStatus = "open"
+	AnomalyAcknowledged  AnomalyStatus = "acknowledged"
+	AnomalyResolved      AnomalyStatus = "resolved"
+	AnomalyFalsePositive AnomalyStatus = "false_positive"
+)
+
+// AnomalyEvent 异常事件
+type AnomalyEvent struct {
+	ID            string          `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID      string          `gorm:"type:varchar(50);not null;index:idx_anomaly_tenant_time" json:"tenantId"`
+	MetricID      string          `gorm:"type:varchar(50);not null;index" json:"metricId"`
+	DetectedAt    time.Time       `gorm:"not null;index:idx_anomaly_tenant_time" json:"detectedAt"`
+	ActualValue   float64         `json:"actualValue"`
+	ExpectedValue float64         `json:"expectedValue"`
+	Deviation     float64         `json:"deviation"` // 偏离程度（倍标准差）
+	Severity      AnomalySeverity `gorm:"size:20;not null;index:idx_anomaly_status" json:"severity"`
+	Confidence    float64         `json:"confidence"`                           // 置信度 0-1
+	Direction     string          `gorm:"size:10" json:"direction"`             // up/down
+	RootCause     string          `gorm:"type:text" json:"rootCause,omitempty"` // JSON：根因分析结果
+	Status        AnomalyStatus   `gorm:"size:20;default:'open';index:idx_anomaly_status" json:"status"`
+	NotifiedAt    *time.Time      `json:"notifiedAt,omitempty"`
+	ResolvedAt    *time.Time      `json:"resolvedAt,omitempty"`
+	UserFeedback  string          `gorm:"size:50" json:"userFeedback,omitempty"` // helpful/not_helpful/false_alarm
+	CreatedAt     time.Time       `json:"createdAt"`
+}
+
+// DailySummary 每日业务摘要
+type DailySummary struct {
+	ID          string     `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID    string     `gorm:"type:varchar(50);not null;index:idx_summary_tenant_date" json:"tenantId"`
+	SummaryDate string     `gorm:"size:20;not null;index:idx_summary_tenant_date" json:"summaryDate"` // "2026-03-25"
+	HealthScore int        `json:"healthScore"`                                                       // 0-100
+	Content     string     `gorm:"type:text;not null" json:"content"`                                 // JSON：结构化摘要内容
+	SentAt      *time.Time `json:"sentAt,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+}
+
 // AutoMigrate 自动迁移所有表
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
@@ -739,5 +808,9 @@ func AutoMigrate(db *gorm.DB) error {
 		// 报表
 		&Report{},
 		&ReportSection{},
+		// 业务健康监控
+		&MetricBaseline{},
+		&AnomalyEvent{},
+		&DailySummary{},
 	)
 }
