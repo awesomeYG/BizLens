@@ -283,3 +283,14 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 使用延迟注入（SetDataDependencies）模式解决循环依赖问题
   - AnomalyService 中的 `DetectAnomaly` 自动使用 BaselineService 获取基线，结合实际值做偏离检测
   - 所有服务初始化完成后在 main.go 中调用 `SetDataDependencies` 注入依赖
+
+### 预设公司数据
+- Date: 2026-03-25
+- Context: 用户要求预设开发阶段默认公司信息，避免每次重新输入
+- Category: 环境配置
+- Instructions:
+  - 公司信息预设值定义在 `frontend/lib/user-store.ts` 的 `EMPTY_COMPANY_INFO` 常量中
+  - 分析偏好预设值定义在 `DEFAULT_COMPANY_PROFILE` 常量中（analysisFocuses + recommendedMetrics）
+  - 当前预设：长亭科技 / 互联网 / 8人 / 全球 / 企业级 AI 开发平台 / 收支平衡 / 分析偏好：注册用户增量、用户粘度
+  - MOCK_DATA（快速测试数据）也同步更新为相同配置
+  - 如需修改默认公司信息，编辑上述两个常量即可

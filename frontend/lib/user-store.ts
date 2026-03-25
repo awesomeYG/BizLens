@@ -20,18 +20,18 @@ import {
 const USER_STORAGE_KEY = "ai-bi-user-session";
 
 export const EMPTY_COMPANY_INFO: CompanyInfo = {
-  companyName: "",
-  industry: "",
-  size: "",
-  region: "",
-  businessModel: "",
-  coreGoals: "",
+  companyName: "长亭科技",
+  industry: "互联网",
+  size: "8人",
+  region: "全球",
+  businessModel: "卖一款企业级 AI 开发平台",
+  coreGoals: "实现收支平衡（支出主要是token消耗和人员工资）",
 };
 
 export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   summary: "",
-  analysisFocuses: ["收入增长趋势", "客户留存与复购", "利润结构优化"],
-  recommendedMetrics: ["营收", "毛利率", "复购率"],
+  analysisFocuses: ["注册用户增量", "用户粘度"],
+  recommendedMetrics: ["DAU", "新增注册用户数", "用户留存率", "复购率"],
 };
 
 function hasCompletedOnboarding(session: Partial<UserSession> | null | undefined): boolean {
@@ -265,30 +265,22 @@ export async function syncCurrentUser(): Promise<UserSessionWithAuth | null> {
 
 /**
  * Mock 数据 - 用于快速测试
- * 包含一家电商公司的完整配置
+ * 包含长亭科技公司的完整配置
  */
 export const MOCK_DATA = {
   companyInfo: {
-    companyName: "杭州智选电商有限公司",
-    industry: "电商零售",
-    size: "200-500 人",
-    region: "华东地区 + 东南亚",
-    businessModel: "B2C D2C 混合模式",
-    coreGoals: "提升复购率至 35%，优化库存周转至 15 天，降低获客成本 20%",
+    companyName: "长亭科技",
+    industry: "互联网",
+    size: "8人",
+    region: "全球",
+    businessModel: "卖一款企业级 AI 开发平台",
+    coreGoals: "实现收支平衡（支出主要是token消耗和人员工资）",
   } as CompanyInfo,
 
   companyProfile: {
-    summary: "智选电商是一家专注于家居生活品类的电商企业，主营天猫、京东、抖音多渠道，年 GMV 约 3 亿元。当前处于成长期向成熟期过渡阶段，需精细化运营提升盈利能力。",
-    analysisFocuses: [
-      "销售增长趋势与渠道贡献分析",
-      "库存周转效率与滞销预警",
-      "客户复购率与生命周期价值",
-    ],
-    recommendedMetrics: [
-      "GMV、毛利率、客单价、ROI",
-      "库存周转天数、动销率、滞销占比",
-      "新客占比、复购率、客诉率",
-    ],
+    summary: "长亭科技是一家企业级 AI 开发平台厂商，当前处于初创阶段，团队 8 人，市场覆盖全球。核心目标是在控制 token 成本和人员支出的前提下实现收支平衡，重点关注用户增长和平台粘性。",
+    analysisFocuses: ["注册用户增量", "用户粘度"],
+    recommendedMetrics: ["DAU", "新增注册用户数", "用户留存率", "复购率"],
   } as CompanyProfile,
 
   dataSources: [
