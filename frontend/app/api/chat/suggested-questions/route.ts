@@ -117,6 +117,7 @@ async function getTenantAIConfigFromBackend(tenantId: string, authHeader?: strin
       method: "GET",
       headers,
       cache: "no-store",
+      signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) return null;
     const payload = await res.json();
@@ -147,6 +148,7 @@ async function getTenantDataSourcesContextFromBackend(
       method: "GET",
       headers,
       cache: "no-store",
+      signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) return null;
 
@@ -210,6 +212,7 @@ async function getUploadedDatasetsContextFromBackend(
       method: "GET",
       headers,
       cache: "no-store",
+      signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) return null;
 
@@ -297,7 +300,7 @@ export async function POST(req: NextRequest) {
 
     const resolvedTenantId = tenantId || "demo-tenant";
 
-    // 并行获取 AI 配置、数据源上下文和上传数据集上下文
+    // 并行获取 AI 配置、数据源上下文和上传数据集上下文（各自 10 秒超时）
     const [serverConfig, dataSourceContext, uploadedDatasetsContext] = await Promise.all([
       getTenantAIConfigFromBackend(resolvedTenantId, authHeader),
       getTenantDataSourcesContextFromBackend(resolvedTenantId, authHeader),

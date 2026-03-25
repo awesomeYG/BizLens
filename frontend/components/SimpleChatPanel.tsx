@@ -400,6 +400,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; summary?: string }[]>([]);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const suggestionsAbortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -442,10 +443,15 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     const userTenantId = currentUser?.tenantId || currentUser?.id || "demo-tenant";
     const token = getAccessToken();
 
-    // 已有推荐问题时无需重复获取（仅在 conversations 变化后更新）
+    // 已有推荐问题时无需重复获取
     if (suggestedQuestions.length > 0 && conversations.length > 0) {
       return;
     }
+
+    // 取消之前的请求，防止竞态条件
+    suggestionsAbortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    suggestionsAbortControllerRef.current = abortController;
 
     setSuggestionsLoading(true);
     fetch("/api/chat/suggested-questions", {
@@ -459,23 +465,33 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
         companyProfile: currentUser?.companyProfile,
         conversations: conversations,
       }),
+      signal: abortController.signal,
     })
       .then((res) => {
         if (!res.ok) throw new Error("fetch failed");
         return res.json();
       })
-      .then((data: { questions?: string[] }) => {
+      .then((data: { questions?: string[]; source?: string }) => {
         if (data.questions && data.questions.length > 0) {
           setSuggestedQuestions(data.questions);
         }
       })
-      .catch(() => {
-        // 失败时静默，不影响界面
+      .catch((err) => {
+        if (err.name === "AbortError") {
+          return;
+        }
+        console.warn("获取推荐问题失败:", err);
       })
       .finally(() => {
-        setSuggestionsLoading(false);
+        if (!abortController.signal.aborted) {
+          setSuggestionsLoading(false);
+        }
       });
-  }, [conversations]);
+
+    return () => {
+      abortController.abort();
+    };
+  }, [conversations, suggestedQuestions.length]);
 
   const applyConversation = useCallback((conversation: ChatConversation) => {
     const persistedMessages = conversation.messages.length ? conversation.messages : [];
