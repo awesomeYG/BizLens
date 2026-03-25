@@ -8,6 +8,7 @@ import rehypeHighlight from "rehype-highlight";
 import { getCurrentUser } from "@/lib/user-store";
 import { request, getAccessToken } from "@/lib/auth/api";
 import { createDashboardInstance } from "@/lib/dashboard-store";
+import { detectUserIntent } from "@/lib/intent-detection";
 import type { ChatConversation, ChatConversationSummary, ChatMessage, DashboardSection } from "@/lib/types";
 import AppHeader from "@/components/AppHeader";
 
@@ -1055,15 +1056,12 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     if (!text || loading) return;
     setInput("");
 
-    const extractDingTalkMessage = (raw: string) => {
-      const regex = /给钉钉发句(?:话)?[“\"]([^”\"]+)[”\"]|发钉钉(?:消息|通知)?[:：]?\s*[“\"]([^”\"]+)[”\"]/;
-      const match = regex.exec(raw);
-      if (!match) return null;
-      return match[1] || match[2] || null;
-    };
+    // 使用 AI 意图识别判断用户想要做什么
+    const intentResult = await detectUserIntent(text, tenantId);
 
-    const directMsg = extractDingTalkMessage(text);
-    if (directMsg) {
+    // 如果是发送钉钉消息
+    if (intentResult.intent === "send_dingtalk") {
+      const directMsg = intentResult.extractedContent || text;
       const userMsgId = crypto.randomUUID();
       const assistantMsgId = crypto.randomUUID();
       setMessages((prev) => [
@@ -1153,6 +1151,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       return;
     }
 
+    // 其他意图交给 AI 处理
     void sendToAI(text);
   };
 
