@@ -101,6 +101,25 @@ const SYSTEM_PROMPT = `你是 BizLens AI 数据分析专家。你需要：
 }
 \`\`\`
 
+### 重要：必须使用真实数据
+**你必须使用"已配置数据源上下文"中的真实数据来填充 dashboard_config 的 data 字段，绝对不要使用示例占位符。**
+
+数据填充规则：
+1. 查看"已配置数据源上下文"中各表的 tablesInfo，了解字段名（field）和类型（type）
+2. 根据用户需求，确定需要查询哪些表和字段
+3. 在 tablesInfo 中找到对应的表，根据 recordCount 判断是否有数据
+4. 从各表的 columns 中找到合适的字段：
+   - label/名称类字段（type 含 varchar/text/name）作为 label、categories
+   - 数值类字段（type 含 int/bigint/float/numeric/decimal）作为 value、values
+   - 时间类字段（type 含 date/time/timestamp）可用于时间趋势图
+5. data 字段中所有数值必须来自 tablesInfo 中的真实字段：
+   - kpiItems 中的 value 必须是真实数值
+   - series 中的 values 数组必须是真实数值序列
+   - rankingItems 中的 value 必须是真实数值
+   - categories 必须是表中实际存在的类别值
+6. 严禁使用"示例数据"、"示例占位符"、"xxx元"、"1000万"等占位性描述
+7. 如果 tablesInfo 中没有足够的数据支撑某个区块，直接在概述中说明缺少哪些数据，不要强行生成
+
 ### 区块类型使用建议
 - **kpi**: 核心指标卡片，colSpan=12，放在最顶部
 - **line/area**: 趋势类数据，colSpan=6~8
@@ -274,6 +293,18 @@ interface AIModelConfig {
   temperature: number;
 }
 
+interface ColumnInfo {
+  field: string;
+  type: string;
+  nullable: boolean;
+}
+
+interface TableSchema {
+  name: string;
+  columns: ColumnInfo[];
+  recordCount: number;
+}
+
 interface TenantDataSourceContext {
   total: number;
   connected: number;
@@ -287,6 +318,7 @@ interface TenantDataSourceContext {
     host?: string;
     lastSyncAt?: string;
     tables: string[];
+    tablesInfo?: TableSchema[];
   }>;
 }
 
@@ -380,6 +412,14 @@ export async function POST(req: NextRequest) {
     const analysisPacket = await getAnalysisPacketFromBackend(tenantId, latestUserMessage);
     const dataSourceContext = await getTenantDataSourcesContextFromBackend(tenantId, authHeader);
 
+    // 自动预查询：如果有已连接的数据源，先执行 AutoQuery 获取真实数据
+    const autoQueryData = await fetchAutoQueryData(
+      tenantId,
+      authHeader,
+      dataSourceContext,
+      latestUserMessage
+    );
+
     const serverConfig = await getTenantAIConfigFromBackend(tenantId, authHeader);
 
     // 优先使用客户端传来的配置，其次服务端租户配置，最后环境变量
@@ -445,7 +485,31 @@ export async function POST(req: NextRequest) {
       systemContent += `\n\n## 对话上下文\n${JSON.stringify(conversationContext, null, 2)}`;
     }
     if (dataSourceContext && dataSourceContext.total > 0) {
-      systemContent += `\n\n## 已配置数据源上下文\n${JSON.stringify(dataSourceContext, null, 2)}`;
+      // 构建更易用的数据源上下文：包含连接状态和表结构信息
+      const enrichedDataSourceContext = dataSourceContext.dataSources.map(ds => ({
+        id: ds.id,
+        name: ds.name,
+        type: ds.type,
+        status: ds.status,
+        database: ds.database,
+        host: ds.host,
+        tables: ds.tablesInfo && ds.tablesInfo.length > 0
+          ? ds.tablesInfo.map(t => ({
+              name: t.name,
+              recordCount: t.recordCount,
+              columns: t.columns.map(c => ({
+                field: c.field,
+                type: c.type,
+                isNullable: c.nullable
+              }))
+            }))
+          : ds.tables.map(name => ({ name, recordCount: 0, columns: [] }))
+      }));
+      systemContent += `\n\n## 已配置数据源上下文\n${JSON.stringify(enrichedDataSourceContext, null, 2)}`;
+    }
+    // 注入 AutoQuery 真实查询结果
+    if (autoQueryData) {
+      systemContent += `\n\n## 数据源真实查询结果（已自动执行聚合查询）\n${JSON.stringify(autoQueryData, null, 2)}`;
     }
     systemContent += `\n\n## AI分析引擎上下文（用于提高回答稳定性）\n${JSON.stringify(analysisPacket, null, 2)}`;
 
@@ -484,7 +548,7 @@ export async function POST(req: NextRequest) {
           }
           // 先发送 analysis 元数据
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: "meta", analysis: analysisPacket, model: finalModel })}\n\n`)
+            encoder.encode(`data: ${JSON.stringify({ type: "meta", analysis: analysisPacket, model: finalModel, autoQueryData })}\n\n`)
           );
           for await (const chunk of stream) {
             if (req.signal.aborted) {
@@ -633,6 +697,95 @@ async function getTenantAIConfigFromBackend(tenantId: string, authHeader?: strin
   }
 }
 
+// AutoQuery API 返回的数据类型
+type AutoQueryData = {
+  totalCount?: Record<string, number>;
+  distributions?: Array<{
+    tableName: string;
+    columnName: string;
+    columnType: string;
+    topValues?: Array<{ label: string; value: number }>;
+    rows?: Record<string, unknown>[];
+  }>;
+  timeTrends?: Array<{
+    tableName: string;
+    columnName: string;
+    rows?: Record<string, unknown>[];
+  }>;
+  sampleRows?: Array<{
+    tableName: string;
+    rows?: Record<string, unknown>[];
+  }>;
+};
+
+type AutoQueryResult = {
+  success: boolean;
+  data?: AutoQueryData;
+  error?: string;
+};
+
+// 调用 AutoQuery API，自动生成并执行聚合查询
+async function fetchAutoQueryData(
+  tenantId: string,
+  authHeader?: string | null,
+  dataSourceContext?: TenantDataSourceContext | null,
+  latestUserMessage?: string
+): Promise<AutoQueryData | null> {
+  if (!dataSourceContext || dataSourceContext.connected === 0) {
+    return null;
+  }
+
+  const backendBase = process.env.BACKEND_INTERNAL_URL || "http://localhost:3001";
+
+  // 只对已连接且有表结构的数据源进行查询
+  const connectedDataSources = dataSourceContext.dataSources
+    .filter(ds => ds.status === "connected" && ds.tablesInfo && ds.tablesInfo.length > 0)
+    .map(ds => ({
+      id: ds.id,
+      name: ds.name,
+      type: ds.type,
+      database: ds.database,
+      tablesInfo: ds.tablesInfo || [],
+    }));
+
+  if (connectedDataSources.length === 0) {
+    return null;
+  }
+
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-Tenant-ID": tenantId,
+    };
+    if (authHeader) {
+      headers.Authorization = authHeader;
+    }
+
+    const res = await fetch(`${backendBase}/api/tenants/${tenantId}/auto-query`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        question: latestUserMessage || "",
+        dataSources: connectedDataSources,
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!res.ok) {
+      return null;
+    }
+
+    const result: AutoQueryResult = await res.json();
+    if (result.success && result.data) {
+      return result.data;
+    }
+  } catch {
+    // AutoQuery 失败不影响主流程，静默降级
+  }
+
+  return null;
+}
+
 async function getTenantDataSourcesContextFromBackend(
   tenantId: string,
   authHeader?: string | null
@@ -688,6 +841,7 @@ async function getTenantDataSourcesContextFromBackend(
           host: typeof item?.host === "string" ? item.host : undefined,
           lastSyncAt: typeof item?.lastSyncAt === "string" ? item.lastSyncAt : undefined,
           tables: tables.slice(0, 100),
+          tablesInfo: Array.isArray(item?.tablesInfo) ? item.tablesInfo.slice(0, 50) : undefined,
         };
       })
       .filter((item: { id: string; name: string }) => item.id || item.name);

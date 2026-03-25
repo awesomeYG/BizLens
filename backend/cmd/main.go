@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
@@ -83,6 +84,18 @@ func main() {
 	analysisService := service.NewAnalysisService(db)
 	analysisHandler := handler.NewAnalysisHandler(analysisService)
 	aiConfigService := service.NewAIConfigService(db)
+
+	// AutoQuery 服务（用于 dashboard 生成前的自动数据查询）
+	autoQueryService := service.NewAutoQueryService(dataSourceService)
+	autoQueryHandler := handler.NewAutoQueryHandler(autoQueryService)
+
+	// WebSocket 实时推送服务
+	wsHub := service.NewHub()
+	go wsHub.Run()
+	wsHandler := handler.NewWebSocketHandler(wsHub)
+	// dashboardRefreshService 可在需要时启动（如 Dashboard 访问时）
+	_ = service.NewDashboardRefreshService(wsHub, autoQueryService, dataSourceService, 5*time.Second)
+
 	aiConfigHandler := handler.NewAIConfigHandler(aiConfigService)
 
 	// 语义层服务
@@ -143,6 +156,11 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	// WebSocket 实时推送（需要鉴权）
+	mux.HandleFunc("/api/ws", func(w http.ResponseWriter, r *http.Request) {
+		wsHandler.HandleWebSocket(w, r)
 	})
 
 	// 认证路由：/api/auth/[register|login|logout|refresh|me|change-password]
@@ -285,6 +303,12 @@ func main() {
 				}
 				return
 			}
+		}
+
+		// POST /api/tenants/{id}/auto-query（dashboard 生成前的自动数据查询）
+		if len(parts) == 2 && parts[1] == "auto-query" && r.Method == http.MethodPost {
+			autoQueryHandler.AutoQuery(w, r)
+			return
 		}
 
 		// /api/tenants/{tenantId}/ai-config

@@ -31,13 +31,80 @@ func (h *DataSourceHandler) ListDataSources(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// 隐藏敏感信息
-	for i := range dataSources {
-		dataSources[i].Password = ""
-		dataSources[i].APIToken = ""
+	// 隐藏敏感信息，并附加解析后的 schema 信息
+	type ColumnInfo struct {
+		Field    string `json:"field"`
+		Type     string `json:"type"`
+		Nullable bool   `json:"nullable"`
+	}
+	type TableSchema struct {
+		Name        string       `json:"name"`
+		Columns     []ColumnInfo `json:"columns"`
+		RecordCount int          `json:"recordCount"`
 	}
 
-	writeJSON(w, http.StatusOK, dataSources)
+	responses := make([]map[string]interface{}, 0, len(dataSources))
+	for _, ds := range dataSources {
+		item := map[string]interface{}{
+			"id":          ds.ID,
+			"tenantId":    ds.TenantID,
+			"type":        ds.Type,
+			"name":        ds.Name,
+			"description": ds.Description,
+			"host":        ds.Host,
+			"port":        ds.Port,
+			"database":    ds.Database,
+			"status":      ds.Status,
+			"lastSyncAt":  ds.LastSyncAt,
+		}
+
+		// 解析 SchemaInfo，附加表结构信息
+		if ds.SchemaInfo != "" {
+			schema, err := service.DeserializeSchemaInfo(ds.SchemaInfo)
+			if err == nil {
+				tables, _ := schema["tables"].([]interface{})
+				structure, _ := schema["structure"].(map[string]interface{})
+
+				tableSchemas := make([]TableSchema, 0, len(tables))
+				for _, t := range tables {
+					tableName, ok := t.(string)
+					if !ok {
+						continue
+					}
+					recordCount, _ := h.dataSourceService.GetTableCount(&ds, tableName)
+					cols := make([]ColumnInfo, 0)
+					if colList, ok := structure[tableName].([]interface{}); ok {
+						for _, col := range colList {
+							if colMap, ok := col.(map[string]interface{}); ok {
+								field, _ := colMap["field"].(string)
+								dataType, _ := colMap["type"].(string)
+								nullable, _ := colMap["nullable"].(bool)
+								cols = append(cols, ColumnInfo{
+									Field:    field,
+									Type:     dataType,
+									Nullable: nullable,
+								})
+							}
+						}
+					}
+					tableSchemas = append(tableSchemas, TableSchema{
+						Name:        tableName,
+						Columns:     cols,
+						RecordCount: int(recordCount),
+					})
+				}
+				item["tablesInfo"] = tableSchemas
+			}
+		}
+
+		// 隐藏敏感信息
+		item["password"] = ""
+		item["apiToken"] = ""
+
+		responses = append(responses, item)
+	}
+
+	writeJSON(w, http.StatusOK, responses)
 }
 
 // GetDataSource GET /api/tenants/{id}/data-sources/{dsId}
@@ -140,7 +207,7 @@ func (h *DataSourceHandler) CreateDataSource(w http.ResponseWriter, r *http.Requ
 			if ds.Type == model.DataSourcePostgreSQL {
 				diagnosis := h.dataSourceService.DiagnosePostgreSQLConnection(ds)
 				writeJSON(w, http.StatusBadRequest, map[string]interface{}{
-					"error":              "数据库连接失败：" + err.Error(),
+					"error":               "数据库连接失败：" + err.Error(),
 					"connectionDiagnosis": diagnosis,
 				})
 				return
@@ -259,7 +326,7 @@ func (h *DataSourceHandler) UpdateDataSource(w http.ResponseWriter, r *http.Requ
 				if existing.Type == model.DataSourcePostgreSQL {
 					diagnosis := h.dataSourceService.DiagnosePostgreSQLConnection(existing)
 					writeJSON(w, http.StatusBadRequest, map[string]interface{}{
-						"error":              "数据库连接失败：" + err.Error(),
+						"error":               "数据库连接失败：" + err.Error(),
 						"connectionDiagnosis": diagnosis,
 					})
 					return
