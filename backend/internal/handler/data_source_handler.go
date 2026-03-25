@@ -250,7 +250,9 @@ func (h *DataSourceHandler) UpdateDataSource(w http.ResponseWriter, r *http.Requ
 			existing.Port = req.Connection.Port
 			existing.Database = req.Connection.Database
 			existing.Username = req.Connection.Username
-			existing.Password = req.Connection.Password
+			if req.Connection.Password != "" {
+				existing.Password = req.Connection.Password
+			}
 			existing.SSL = req.Connection.SSL
 
 			if err := h.dataSourceService.TestConnection(existing); err != nil {

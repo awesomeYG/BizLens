@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { getCurrentUser } from "@/lib/user-store";
 import type { AlertEvent, AlertTriggerLog } from "@/lib/im";
 import AppHeader from "@/components/AppHeader";
+import IMSectionNav from "@/components/IMSectionNav";
 
 export default function AlertsPage() {
   const router = useRouter();
@@ -43,6 +44,7 @@ export default function AlertsPage() {
       <AppHeader title="智能告警" backHref="/" />
 
       <main className="p-6 max-w-4xl mx-auto">
+        <IMSectionNav current="alerts" />
         {/* 概览卡片 */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           {[

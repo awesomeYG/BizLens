@@ -500,7 +500,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsgId
-                ? { ...m, content: `${cleanContent}\n\n**数据源配置失败**：${errMsg}\n\n请检查连接信息是否正确，或前往 [数据源管理](/data-sources) 页面手动配置。` }
+                ? { ...m, content: `${cleanContent}\n\n**数据源配置失败**：${errMsg}\n\n请检查连接信息是否正确，或前往 [数据源管理](/settings/data-sources) 页面手动配置。` }
                 : m
             )
           );
@@ -520,7 +520,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
                     `- 主机：${dsConfig.connection?.host}:${dsConfig.connection?.port}\n` +
                     `- 数据库：${dsConfig.connection?.database}\n` +
                     `- 状态：已连接\n\n` +
-                    `你可以前往 [数据源管理](/data-sources) 页面查看详情，或直接开始数据分析。`,
+                    `你可以前往 [数据源管理](/settings/data-sources) 页面查看详情，或直接开始数据分析。`,
                 }
               : m
           )
@@ -770,7 +770,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
                       `已识别到数据库连接串，但自动配置失败：${errMsg}\n\n` +
                       diagnosisText +
                       `\n\n` +
-                      `请确认连接串可访问，或前往 [数据源管理](/data-sources) 页面查看。`,
+                      `请确认连接串可访问，或前往 [数据源管理](/settings/data-sources) 页面查看。`,
                   }
                 : m
             )

@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 
 /**
  * 文件管理页面已迁移至统一数据源管理页面。
- * 此页面仅用于向后兼容，自动重定向到 /data-sources?tab=files。
+ * 此页面仅用于向后兼容，自动重定向到统一数据源管理。
  */
 export default function FilesSettingsRedirect() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/data-sources?tab=files");
+    router.replace("/settings/data-sources?tab=files");
   }, [router]);
 
   return (

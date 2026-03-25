@@ -12,6 +12,12 @@ const SETTINGS_NAV = [
     description: "维护公司信息与分析偏好",
   },
   {
+    href: "/settings/data-sources",
+    label: "数据源",
+    icon: "M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375",
+    description: "连接与管理分析用数据源",
+  },
+  {
     href: "/settings/ai",
     label: "AI 模型配置",
     icon: "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
@@ -44,7 +50,10 @@ export default function SettingsLayout({
             </div>
             <nav className="space-y-1">
               {SETTINGS_NAV.map((item) => {
-                const isActive = pathname === item.href;
+                const isActive =
+                  pathname === item.href ||
+                  (item.href === "/settings/data-sources" &&
+                    pathname.startsWith("/settings/data-sources"));
                 return (
                   <Link
                     key={item.href}

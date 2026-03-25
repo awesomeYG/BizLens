@@ -13,6 +13,7 @@ import {
   type IMPlatformConfig,
 } from "@/lib/im";
 import AppHeader from "@/components/AppHeader";
+import IMSectionNav from "@/components/IMSectionNav";
 
 export default function AlertConfigPage() {
   const router = useRouter();
@@ -101,6 +102,7 @@ export default function AlertConfigPage() {
       />
 
       <main className="p-6 max-w-3xl mx-auto space-y-3">
+        <IMSectionNav current="alerts" />
         {events.length === 0 && (
           <div className="text-center py-20 text-zinc-500">
             暂无告警规则，点击右上角新建，或在 <Link href="/chat" className="text-indigo-400 hover:underline">AI 对话</Link> 中用自然语言创建

@@ -114,7 +114,7 @@ export default function OnboardingPage() {
                 去设置中心补充档案
               </button>
               <button
-                onClick={() => router.push("/data-sources?returnTo=/onboarding")}
+                onClick={() => router.push("/settings/data-sources?returnTo=/onboarding")}
                 className="rounded-xl border border-indigo-400/40 bg-indigo-500/10 px-4 py-2 text-sm font-medium text-indigo-100 transition hover:border-indigo-300 hover:bg-indigo-500/20"
               >
                 管理数据源
@@ -234,7 +234,7 @@ export default function OnboardingPage() {
                   <p className="mt-2 text-sm text-slate-300/90">支持持续新增，未填也可先进入系统。连接后 AI 和大屏会即时利用数据。</p>
                 </div>
                 <button
-                  onClick={() => router.push("/data-sources?returnTo=/onboarding")}
+                  onClick={() => router.push("/settings/data-sources?returnTo=/onboarding")}
                   className="rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-100 transition hover:border-indigo-300"
                 >
                   前往数据源
@@ -278,7 +278,7 @@ export default function OnboardingPage() {
                 }, {
                   title: "连接数据源",
                   description: "接入数据库或文件，获得真实业务数据洞察。",
-                  action: () => router.push("/data-sources?returnTo=/onboarding"),
+                  action: () => router.push("/settings/data-sources?returnTo=/onboarding"),
                   done: Boolean(dataSources.length),
                 }, {
                   title: "进入系统体验",

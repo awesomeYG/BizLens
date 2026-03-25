@@ -40,7 +40,7 @@ interface AppHeaderProps {
   breadcrumb?: string[];
   /** 右侧额外操作按钮（在标准导航项之前） */
   actions?: React.ReactNode;
-  /** 是否显示标准导航项（数据源、报表、集成、设置、退出），默认 true */
+  /** 是否显示标准导航项（对话、大屏、报表、集成与告警、设置、退出），默认 true */
   showNav?: boolean;
   /** 是否显示退出按钮，默认 true */
   showLogout?: boolean;
@@ -85,9 +85,8 @@ export default function AppHeader({
   /* 默认导航项 */
   const defaultNavItems: NavItem[] = [
     { href: "/chat", label: "AI 对话" },
-    { href: "/data-sources", label: "数据源" },
+    { href: "/dashboards", label: "数据大屏" },
     { href: "/reports", label: "报表" },
-    { href: "/alerts", label: "告警" },
   ];
 
   const resolvedNavItems = navItems ?? defaultNavItems;
@@ -195,18 +194,34 @@ export default function AppHeader({
           {/* 分隔线 */}
           {showNav && <div className="w-px h-4 bg-zinc-800 mx-1" />}
 
-          {/* 集成按钮 */}
+          {/* IM 与告警（通知走 IM 能力） */}
           {showNav && (
-            <Link
-              href="/im/settings"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 transition-all"
-              title="IM 集成与通知"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d={IM_ICON_PATH} />
-              </svg>
-              集成
-            </Link>
+            <div className="flex items-center gap-1">
+              <Link
+                href="/im/settings"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 transition-all"
+                title="IM 集成与通知"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d={IM_ICON_PATH} />
+                </svg>
+                集成
+              </Link>
+              <Link
+                href="/alerts"
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-all ${
+                  pathname === "/alerts" || pathname.startsWith("/alerts/")
+                    ? "bg-purple-500/20 text-purple-200 border-purple-400/40"
+                    : "bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border-purple-500/30"
+                }`}
+                title="数据告警（可走 IM 推送）"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                </svg>
+                告警
+              </Link>
+            </div>
           )}
 
           {/* 额外操作按钮 */}

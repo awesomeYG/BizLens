@@ -515,7 +515,7 @@ export default function FileUploadTab() {
                       <div className="flex items-center gap-1">
                         {isFileReady(file.status) && (
                           <button
-                            onClick={() => router.push(`/data-sources/clean?dataset=${file.id}`)}
+                            onClick={() => router.push(`/settings/data-sources/clean?dataset=${file.id}`)}
                             className="rounded-lg p-2 text-zinc-600 transition-all hover:bg-cyan-500/10 hover:text-cyan-400"
                             title="数据清洗"
                           >
