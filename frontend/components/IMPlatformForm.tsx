@@ -22,8 +22,8 @@ export default function IMPlatformForm({
   const selectedPlatform = IM_PLATFORMS_LIST.find((p) => p.type === formData.type);
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-      <div className="w-full max-w-lg glass-card rounded-2xl p-6 space-y-5 border-zinc-700/50 shadow-2xl">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center px-4 py-8 sm:px-6 z-50 animate-fade-in overflow-y-auto">
+      <div className="w-full max-w-lg glass-card rounded-2xl p-6 space-y-5 border-zinc-700/50 shadow-2xl max-h-[calc(100vh-4rem)] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
