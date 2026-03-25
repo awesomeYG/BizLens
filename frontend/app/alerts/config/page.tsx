@@ -39,7 +39,8 @@ export default function AlertConfigPage() {
 
   useEffect(() => {
     const user = getCurrentUser();
-    if (!user?.isOnboarded) { router.replace("/"); return; }
+    if (!user) { router.replace("/auth/login"); return; }
+    if (!user.isOnboarded) { router.replace("/onboarding"); return; }
     setTenantId(user.tenantId || user.id);
   }, [router]);
 
