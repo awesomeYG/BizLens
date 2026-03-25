@@ -4,11 +4,8 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import DashboardView from "./DashboardView";
 import DashboardThumbnail from "./DashboardThumbnail";
-import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
-import DashboardView from "./DashboardView";
-import DashboardThumbnail from "./DashboardThumbnail";
 import { listDashboards, createDashboardInstance, deleteDashboard, type DashboardInstanceView } from "@/lib/dashboard-store";
+import { DEFAULT_DASHBOARD_DATA } from "@/lib/data-mapper";
 import { DASHBOARD_TEMPLATES } from "@/lib/templates";
 
 export default function DashboardTabs() {

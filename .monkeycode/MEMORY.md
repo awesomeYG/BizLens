@@ -237,3 +237,10 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 前端 SimpleChatPanel 增加了"给钉钉发句话'xxx'"的直接发送快捷指令（走 /api/tenants/{id}/notifications/send）
   - IMPlatformForm 钉钉配置增加了双向对话提示（回调 URL 格式说明）
   - 钉钉机器人安全设置的加签 secret 复用 IMConfig.Secret 字段，无需新增 model 字段
+
+### Chat 页面大屏自动生成偏好
+- Date: 2026-03-25
+- Context: 用户要求在 chat 页面对话即可直接生成可在数据大屏查看的大屏
+- Instructions:
+  - 当用户在 Chat 页面提出生成大屏需求时，应自动解析 `dashboard_config` 并创建大屏实例
+  - 创建成功后应在对话中返回可直接跳转的 `/dashboards?id=<id>` 查看入口
