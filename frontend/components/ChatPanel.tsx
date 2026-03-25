@@ -482,6 +482,111 @@ export default function ChatPanel({
       }
     };
 
+    // 根因分析请求处理
+    const executeRCAFromResponse = async (rawContent: string) => {
+      const rcaRegex = /```rca_request\s*\n([\s\S]*?)\n```/;
+      const rcaMatch = rcaRegex.exec(rawContent);
+      if (!rcaMatch) return false;
+
+      try {
+        const rcaRequest = JSON.parse(rcaMatch[1]);
+        const user = getCurrentUser();
+        const tenantId = user?.id || "demo-tenant";
+        const token = getAccessToken();
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const rcaRes = await fetch(`/api/tenants/${tenantId}/rca/analyze`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(rcaRequest),
+        });
+
+        const cleanContent = rawContent.replace(rcaRegex, "").trim();
+
+        if (!rcaRes.ok) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? { ...m, content: cleanContent + "\n\n**Root Cause Analysis unavailable** - no configured metrics or data source found." }
+                : m
+            )
+          );
+          return false;
+        }
+
+        const data = await rcaRes.json();
+        const result = data.result;
+        if (!result) return false;
+
+        // Build a readable RCA result
+        let rcaReport = "\n\n---\n\n**Root Cause Analysis Results**\n\n";
+        rcaReport += `| Item | Value |\n|------|-------|\n`;
+        rcaReport += `| Metric | ${result.metricName} |\n`;
+        rcaReport += `| Current Value | ${result.currentValue?.toLocaleString()} |\n`;
+        rcaReport += `| Baseline Value | ${result.baseValue?.toLocaleString()} |\n`;
+        rcaReport += `| Change | ${result.changeRate > 0 ? "+" : ""}${result.changeRate}% |\n`;
+        rcaReport += `| Direction | ${result.direction} |\n\n`;
+
+        if (result.summary) {
+          rcaReport += `**Summary**: ${result.summary}\n\n`;
+        }
+
+        // Drill down results
+        if (result.drillDowns && result.drillDowns.length > 0) {
+          rcaReport += "**Dimension Drill-Down**\n\n";
+          for (const drill of result.drillDowns) {
+            rcaReport += `*${drill.dimensionName}*\n\n`;
+            rcaReport += `| Value | Current | Baseline | Change | Contribution |\n|-------|---------|----------|--------|------|\n`;
+            for (const item of (drill.items || []).slice(0, 5)) {
+              const mark = item.isAnomaly ? " [!]" : "";
+              rcaReport += `| ${item.value}${mark} | ${item.currentValue?.toLocaleString()} | ${item.baseValue?.toLocaleString()} | ${item.changeRate > 0 ? "+" : ""}${item.changeRate}% | ${item.contribution}% |\n`;
+            }
+            rcaReport += "\n";
+          }
+        }
+
+        // Comparisons
+        if (result.comparisons && result.comparisons.length > 0) {
+          rcaReport += "**Period Comparisons**\n\n";
+          rcaReport += `| Type | Current | Compare | Change |\n|------|---------|---------|--------|\n`;
+          for (const comp of result.comparisons) {
+            rcaReport += `| ${comp.label} | ${comp.currentValue?.toLocaleString()} | ${comp.compareValue?.toLocaleString()} | ${comp.changeRate > 0 ? "+" : ""}${comp.changeRate}% |\n`;
+          }
+          rcaReport += "\n";
+        }
+
+        // Correlations
+        if (result.correlations && result.correlations.length > 0) {
+          rcaReport += "**Correlated Metrics**\n\n";
+          for (const corr of result.correlations) {
+            rcaReport += `- ${corr.description} (impact: ${corr.impact})\n`;
+          }
+          rcaReport += "\n";
+        }
+
+        // Suggestions
+        if (result.suggestions && result.suggestions.length > 0) {
+          rcaReport += "**Suggestions**\n\n";
+          for (const sug of result.suggestions) {
+            rcaReport += `- ${sug}\n`;
+          }
+        }
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? { ...m, content: cleanContent + rcaReport }
+              : m
+          )
+        );
+        return true;
+      } catch (err) {
+        console.error("Root cause analysis failed:", err);
+        return false;
+      }
+    };
+
     setLoading(true);
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -556,7 +661,7 @@ export default function ChatPanel({
         await createNotificationRuleFromResponse(content);
         await createReportFromResponse(content);
         await createDataSourceFromResponse(content);
-        return;
+        await executeRCAFromResponse(content);
       }
 
       // 流式读取
@@ -611,6 +716,7 @@ export default function ChatPanel({
         await createNotificationRuleFromResponse(fullContent);
         await createReportFromResponse(fullContent);
         await createDataSourceFromResponse(fullContent);
+        await executeRCAFromResponse(fullContent);
       }
     } catch (err) {
       const isManualAbort = manualStopRef.current || (err instanceof DOMException && err.name === "AbortError");

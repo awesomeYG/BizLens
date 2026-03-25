@@ -246,3 +246,40 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
 - Instructions:
   - 当用户在 Chat 页面提出生成大屏需求时，应自动解析 `dashboard_config` 并创建大屏实例
   - 创建成功后应在对话中返回可直接跳转的 `/dashboards?id=<id>` 查看入口
+
+### 根因分析引擎架构
+- Date: 2026-03-25
+- Context: Agent 在执行 Week 2 功能开发时发现
+- Category: 代码结构
+- Instructions:
+  - 后端 RCA 服务：`backend/internal/service/rca_service.go`（~980 行），实现自动下钻分析
+  - RCA 分析包含 4 个维度：维度下钻（DrillDown）、同比/环比对比（Comparisons）、关联指标分析（Correlations）、操作建议（Suggestions）
+  - 使用皮尔逊相关系数计算关联指标，使用线性回归融合加权移动平均做趋势预测
+  - RCA Handler 在 `backend/internal/handler/rca_handler.go`，API 端点：`/api/tenants/{id}/rca/analyze`
+  - AI 对话中支持 `rca_request` JSON block 自动触发根因分析
+  - ChatPanel 中新增 `executeRCAFromResponse` 函数处理 `rca_request` block
+
+### 每日摘要增强架构
+- Date: 2026-03-25
+- Context: Agent 在执行 Week 2 功能开发时发现
+- Category: 代码结构
+- Instructions:
+  - 后端服务：`backend/internal/service/daily_summary_service.go`（大幅增强，约 580 行）
+  - 增强版摘要内容包含：健康评分、核心指标速览、异常告警、趋势描述、趋势预测（带历史序列）、变化最大的指标 Top Changes
+  - 趋势预测使用线性回归 + 加权移动平均融合算法
+  - 从真实数据源查询核心指标（`queryRealMetricSummaries`），遍历已确认/活跃的 Metric 配置
+  - 每日摘要 Handler：`backend/internal/handler/daily_summary_handler.go`
+  - API 端点：`GET /api/tenants/{id}/daily-summary`、`GET /api/tenants/{id}/daily-summary/latest`、`POST /api/tenants/{id}/daily-summary/generate`
+  - 前端页面：`frontend/app/insights/page.tsx`，包含健康评分卡片、核心指标网格、Top Changes 表格、异常告警列表、趋势预测卡片（含迷你 sparkline）
+  - 导航入口：`AppHeader` 中增加了 Insights 导航项
+
+### 监控服务真实数据源集成
+- Date: 2026-03-25
+- Context: Agent 在执行 Week 2 功能开发时发现
+- Category: 代码结构
+- Instructions:
+  - BaselineService（`baseline_service.go`）：改造 `fetchHistoricalValues` 从真实数据源查询每日数据，`LearnBaseline` 使用真实基线值，`QueryCurrentValue` 查询当前值
+  - SchedulerService（`scheduler_service.go`）：改造为遍历所有租户的所有已确认/活跃指标（不再硬编码 demo），自动获取租户的 IM 平台 ID 用于异常通知推送
+  - 使用延迟注入（SetDataDependencies）模式解决循环依赖问题
+  - AnomalyService 中的 `DetectAnomaly` 自动使用 BaselineService 获取基线，结合实际值做偏离检测
+  - 所有服务初始化完成后在 main.go 中调用 `SetDataDependencies` 注入依赖
