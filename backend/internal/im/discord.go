@@ -66,7 +66,7 @@ func (d *DiscordAdapter) Send(webhookURL string, msg Message, secret string) Sen
 	return SendResult{Success: true}
 }
 
-func (d *DiscordAdapter) Test(webhookURL, secret string) SendResult {
+func (d *DiscordAdapter) Test(webhookURL, secret, _ string) SendResult {
 	return d.Send(webhookURL, Message{
 		Title:    "🤖 AI BI 平台连接测试",
 		Content:  "如果您收到这条消息，说明 Discord Webhook 配置正确！",

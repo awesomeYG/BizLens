@@ -76,6 +76,6 @@ func (f *FeishuAdapter) Send(webhookURL string, msg Message, secret string) Send
 	return SendResult{Success: true}
 }
 
-func (f *FeishuAdapter) Test(webhookURL, secret string) SendResult {
+func (f *FeishuAdapter) Test(webhookURL, secret, _ string) SendResult {
 	return f.Send(webhookURL, Message{Content: "AI BI 平台连接测试成功"}, secret)
 }

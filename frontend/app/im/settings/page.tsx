@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { request } from "@/lib/auth/api";
 import { getCurrentUser } from "@/lib/user-store";
 import { IM_PLATFORMS_LIST, type IMPlatformConfig, type IMPlatformType, type IMConfigCreateRequest } from "@/lib/im";
 import IMPlatformCard from "@/components/IMPlatformCard";
@@ -10,23 +10,28 @@ import AppHeader from "@/components/AppHeader";
 import IMSectionNav from "@/components/IMSectionNav";
 
 export default function IMSettingsPage() {
-  const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
-  const [tenantId, setTenantId] = useState("demo-tenant");
+  const [tenantId, setTenantId] = useState("");
   const [configs, setConfigs] = useState<IMPlatformConfig[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState<IMConfigCreateRequest>({ type: "dingtalk", name: "", webhookUrl: "", secret: "", enabled: true });
+  const [formData, setFormData] = useState<IMConfigCreateRequest>({ type: "dingtalk", name: "", webhookUrl: "", secret: "", keyword: "", enabled: true });
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
     const user = getCurrentUser();
-    if (user) setTenantId(user.id);
+    if (user?.tenantId || user?.id) {
+      setTenantId(user.tenantId || user.id);
+    }
     setHydrated(true);
-    loadConfigs();
   }, []);
+
+  useEffect(() => {
+    if (!hydrated || !tenantId) return;
+    loadConfigs();
+  }, [hydrated, tenantId]);
 
   useEffect(() => {
     if (toast) {
@@ -38,60 +43,96 @@ export default function IMSettingsPage() {
   const loadConfigs = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/tenants/${tenantId}/im-configs`);
-      if (res.ok) setConfigs(await res.json());
-    } catch {} finally { setLoading(false); }
+      const data = await request<IMPlatformConfig[]>(`/tenants/${tenantId}/im-configs`);
+      setConfigs(data);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "加载失败";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setError("");
-    if (!formData.name || !formData.webhookUrl) { setError("名称和 Webhook 地址必填"); return; }
-    const url = editingId ? `/api/tenants/${tenantId}/im-configs/${editingId}` : `/api/tenants/${tenantId}/im-configs`;
-    const res = await fetch(url, { method: editingId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
-    if (!res.ok) { setError("操作失败"); return; }
-    await loadConfigs();
-    setShowForm(false);
-    setEditingId(null);
-    setFormData({ type: "dingtalk", name: "", webhookUrl: "", secret: "", enabled: true });
-    setToast({ message: editingId ? "配置已更新" : "平台已添加", type: "success" });
+    e.preventDefault();
+    setError("");
+    if (!formData.name || !formData.webhookUrl) {
+      setError("名称和 Webhook 地址必填");
+      return;
+    }
+    const endpoint = editingId ? `/tenants/${tenantId}/im-configs/${editingId}` : `/tenants/${tenantId}/im-configs`;
+    try {
+      await request<IMPlatformConfig>(endpoint, {
+        method: editingId ? "PUT" : "POST",
+        body: JSON.stringify(formData),
+      });
+      await loadConfigs();
+      setShowForm(false);
+      setEditingId(null);
+      setFormData({ type: "dingtalk", name: "", webhookUrl: "", secret: "", keyword: "", enabled: true });
+      setToast({ message: editingId ? "配置已更新" : "平台已添加", type: "success" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "操作失败";
+      setError(msg);
+    }
   };
 
   const handleEdit = (config: IMPlatformConfig) => {
     setEditingId(config.id);
-    setFormData({ type: config.type, name: config.name, webhookUrl: config.webhookUrl, secret: config.secret || "", enabled: config.enabled });
+    setFormData({
+      type: config.type,
+      name: config.name,
+      webhookUrl: config.webhookUrl,
+      secret: config.secret || "",
+      keyword: config.keyword || "",
+      enabled: config.enabled,
+    });
     setShowForm(true);
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("确定删除此配置？")) return;
-    await fetch(`/api/tenants/${tenantId}/im-configs/${id}`, { method: "DELETE" });
-    await loadConfigs();
-    setToast({ message: "配置已删除", type: "success" });
+    try {
+      await request(`/tenants/${tenantId}/im-configs/${id}`, { method: "DELETE" });
+      await loadConfigs();
+      setToast({ message: "配置已删除", type: "success" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "删除失败";
+      setToast({ message: msg, type: "error" });
+    }
   };
 
   const handleTest = async (id: string) => {
-    const res = await fetch(`/api/tenants/${tenantId}/im-configs/${id}/test`, { method: "POST" });
-    const data = await res.json();
-    setToast({ 
-      message: data.success ? "连接测试成功！" : `连接失败：${data.error}`, 
-      type: data.success ? "success" : "error" 
-    });
-    await loadConfigs();
+    try {
+      const data = await request<{ success: boolean; message?: string; error?: string }>(
+        `/tenants/${tenantId}/im-configs/${id}/test`,
+        { method: "POST" }
+      );
+      setToast({
+        message: data.success ? "连接测试成功！" : `连接失败：${data.error || "未知错误"}`,
+        type: data.success ? "success" : "error",
+      });
+      await loadConfigs();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "测试失败";
+      setToast({ message: msg, type: "error" });
+    }
   };
 
   const handleToggle = async (id: string, enabled: boolean) => {
     const config = configs.find(c => c.id === id);
     if (!config) return;
-    
-    const res = await fetch(`/api/tenants/${tenantId}/im-configs/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...config, enabled }),
-    });
-    
-    if (res.ok) {
+
+    try {
+      await request<IMPlatformConfig>(`/tenants/${tenantId}/im-configs/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ ...config, enabled }),
+      });
       await loadConfigs();
       setToast({ message: enabled ? "平台已启用" : "平台已禁用", type: "success" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "更新失败";
+      setToast({ message: msg, type: "error" });
     }
   };
 

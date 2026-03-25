@@ -141,6 +141,25 @@ export default function IMPlatformForm({
             </div>
           ) : null}
 
+          {formData.type === "dingtalk" ? (
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1.5">
+                自定义关键词
+                <span className="text-zinc-600 ml-1">(若机器人启用了关键词安全设置则必填)</span>
+              </label>
+              <input
+                value={formData.keyword ?? ""}
+                onChange={(e) => onFormDataChange({ ...formData, keyword: e.target.value })}
+                placeholder="与钉钉群内机器人设置一致"
+                type="text"
+                className="input-base"
+              />
+              <p className="text-[10px] text-zinc-600 mt-1">
+                平台会在发送内容前自动附带该词，避免「关键词不匹配」错误
+              </p>
+            </div>
+          ) : null}
+
           <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/50">
             <input
               id="enabled"

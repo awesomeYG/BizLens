@@ -125,6 +125,7 @@ func (s *AlertService) TriggerEvent(tenantID, eventID string, actualValue float6
 				Title:    "🔔 " + event.Name,
 				Content:  event.Message,
 				Markdown: true,
+				Keyword:  cfg.Keyword,
 			}, cfg.Secret)
 			if !result.Success {
 				log.Status = "failed"

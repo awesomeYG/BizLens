@@ -4,8 +4,11 @@ import (
 	"ai-bi-server/internal/model"
 	"ai-bi-server/internal/service"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
+
+	"gorm.io/gorm"
 )
 
 type IMHandler struct {
@@ -89,6 +92,7 @@ type CreateIMConfigRequest struct {
 	Name       string `json:"name"`
 	WebhookURL string `json:"webhookUrl"`
 	Secret     string `json:"secret,omitempty"`
+	Keyword    string `json:"keyword,omitempty"`
 	Enabled    bool   `json:"enabled"`
 }
 
@@ -116,6 +120,7 @@ func (h *IMHandler) CreateIMConfig(w http.ResponseWriter, r *http.Request) {
 		Name:       req.Name,
 		WebhookURL: req.WebhookURL,
 		Secret:     req.Secret,
+		Keyword:    req.Keyword,
 		Enabled:    req.Enabled,
 	}
 
@@ -138,15 +143,19 @@ func (h *IMHandler) UpdateIMConfig(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	configID := parts[len(parts)-1]
 
-	var updates map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+	var in service.IMConfigUpdateInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeError(w, http.StatusBadRequest, "请求体解析失败")
 		return
 	}
 
-	cfg, err := h.imService.UpdateConfig(tenantID, configID, updates)
+	cfg, err := h.imService.UpdateConfig(tenantID, configID, &in)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "更新失败")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			writeError(w, http.StatusNotFound, "配置不存在")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 

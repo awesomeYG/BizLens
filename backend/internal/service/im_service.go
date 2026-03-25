@@ -41,13 +41,51 @@ func (s *IMService) CreateConfig(tenantID string, cfg *model.IMConfig) error {
 	return s.db.Create(cfg).Error
 }
 
-// UpdateConfig 更新 IM 配置
-func (s *IMService) UpdateConfig(tenantID, id string, updates map[string]interface{}) (*model.IMConfig, error) {
+// IMConfigUpdateInput 客户端可更新的字段；JSON 中未出现的键保持 nil，表示不修改该列（避免误清空 secret 等）
+type IMConfigUpdateInput struct {
+	Type       *string `json:"type"`
+	Name       *string `json:"name"`
+	WebhookURL *string `json:"webhookUrl"`
+	Secret     *string `json:"secret"`
+	Keyword    *string `json:"keyword"`
+	Enabled    *bool   `json:"enabled"`
+}
+
+// UpdateConfig 更新 IM 配置。仅写入白名单列且使用数据库列名，避免把 webhookUrl、tenantId 等键原样传给 GORM 导致 SQL 报错。
+func (s *IMService) UpdateConfig(tenantID, id string, in *IMConfigUpdateInput) (*model.IMConfig, error) {
 	var cfg model.IMConfig
 	if err := s.db.Where("tenant_id = ? AND id = ?", tenantID, id).First(&cfg).Error; err != nil {
 		return nil, err
 	}
+	if in == nil {
+		return &cfg, nil
+	}
+	updates := map[string]interface{}{}
+	if in.Type != nil {
+		updates["type"] = *in.Type
+	}
+	if in.Name != nil {
+		updates["name"] = *in.Name
+	}
+	if in.WebhookURL != nil {
+		updates["webhook_url"] = *in.WebhookURL
+	}
+	if in.Secret != nil {
+		updates["secret"] = *in.Secret
+	}
+	if in.Keyword != nil {
+		updates["keyword"] = *in.Keyword
+	}
+	if in.Enabled != nil {
+		updates["enabled"] = *in.Enabled
+	}
+	if len(updates) == 0 {
+		return &cfg, nil
+	}
 	if err := s.db.Model(&cfg).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	if err := s.db.Where("tenant_id = ? AND id = ?", tenantID, id).First(&cfg).Error; err != nil {
 		return nil, err
 	}
 	return &cfg, nil
@@ -74,7 +112,7 @@ func (s *IMService) TestConnection(tenantID, id string) (*im.SendResult, error) 
 		return nil, errors.New("不支持的平台类型")
 	}
 
-	result := adapter.Test(cfg.WebhookURL, cfg.Secret)
+	result := adapter.Test(cfg.WebhookURL, cfg.Secret, cfg.Keyword)
 
 	// 更新连接状态
 	status := model.IMStatusConnected
@@ -130,6 +168,7 @@ func (s *IMService) SendNotification(tenantID string, platformIDs []string, temp
 			Title:    title,
 			Content:  content,
 			Markdown: markdown,
+			Keyword:  cfg.Keyword,
 		}, cfg.Secret)
 
 		now := time.Now()

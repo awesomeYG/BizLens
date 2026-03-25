@@ -22,6 +22,13 @@ export const IM_PLATFORM_REGISTRY: Record<string, IMPlatformMeta> = {
     fields: [
       COMMON_WEBHOOK_FIELD,
       { key: "secret", label: "签名密钥（Secret）", placeholder: "SEC...", required: false, type: "password" },
+      {
+        key: "keyword",
+        label: "自定义关键词",
+        placeholder: "与群机器人安全设置一致，未配置可留空",
+        required: false,
+        type: "text",
+      },
     ],
   },
   feishu: {

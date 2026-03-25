@@ -53,7 +53,7 @@ func (s *SlackAdapter) Send(webhookURL string, msg Message, secret string) SendR
 	return SendResult{Success: true}
 }
 
-func (s *SlackAdapter) Test(webhookURL, secret string) SendResult {
+func (s *SlackAdapter) Test(webhookURL, secret, _ string) SendResult {
 	return s.Send(webhookURL, Message{
 		Title:    "🤖 AI BI 平台连接测试",
 		Content:  "如果您收到这条消息，说明 Webhook 配置正确！",

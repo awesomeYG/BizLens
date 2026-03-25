@@ -51,6 +51,6 @@ func (w *WecomAdapter) Send(webhookURL string, msg Message, _ string) SendResult
 	return SendResult{Success: true}
 }
 
-func (w *WecomAdapter) Test(webhookURL, _ string) SendResult {
+func (w *WecomAdapter) Test(webhookURL, _, _ string) SendResult {
 	return w.Send(webhookURL, Message{Content: "AI BI 平台连接测试成功"}, "")
 }

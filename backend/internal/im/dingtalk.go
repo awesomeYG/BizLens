@@ -9,11 +9,23 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
 // DingtalkAdapter 钉钉自定义机器人适配器
 type DingtalkAdapter struct{}
+
+func dingtalkEnsureKeyword(content, keyword string) string {
+	kw := strings.TrimSpace(keyword)
+	if kw == "" {
+		return content
+	}
+	if strings.Contains(content, kw) {
+		return content
+	}
+	return kw + "\n" + content
+}
 
 func (d *DingtalkAdapter) buildSignedURL(webhookURL, secret string) string {
 	ts := time.Now().UnixMilli()
@@ -34,20 +46,26 @@ func (d *DingtalkAdapter) Send(webhookURL string, msg Message, secret string) Se
 		target = d.buildSignedURL(webhookURL, secret)
 	}
 
+	title := msg.Title
+	content := dingtalkEnsureKeyword(msg.Content, msg.Keyword)
+	if msg.Markdown && strings.TrimSpace(title) != "" {
+		title = dingtalkEnsureKeyword(title, msg.Keyword)
+	}
+
 	var body map[string]interface{}
 	if msg.Markdown {
 		body = map[string]interface{}{
 			"msgtype": "markdown",
 			"markdown": map[string]string{
-				"title": msg.Title,
-				"text":  msg.Content,
+				"title": title,
+				"text":  content,
 			},
 			"at": map[string]interface{}{"isAtAll": msg.AtAll},
 		}
 	} else {
 		body = map[string]interface{}{
 			"msgtype": "text",
-			"text":    map[string]string{"content": msg.Content},
+			"text":    map[string]string{"content": content},
 			"at":      map[string]interface{}{"isAtAll": msg.AtAll},
 		}
 	}
@@ -55,8 +73,8 @@ func (d *DingtalkAdapter) Send(webhookURL string, msg Message, secret string) Se
 	return doPost(target, body)
 }
 
-func (d *DingtalkAdapter) Test(webhookURL, secret string) SendResult {
-	return d.Send(webhookURL, Message{Content: "AI BI 平台连接测试成功"}, secret)
+func (d *DingtalkAdapter) Test(webhookURL, secret, keyword string) SendResult {
+	return d.Send(webhookURL, Message{Content: "AI BI 平台连接测试成功", Keyword: keyword}, secret)
 }
 
 // containsQuery 检查 URL 是否已有 query 参数

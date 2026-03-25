@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getAccessToken } from "@/lib/auth/api";
 import { getCurrentUser } from "@/lib/user-store";
 import { IM_PLATFORM_REGISTRY, type IMPlatformConfig, type NotificationRecord, type NotificationSendRequest } from "@/lib/im";
 import IMPlatformIcon from "@/components/IMPlatformIcon";
@@ -10,8 +10,8 @@ import AppHeader from "@/components/AppHeader";
 import IMSectionNav from "@/components/IMSectionNav";
 
 export default function NotificationsPage() {
-  const router = useRouter();
-  const [tenantId, setTenantId] = useState("demo-tenant");
+  const [tenantId, setTenantId] = useState("");
+  const [hydrated, setHydrated] = useState(false);
   const [configs, setConfigs] = useState<IMPlatformConfig[]>([]);
   const [history, setHistory] = useState<NotificationRecord[]>([]);
   const [sending, setSending] = useState(false);
@@ -21,11 +21,26 @@ export default function NotificationsPage() {
   const [form, setForm] = useState<NotificationSendRequest>({ platformIds: [], templateType: "custom", title: "", content: "", markdown: false });
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
+  const authFetchHeaders = (json = false): Record<string, string> => {
+    const h: Record<string, string> = {};
+    const token = getAccessToken();
+    if (token) h.Authorization = `Bearer ${token}`;
+    if (json) h["Content-Type"] = "application/json";
+    return h;
+  };
+
   useEffect(() => {
     const user = getCurrentUser();
-    if (user) setTenantId(user.id);
-    loadData();
+    if (user?.tenantId || user?.id) {
+      setTenantId(user.tenantId || user.id);
+    }
+    setHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (!hydrated || !tenantId) return;
+    loadData();
+  }, [hydrated, tenantId]);
 
   useEffect(() => {
     if (toast) {
@@ -35,9 +50,10 @@ export default function NotificationsPage() {
   }, [toast]);
 
   const loadData = async () => {
+    const headers = authFetchHeaders();
     const [cfgRes, histRes] = await Promise.all([
-      fetch(`/api/tenants/${tenantId}/im-configs`),
-      fetch(`/api/tenants/${tenantId}/notifications`),
+      fetch(`/api/tenants/${tenantId}/im-configs`, { headers }),
+      fetch(`/api/tenants/${tenantId}/notifications`, { headers }),
     ]);
     if (cfgRes.ok) setConfigs(await cfgRes.json());
     if (histRes.ok) setHistory(await histRes.json());
@@ -56,7 +72,11 @@ export default function NotificationsPage() {
     if (!form.content.trim()) { setError("消息内容不能为空"); return; }
     setSending(true);
     try {
-      const res = await fetch(`/api/tenants/${tenantId}/notifications/send`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+      const res = await fetch(`/api/tenants/${tenantId}/notifications/send`, {
+        method: "POST",
+        headers: authFetchHeaders(true),
+        body: JSON.stringify(form),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "发送失败");
       const records = data.records || [];

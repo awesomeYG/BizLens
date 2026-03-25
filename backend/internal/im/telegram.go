@@ -89,7 +89,7 @@ func (t *TelegramAdapter) Send(webhookURL string, msg Message, secret string) Se
 	return SendResult{Success: true}
 }
 
-func (t *TelegramAdapter) Test(webhookURL, secret string) SendResult {
+func (t *TelegramAdapter) Test(webhookURL, secret, _ string) SendResult {
 	return t.Send(webhookURL, Message{
 		Title:    "🤖 AI BI 平台",
 		Content:  "如果您收到这条消息，说明 Telegram Bot 配置正确！",

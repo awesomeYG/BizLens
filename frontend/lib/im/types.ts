@@ -19,6 +19,8 @@ export interface IMPlatformConfig {
   enabled: boolean;
   webhookUrl: string;
   secret?: string;
+  /** 钉钉自定义机器人安全设置中的关键词（可选） */
+  keyword?: string;
   status: IMConnectionStatus;
   createdAt: string;
   updatedAt: string;
@@ -78,6 +80,7 @@ export interface IMConfigCreateRequest {
   name: string;
   webhookUrl: string;
   secret?: string;
+  keyword?: string;
   enabled?: boolean;
 }
 

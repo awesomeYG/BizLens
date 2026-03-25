@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { getAccessToken } from "@/lib/auth/api";
 import { getCurrentUser } from "@/lib/user-store";
 import {
   ALERT_CONDITION_OPTIONS,
@@ -18,6 +19,14 @@ import IMSectionNav from "@/components/IMSectionNav";
 export default function AlertConfigPage() {
   const router = useRouter();
   const [tenantId, setTenantId] = useState("");
+
+  const authFetchHeaders = (json = false): Record<string, string> => {
+    const h: Record<string, string> = {};
+    const token = getAccessToken();
+    if (token) h.Authorization = `Bearer ${token}`;
+    if (json) h["Content-Type"] = "application/json";
+    return h;
+  };
   const [events, setEvents] = useState<AlertEvent[]>([]);
   const [configs, setConfigs] = useState<IMPlatformConfig[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -31,15 +40,16 @@ export default function AlertConfigPage() {
   useEffect(() => {
     const user = getCurrentUser();
     if (!user?.isOnboarded) { router.replace("/"); return; }
-    setTenantId(user.id);
+    setTenantId(user.tenantId || user.id);
   }, [router]);
 
   useEffect(() => { if (tenantId) loadData(); }, [tenantId]);
 
   const loadData = async () => {
+    const headers = authFetchHeaders();
     const [evtRes, cfgRes] = await Promise.all([
-      fetch(`/api/tenants/${tenantId}/alerts`),
-      fetch(`/api/tenants/${tenantId}/im-configs`),
+      fetch(`/api/tenants/${tenantId}/alerts`, { headers }),
+      fetch(`/api/tenants/${tenantId}/im-configs`, { headers }),
     ]);
     if (evtRes.ok) { const d = await evtRes.json(); setEvents(Array.isArray(d) ? d : []); }
     if (cfgRes.ok) { const d = await cfgRes.json(); setConfigs(Array.isArray(d) ? d : []); }
@@ -50,7 +60,7 @@ export default function AlertConfigPage() {
     setError("");
     if (!form.name || !form.metric || !form.message) { setError("名称、指标、通知内容必填"); return; }
     const url = editingId ? `/api/tenants/${tenantId}/alerts/${editingId}` : `/api/tenants/${tenantId}/alerts`;
-    const res = await fetch(url, { method: editingId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+    const res = await fetch(url, { method: editingId ? "PUT" : "POST", headers: authFetchHeaders(true), body: JSON.stringify(form) });
     if (!res.ok) { setError("操作失败"); return; }
     setShowForm(false); setEditingId(null);
     setForm({ name: "", metric: "", conditionType: "greater", threshold: 0, message: "", platformIds: "", enabled: true });
@@ -65,12 +75,12 @@ export default function AlertConfigPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("确定删除此告警规则？")) return;
-    await fetch(`/api/tenants/${tenantId}/alerts/${id}`, { method: "DELETE" });
+    await fetch(`/api/tenants/${tenantId}/alerts/${id}`, { method: "DELETE", headers: authFetchHeaders() });
     await loadData();
   };
 
   const handleToggle = async (evt: AlertEvent) => {
-    await fetch(`/api/tenants/${tenantId}/alerts/${evt.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: !evt.enabled }) });
+    await fetch(`/api/tenants/${tenantId}/alerts/${evt.id}`, { method: "PUT", headers: authFetchHeaders(true), body: JSON.stringify({ enabled: !evt.enabled }) });
     await loadData();
   };
 

@@ -64,6 +64,8 @@ type IMConfig struct {
 	Enabled    bool               `gorm:"default:true" json:"enabled"`
 	WebhookURL string             `gorm:"size:500;not null" json:"webhookUrl"`
 	Secret     string             `gorm:"size:500" json:"secret,omitempty"`
+	// Keyword 钉钉自定义机器人「安全设置-自定义关键词」中配置的关键词；发送内容需包含该词，否则钉钉返回 errcode 310000
+	Keyword    string             `gorm:"size:100" json:"keyword,omitempty"`
 	Status     IMConnectionStatus `gorm:"size:50;default:'disconnected'" json:"status"`
 	CreatedAt  time.Time          `json:"createdAt"`
 	UpdatedAt  time.Time          `json:"updatedAt"`
