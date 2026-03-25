@@ -46,35 +46,41 @@ export default function IMPlatformForm({
 
         {/* Platform Selection (only for new) */}
         {!editingId && (
-          <div>
-            <label className="block text-xs text-zinc-500 mb-2">选择平台类型</label>
-            <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-2">
+            <label className="block text-xs text-zinc-500">选择平台类型</label>
+            <div className="relative">
+              <select
+                value={formData.type ?? ""}
+                onChange={(e) => onFormDataChange({ ...formData, type: e.target.value as IMPlatformType })}
+                className="w-full appearance-none rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200 shadow-inner focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition"
+              >
+                <option value="" disabled>
+                  请选择要接入的平台
+                </option>
+                {IM_PLATFORMS_LIST.map((platform) => (
+                  <option key={platform.type} value={platform.type}>
+                    {platform.label} · {platform.description}
+                  </option>
+                ))}
+              </select>
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2 text-[11px] text-zinc-500">
               {IM_PLATFORMS_LIST.map((platform) => (
-                <button
+                <span
                   key={platform.type}
-                  type="button"
-                  onClick={() => onFormDataChange({ ...formData, type: platform.type as IMPlatformType })}
-                  className={`p-3 rounded-xl border transition-all text-left ${
-                    formData.type === platform.type
-                      ? "border-indigo-500/50 bg-indigo-500/10"
-                      : "border-zinc-800 bg-zinc-900/30 hover:border-zinc-700"
-                  }`}
+                  className="inline-flex items-center gap-1 rounded-full border border-zinc-800/80 bg-zinc-900/50 px-2.5 py-1"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center"
-                      style={{ backgroundColor: `${platform.color}15` }}
-                    >
-                      <span className="text-sm font-bold" style={{ color: platform.color }}>
-                        {platform.label.charAt(0)}
-                      </span>
-                    </div>
-                    <div>
-                      <div className="text-xs font-medium text-zinc-200">{platform.label}</div>
-                      <div className="text-[10px] text-zinc-500 truncate">{platform.description}</div>
-                    </div>
-                  </div>
-                </button>
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: platform.color }}
+                  />
+                  <span className="text-[11px] text-zinc-300">{platform.label}</span>
+                </span>
               ))}
             </div>
           </div>
