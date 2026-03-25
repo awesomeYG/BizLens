@@ -118,6 +118,22 @@ function toPersistedMessages(messages: ChatMessage[]) {
   return messages.filter((item) => item.id !== "welcome");
 }
 
+/**
+ * 归一化签名：只提取后端 DTO 关心的字段，避免前端独有字段（sqlQuery、schemaContext 等）
+ * 导致签名永远不同而引发无限重复保存或比对失效。
+ */
+function computeMessageSignature(messages: ChatMessage[]): string {
+  return JSON.stringify(
+    messages.map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      files: m.files,
+      timestamp: m.timestamp,
+    }))
+  );
+}
+
 function extractDashboardConfig(content: string): { sections: DashboardSection[]; title?: string } | null {
   const regex = /```dashboard_config\s*\n([\s\S]*?)\n```/;
   const match = regex.exec(content);
@@ -367,6 +383,8 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const manualStopRef = useRef(false);
+  /** 标记在 loading 期间有消息变更需要保存 */
+  const pendingSaveDuringLoadingRef = useRef(false);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -401,7 +419,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     setUploadedFiles(
       persistedMessages.flatMap((item) => item.files?.map((file) => ({ name: file.name, summary: file.summary })) || [])
     );
-    lastSavedSignatureRef.current = JSON.stringify(persistedMessages);
+    lastSavedSignatureRef.current = computeMessageSignature(persistedMessages);
   }, []);
 
   const resetToWelcomeState = useCallback(() => {
@@ -423,6 +441,39 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       });
     });
   }, []);
+
+  /**
+   * 立即保存当前会话消息到后端，不走防抖。
+   * 用于 sendToAI 结束时确保消息可靠持久化。
+   */
+  const flushSave = useCallback(
+    async (conversationId: string, currentMessages: ChatMessage[]) => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      const persistedMessages = toPersistedMessages(currentMessages);
+      const signature = computeMessageSignature(persistedMessages);
+      if (signature === lastSavedSignatureRef.current) return;
+      try {
+        const saved = await request<ChatConversation>(
+          `/tenants/${tenantId}/chat-conversations/${conversationId}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              title: buildConversationTitle(persistedMessages),
+              messages: persistedMessages,
+            }),
+          }
+        );
+        lastSavedSignatureRef.current = computeMessageSignature(saved.messages);
+        upsertConversationSummary(summaryFromConversation(saved));
+      } catch (err) {
+        console.error("保存会话失败:", err);
+      }
+    },
+    [tenantId, upsertConversationSummary]
+  );
 
   const filteredConversations = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase();
@@ -510,11 +561,17 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
   }, [createConversation, currentUser, loadConversation, resetToWelcomeState, router, tenantId]);
 
   useEffect(() => {
-    if (!activeConversationId || loading || historyLoading) return;
+    if (!activeConversationId || historyLoading) return;
 
     const persistedMessages = toPersistedMessages(messages);
-    const signature = JSON.stringify(persistedMessages);
+    const signature = computeMessageSignature(persistedMessages);
     if (signature === lastSavedSignatureRef.current) return;
+
+    // 在 AI 回复期间（loading === true）不立即保存，但标记需要保存
+    if (loading) {
+      pendingSaveDuringLoadingRef.current = true;
+      return;
+    }
 
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
@@ -529,7 +586,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
             messages: persistedMessages,
           }),
         });
-        lastSavedSignatureRef.current = JSON.stringify(saved.messages);
+        lastSavedSignatureRef.current = computeMessageSignature(saved.messages);
         upsertConversationSummary(summaryFromConversation(saved));
       } catch (err) {
         console.error("保存会话失败:", err);
@@ -1014,9 +1071,20 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     } finally {
       abortControllerRef.current = null;
       manualStopRef.current = false;
+      pendingSaveDuringLoadingRef.current = true;
       setLoading(false);
     }
   }, [activeConversationId, createConversation, dataSummary, messages, router, tenantId]);
+
+  /**
+   * 当 loading 从 true 变为 false 且有 pending 保存时，立即保存。
+   * 不走防抖，确保 AI 回复结束后消息一定被持久化。
+   */
+  useEffect(() => {
+    if (loading || !pendingSaveDuringLoadingRef.current || !activeConversationId) return;
+    pendingSaveDuringLoadingRef.current = false;
+    flushSave(activeConversationId, messages);
+  }, [loading, activeConversationId, messages, flushSave]);
 
   const handleStopGeneration = useCallback(() => {
     if (!loading || !abortControllerRef.current) return;
