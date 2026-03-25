@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
@@ -30,6 +30,14 @@ interface IMConfig {
 }
 
 export default function NotificationRulesPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}>
+      <NotificationRulesContent />
+    </Suspense>
+  );
+}
+
+function NotificationRulesContent() {
   const searchParams = useSearchParams();
   const focusRuleId = searchParams.get("ruleId");
   const [tenantId, setTenantId] = useState("demo-tenant");

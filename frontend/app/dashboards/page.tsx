@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getCurrentUser } from "@/lib/user-store";
 import AppHeader from "@/components/AppHeader";
 import DashboardView from "@/components/DashboardView";
 import { DASHBOARD_TEMPLATES, getTemplatesByCategory } from "@/lib/dashboard-templates";
+import { listDashboards, type DashboardInstanceView } from "@/lib/dashboard-store";
 import type { DashboardTemplate } from "@/lib/types";
 
 const CATEGORIES = [
@@ -18,10 +19,21 @@ const CATEGORIES = [
 ];
 
 export default function DashboardsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0b0b10]" />}>
+      <DashboardsContent />
+    </Suspense>
+  );
+}
+
+function DashboardsContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [ready, setReady] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [previewTemplate, setPreviewTemplate] = useState<DashboardTemplate | null>(null);
+  const [myDashboards, setMyDashboards] = useState<DashboardInstanceView[]>([]);
+  const [activeMyDashboard, setActiveMyDashboard] = useState<DashboardInstanceView | null>(null);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -31,6 +43,22 @@ export default function DashboardsPage() {
     }
     setReady(true);
   }, [router]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const loadDashboards = async () => {
+      const list = await listDashboards().catch(() => []);
+      setMyDashboards(list);
+      if (list.length === 0) {
+        setActiveMyDashboard(null);
+        return;
+      }
+      const idFromUrl = searchParams.get("id");
+      const matched = idFromUrl ? list.find((d) => d.id === idFromUrl) : undefined;
+      setActiveMyDashboard(matched || list[0]);
+    };
+    void loadDashboards();
+  }, [ready, searchParams]);
 
   const filteredTemplates = getTemplatesByCategory(selectedCategory).filter(
     (t) => t.id !== "custom" || selectedCategory === "custom" || selectedCategory === "all"
@@ -205,7 +233,7 @@ export default function DashboardsPage() {
             </div>
           </section>
 
-          {/* 我的大屏 -- 占位 */}
+          {/* 我的大屏 */}
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
@@ -213,26 +241,56 @@ export default function DashboardsPage() {
                 <p className="text-sm text-zinc-400">通过模板生成或 AI 对话创建的大屏会出现在这里</p>
               </div>
             </div>
-            <div className="relative overflow-hidden rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-6 py-10 text-center">
-              <div className="absolute inset-0 opacity-40" style={{ backgroundImage: "radial-gradient(circle at 30% 30%, rgba(99,102,241,0.15), transparent 35%), radial-gradient(circle at 70% 60%, rgba(14,165,233,0.15), transparent 40%)" }} />
-              <div className="relative space-y-3 max-w-xl mx-auto">
-                <div className="mx-auto w-12 h-12 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-100 text-xl">
-                  📺
+
+            {activeMyDashboard ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {myDashboards.map((dashboard) => {
+                    const active = dashboard.id === activeMyDashboard.id;
+                    return (
+                      <button
+                        key={dashboard.id}
+                        onClick={() => {
+                          setActiveMyDashboard(dashboard);
+                          router.replace(`/dashboards?id=${dashboard.id}`);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg border text-xs transition-all ${
+                          active
+                            ? "border-indigo-500/50 bg-indigo-500/20 text-indigo-100"
+                            : "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10"
+                        }`}
+                      >
+                        {dashboard.title}
+                      </button>
+                    );
+                  })}
                 </div>
-                <h3 className="text-xl font-semibold text-white">还没有大屏</h3>
-                <p className="text-sm text-zinc-400">
-                  点击上方模板卡片预览效果，或前往 AI 对话页面用自然语言生成专属大屏。
-                </p>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-2">
-                  <button
-                    onClick={() => router.push("/chat")}
-                    className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium shadow-lg shadow-indigo-500/30 hover:bg-indigo-500 transition-all"
-                  >
-                    用 AI 生成大屏
-                  </button>
+                <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                  <DashboardView sections={activeMyDashboard.sections} />
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="relative overflow-hidden rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-6 py-10 text-center">
+                <div className="absolute inset-0 opacity-40" style={{ backgroundImage: "radial-gradient(circle at 30% 30%, rgba(99,102,241,0.15), transparent 35%), radial-gradient(circle at 70% 60%, rgba(14,165,233,0.15), transparent 40%)" }} />
+                <div className="relative space-y-3 max-w-xl mx-auto">
+                  <div className="mx-auto w-12 h-12 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-100 text-xl">
+                    D
+                  </div>
+                  <h3 className="text-xl font-semibold text-white">还没有大屏</h3>
+                  <p className="text-sm text-zinc-400">
+                    点击上方模板卡片预览效果，或前往 AI 对话页面用自然语言生成专属大屏。
+                  </p>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-2">
+                    <button
+                      onClick={() => router.push("/chat")}
+                      className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium shadow-lg shadow-indigo-500/30 hover:bg-indigo-500 transition-all"
+                    >
+                      用 AI 生成大屏
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       </main>

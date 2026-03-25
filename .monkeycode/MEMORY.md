@@ -223,3 +223,10 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
 - Instructions:
   - onboarding 页面完成初始化时不应强制要求用户至少添加一个数据源
   - 数据源在引导流程中属于可选项，用户可稍后再去 `/data-sources` 补充
+
+### Chat 页面大屏自动生成偏好
+- Date: 2026-03-25
+- Context: 用户要求在 chat 页面对话即可直接生成可在数据大屏查看的大屏
+- Instructions:
+  - 当用户在 Chat 页面提出生成大屏需求时，应自动解析 `dashboard_config` 并创建大屏实例
+  - 创建成功后应在对话中返回可直接跳转的 `/dashboards?id=<id>` 查看入口

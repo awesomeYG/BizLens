@@ -774,8 +774,6 @@ export default function ChatPanel({
                       }}
                     />
                    </>
-                 ) : (
-                   <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">{m.content}</pre>
                  )}
 
               </div>

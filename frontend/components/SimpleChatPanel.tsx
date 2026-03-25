@@ -7,7 +7,8 @@ import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { getCurrentUser } from "@/lib/user-store";
 import { request, getAccessToken } from "@/lib/auth/api";
-import type { ChatConversation, ChatConversationSummary, ChatMessage } from "@/lib/types";
+import { createDashboardInstance } from "@/lib/dashboard-store";
+import type { ChatConversation, ChatConversationSummary, ChatMessage, DashboardSection } from "@/lib/types";
 import AppHeader from "@/components/AppHeader";
 
 interface ChatPanelProps {
@@ -115,6 +116,64 @@ function toPersistedMessages(messages: ChatMessage[]) {
   return messages.filter((item) => item.id !== "welcome");
 }
 
+function extractDashboardConfig(content: string): { sections: DashboardSection[]; title?: string } | null {
+  const regex = /```dashboard_config\s*\n([\s\S]*?)\n```/;
+  const match = regex.exec(content);
+  if (!match) return null;
+  try {
+    const config = JSON.parse(match[1]);
+    if (config.sections && Array.isArray(config.sections)) {
+      return { sections: config.sections, title: config.title };
+    }
+  } catch {
+    // ignore parse error
+  }
+  return null;
+}
+
+function removeActionBlocks(content: string): string {
+  return content
+    .replace(/```dashboard_config\s*\n[\s\S]*?\n```/g, "")
+    .replace(/```datasource_config\s*\n[\s\S]*?\n```/g, "")
+    .replace(/```alert_config\s*\n[\s\S]*?\n```/g, "")
+    .replace(/```notification_rule\s*\n[\s\S]*?\n```/g, "")
+    .replace(/```report_config\s*\n[\s\S]*?\n```/g, "")
+    .trim();
+}
+
+function InlineDashboardPreview({
+  content,
+  onSave,
+}: {
+  content: string;
+  onSave?: (payload: { title?: string; sections: DashboardSection[] }) => void;
+}) {
+  const config = extractDashboardConfig(content);
+  if (!config) return null;
+
+  return (
+    <div className="mt-3 rounded-xl border border-indigo-500/20 bg-gradient-to-br from-slate-900/80 via-[#0f1020] to-black overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-white/5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+          <span className="text-xs font-medium text-zinc-300">{config.title || "AI 生成大屏"}</span>
+          <span className="text-[10px] text-zinc-500">{config.sections.length} 个区块</span>
+        </div>
+        {onSave ? (
+          <button
+            onClick={() => onSave({ title: config.title, sections: config.sections })}
+            className="text-[11px] text-indigo-100 px-3 py-1 rounded-lg bg-indigo-500/20 border border-indigo-500/30 hover:bg-indigo-500/30"
+          >
+            保存为大屏
+          </button>
+        ) : (
+          <span className="text-[10px] text-zinc-500 px-2 py-0.5 rounded-full bg-white/5 border border-white/10">预览</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function summaryFromConversation(conversation: ChatConversation): ChatConversationSummary {
   const persistedMessages = toPersistedMessages(conversation.messages);
   const preview = persistedMessages[persistedMessages.length - 1]?.content?.replace(/\s+/g, " ").trim() || "";
@@ -173,7 +232,15 @@ function ThinkingIndicator() {
   );
 }
 
-function MessageBubble({ message, userName }: { message: ChatMessage; userName?: string }) {
+function MessageBubble({
+  message,
+  userName,
+  onSaveDashboard,
+}: {
+  message: ChatMessage;
+  userName?: string;
+  onSaveDashboard?: (payload: { title?: string; sections: DashboardSection[] }) => void;
+}) {
   const isUser = message.role === "user";
 
   return (
@@ -201,10 +268,12 @@ function MessageBubble({ message, userName }: { message: ChatMessage; userName?:
           ) : (
             <div className="prose-chat prose-invert max-w-full min-w-0 overflow-x-auto break-all">
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-                {message.content}
+                {removeActionBlocks(message.content)}
               </ReactMarkdown>
             </div>
           )}
+
+          {!isUser ? <InlineDashboardPreview content={message.content} onSave={onSaveDashboard} /> : null}
         </div>
 
         <span className={`mt-1.5 text-[10px] text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity select-none ${isUser ? "text-right pr-1" : "pl-1"}`}>
@@ -700,6 +769,32 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       }
     };
 
+    const createDashboardFromResponse = async (rawContent: string) => {
+      const config = extractDashboardConfig(rawContent);
+      if (!config) return false;
+      try {
+        const saved = await createDashboardInstance({
+          title: config.title || "AI 生成大屏",
+          sections: config.sections,
+        });
+        const cleanContent = removeActionBlocks(rawContent);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  content: `${cleanContent}\n\n[check] 大屏「${saved.title}」已自动创建，可前往 /dashboards?id=${saved.id} 查看。`,
+                }
+              : m
+          )
+        );
+        return true;
+      } catch (err) {
+        console.error("创建大屏失败:", err);
+        return false;
+      }
+    };
+
     setMessages((prev) => [
       ...prev,
       { id: userMsgId, role: "user", content: question, timestamp: Date.now() },
@@ -836,6 +931,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
         await createAlertFromResponse(content);
         await createNotificationRuleFromResponse(content);
         await createDataSourceFromResponse(content);
+        await createDashboardFromResponse(content);
         return;
       }
 
@@ -877,6 +973,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
         await createAlertFromResponse(fullContent);
         await createNotificationRuleFromResponse(fullContent);
         await createDataSourceFromResponse(fullContent);
+        await createDashboardFromResponse(fullContent);
       }
     } catch (err) {
       const isManualAbort = manualStopRef.current || (err instanceof DOMException && err.name === "AbortError");
@@ -1185,7 +1282,46 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
                 {messages.map((m) => {
                   if (m.id === "welcome") return null;
                   if (m.role === "assistant" && !m.content.trim()) return null;
-                  return <MessageBubble key={m.id} message={m} userName={currentUser?.name} />;
+                  return (
+                    <MessageBubble
+                      key={m.id}
+                      message={m}
+                      userName={currentUser?.name}
+                      onSaveDashboard={async (payload) => {
+                        try {
+                          const saved = await createDashboardInstance({
+                            title: payload.title || "AI 生成大屏",
+                            sections: payload.sections,
+                          });
+                          setMessages((prev) =>
+                            prev.map((x) =>
+                              x.id === m.id
+                                ? {
+                                    ...x,
+                                    content:
+                                      removeActionBlocks(x.content) +
+                                      `\n\n[check] 大屏「${saved.title}」已保存，可前往 /dashboards?id=${saved.id} 查看。`,
+                                  }
+                                : x
+                            )
+                          );
+                        } catch (err) {
+                          setMessages((prev) =>
+                            prev.map((x) =>
+                              x.id === m.id
+                                ? {
+                                    ...x,
+                                    content:
+                                      removeActionBlocks(x.content) +
+                                      `\n\n[error] 保存大屏失败：${err instanceof Error ? err.message : "未知错误"}`,
+                                  }
+                                : x
+                            )
+                          );
+                        }
+                      }}
+                    />
+                  );
                 })}
                 {showThinkingIndicator ? <ThinkingIndicator /> : null}
               </div>
