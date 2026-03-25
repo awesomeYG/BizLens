@@ -166,6 +166,26 @@ export default function IMPlatformForm({
             </div>
           ) : null}
 
+          {formData.type === "dingtalk" ? (
+            <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20">
+              <div className="flex items-start gap-2">
+                <svg className="w-4 h-4 text-indigo-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="text-xs text-indigo-300 font-medium">双向对话支持</p>
+                  <p className="text-[10px] text-zinc-400 mt-1 leading-relaxed">
+                    如需在钉钉群内 @机器人 与 AI 对话，请在钉钉机器人安全设置中开启「自定义关键词」或「加签」，
+                    并将消息接收地址设为：<br />
+                    <code className="text-[10px] text-indigo-300 bg-zinc-900/80 px-1.5 py-0.5 rounded mt-1 inline-block">
+                      {'<'}您的域名{'>'}/api/webhook/dingtalk
+                    </code>
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/50">
             <input
               id="enabled"

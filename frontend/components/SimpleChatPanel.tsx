@@ -953,10 +953,109 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     e.target.value = "";
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = input.trim();
     if (!text || loading) return;
     setInput("");
+
+    const extractDingTalkMessage = (raw: string) => {
+      const regex = /给钉钉发句(?:话)?[“\"]([^”\"]+)[”\"]|发钉钉(?:消息|通知)?[:：]?\s*[“\"]([^”\"]+)[”\"]/;
+      const match = regex.exec(raw);
+      if (!match) return null;
+      return match[1] || match[2] || null;
+    };
+
+    const directMsg = extractDingTalkMessage(text);
+    if (directMsg) {
+      const userMsgId = crypto.randomUUID();
+      const assistantMsgId = crypto.randomUUID();
+      setMessages((prev) => [
+        ...prev,
+        { id: userMsgId, role: "user", content: text, timestamp: Date.now() },
+        { id: assistantMsgId, role: "assistant", content: "", timestamp: Date.now() },
+      ]);
+
+      const token = getAccessToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      try {
+        const imRes = await fetch(`/api/tenants/${tenantId}/im-configs`, { headers });
+        const imConfigs = imRes.ok ? await imRes.json() : [];
+        const enabledConfigs = Array.isArray(imConfigs) ? imConfigs.filter((c) => c?.enabled) : [];
+        const dingCfg = enabledConfigs.find((c: any) => String(c?.type || "").toLowerCase() === "dingtalk");
+
+        if (!dingCfg) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? {
+                    ...m,
+                    content:
+                      `未找到已启用的钉钉配置，无法发送。\n\n` +
+                      `请先前往 [IM 配置](/im/settings) 添加并启用钉钉机器人。`,
+                  }
+                : m
+            )
+          );
+          return;
+        }
+
+        const sendRes = await fetch(`/api/tenants/${tenantId}/notifications/send`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            platformIds: [String(dingCfg.id)],
+            templateType: "chat_direct",
+            title: "",
+            content: directMsg,
+            markdown: false,
+          }),
+        });
+
+        if (!sendRes.ok) {
+          const errData = await sendRes.json().catch(() => null);
+          const errMsg = errData?.error || `HTTP ${sendRes.status}`;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? {
+                    ...m,
+                    content:
+                      `发送到钉钉失败：${errMsg}\n\n` +
+                      `请检查 Webhook 与密钥是否正确，或在 [IM 配置](/im/settings) 重新测试。`,
+                  }
+                : m
+            )
+          );
+          return;
+        }
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  content: `已将消息发送到钉钉：${directMsg}`,
+                }
+              : m
+          )
+        );
+      } catch (err) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  content: `发送到钉钉时出现错误：${err instanceof Error ? err.message : "未知错误"}`,
+                }
+              : m
+          )
+        );
+      }
+      return;
+    }
+
     void sendToAI(text);
   };
 
