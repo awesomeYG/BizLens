@@ -69,11 +69,10 @@ export default function IMPlatformForm({
                 aria-haspopup="listbox"
                 aria-expanded={typeMenuOpen}
                 onClick={() => setTypeMenuOpen((open) => !open)}
-                className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 ${
-                  typeMenuOpen
-                    ? "border-indigo-500/60 bg-zinc-900/70 shadow-[0_0_0_1px_rgba(99,102,241,0.25)]"
-                    : "border-zinc-800 bg-zinc-900/60 hover:border-zinc-700"
-                }`}
+                className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 ${typeMenuOpen
+                  ? "border-indigo-500/60 bg-zinc-900/70 shadow-[0_0_0_1px_rgba(99,102,241,0.25)]"
+                  : "border-zinc-800 bg-zinc-900/60 hover:border-zinc-700"
+                  }`}
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-950">
                   {selectedPlatform ? (
@@ -120,11 +119,10 @@ export default function IMPlatformForm({
                           onFormDataChange({ ...formData, type: platform.type as IMPlatformType });
                           setTypeMenuOpen(false);
                         }}
-                        className={`flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition ${
-                          selected
-                            ? "bg-indigo-500/10 text-indigo-100"
-                            : "text-zinc-100 hover:bg-white/5"
-                        }`}
+                        className={`flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition ${selected
+                          ? "bg-indigo-500/10 text-indigo-100"
+                          : "text-zinc-100 hover:bg-white/5"
+                          }`}
                       >
                         <span
                           className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800"
@@ -169,7 +167,7 @@ export default function IMPlatformForm({
         )}
 
         {/* Selected Platform Info */}
-        {selectedPlatform && (
+        {selectedPlatform && editingId && (
           <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-900/50 border border-zinc-800/50">
             <div
               className="w-10 h-10 rounded-lg flex items-center justify-center"
@@ -185,9 +183,8 @@ export default function IMPlatformForm({
             </div>
           </div>
         )}
-
         {/* Form */}
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} className="space-y-4" autoComplete="off">
           <div>
             <label className="block text-xs text-zinc-500 mb-1.5">配置名称</label>
             <input
@@ -207,6 +204,8 @@ export default function IMPlatformForm({
               placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."
               type="url"
               className="input-base"
+              autoComplete="off"
+              spellCheck={false}
             />
           </div>
 
@@ -220,8 +219,11 @@ export default function IMPlatformForm({
                 value={formData.secret}
                 onChange={(e) => onFormDataChange({ ...formData, secret: e.target.value })}
                 placeholder="SEC..."
-                type="password"
+                type="text"
                 className="input-base"
+                autoComplete="off"
+                spellCheck={false}
+                style={{ WebkitTextSecurity: "disc" } as any}
               />
               <p className="text-[10px] text-zinc-600 mt-1">
                 部分平台需要签名密钥以增强安全性
