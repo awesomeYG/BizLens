@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { getCurrentUser } from "@/lib/user-store";
 import { IM_PLATFORMS_LIST, type IMPlatformConfig, type IMPlatformType, type IMConfigCreateRequest } from "@/lib/im";
 import IMPlatformCard from "@/components/IMPlatformCard";
 import IMPlatformForm from "@/components/IMPlatformForm";
 import AppHeader from "@/components/AppHeader";
+import IMSectionNav from "@/components/IMSectionNav";
 
 export default function IMSettingsPage() {
   const router = useRouter();
@@ -107,20 +107,15 @@ export default function IMSettingsPage() {
         title="IM 平台集成"
         backHref="/"
         actions={
-          <>
-            <Link href="/im/notifications" className="px-3 py-1.5 text-xs rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/70 transition-all">
-              通知中心
-            </Link>
-            <button
-              onClick={() => setShowForm(true)}
-              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-lg shadow-indigo-500/30 flex items-center gap-1.5"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              添加平台
-            </button>
-          </>
+          <button
+            onClick={() => setShowForm(true)}
+            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-lg shadow-indigo-500/30 flex items-center gap-1.5"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            添加平台
+          </button>
         }
       />
 
@@ -152,6 +147,8 @@ export default function IMSettingsPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
+        <IMSectionNav current="settings" />
+
         {/* Platform Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
           {configs.map((config) => {

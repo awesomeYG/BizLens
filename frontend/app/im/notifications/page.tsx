@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/lib/user-store";
 import { IM_PLATFORM_REGISTRY, type IMPlatformConfig, type NotificationRecord, type NotificationSendRequest } from "@/lib/im";
 import IMPlatformIcon from "@/components/IMPlatformIcon";
 import AppHeader from "@/components/AppHeader";
+import IMSectionNav from "@/components/IMSectionNav";
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -111,6 +112,8 @@ export default function NotificationsPage() {
 
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-6 py-8">
+        <IMSectionNav current="notifications" />
+
         {/* Tab Switcher */}
         <div className="flex gap-1 bg-zinc-900/80 rounded-xl p-1 w-fit mb-6 border border-zinc-800/50">
           {(["send", "history"] as const).map((t) => (

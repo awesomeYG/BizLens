@@ -199,7 +199,7 @@ function MessageBubble({ message, userName }: { message: ChatMessage; userName?:
           {isUser ? (
             <p className="whitespace-pre-wrap break-words">{message.content}</p>
           ) : (
-            <div className="prose-chat prose-invert max-w-full min-w-0 overflow-x-auto">
+            <div className="prose-chat prose-invert max-w-full min-w-0 overflow-x-auto break-all">
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                 {message.content}
               </ReactMarkdown>
@@ -532,6 +532,174 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       }
     };
 
+    const createAlertFromResponse = async (rawContent: string) => {
+      const alertRegex = /```alert_config\s*\n([\s\S]*?)\n```/;
+      const alertMatch = alertRegex.exec(rawContent);
+      if (!alertMatch) return false;
+
+      try {
+        const alertConfig = JSON.parse(alertMatch[1]);
+        const token = getAccessToken();
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) headers.Authorization = `Bearer ${token}`;
+
+        const alertRes = await fetch(`/api/tenants/${tenantId}/alerts`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(alertConfig),
+        });
+
+        const cleanContent = rawContent.replace(alertRegex, "").trim();
+        if (!alertRes.ok) {
+          const errData = await alertRes.json().catch(() => null);
+          const errMsg = errData?.error || `HTTP ${alertRes.status}`;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? {
+                    ...m,
+                    content:
+                      `${cleanContent}\n\n` +
+                      `已识别到告警意图，但自动创建告警规则失败：${errMsg}\n\n` +
+                      `你可以前往 [告警配置](/alerts/config) 页面手动检查。`,
+                  }
+                : m
+            )
+          );
+          return false;
+        }
+
+        const created = await alertRes.json();
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  content:
+                    `${cleanContent}\n\n` +
+                    `告警规则「${created.name || alertConfig.name}」已自动创建。\n\n` +
+                    `可前往 [告警配置](/alerts/config) 页面查看和调整。`,
+                }
+              : m
+          )
+        );
+        return true;
+      } catch (err) {
+        console.error("创建告警规则失败:", err);
+        return false;
+      }
+    };
+
+    const createNotificationRuleFromResponse = async (rawContent: string) => {
+      const notificationRegex = /```notification_rule\s*\n([\s\S]*?)\n```/;
+      const notificationMatch = notificationRegex.exec(rawContent);
+      if (!notificationMatch) return false;
+
+      try {
+        const ruleConfig = JSON.parse(notificationMatch[1]) as Record<string, unknown>;
+        const token = getAccessToken();
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) headers.Authorization = `Bearer ${token}`;
+
+        const imRes = await fetch(`/api/tenants/${tenantId}/im-configs`, { headers });
+        const imConfigs = imRes.ok ? await imRes.json() : [];
+        const enabledConfigs = Array.isArray(imConfigs) ? imConfigs.filter((c) => c?.enabled) : [];
+
+        const rawPlatformValue = ruleConfig.platformIds;
+        const rawPlatformIds = Array.isArray(rawPlatformValue)
+          ? rawPlatformValue.map(String).join(",").trim()
+          : typeof rawPlatformValue === "string"
+            ? rawPlatformValue.trim()
+            : "";
+        const requestedTokens = rawPlatformIds
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        const resolvedIds = new Set<string>();
+        const unresolvedTokens: string[] = [];
+
+        for (const tokenItem of requestedTokens) {
+          const tokenLower = tokenItem.toLowerCase();
+          const matched = enabledConfigs.filter((cfg: any) => {
+            const id = String(cfg?.id || "");
+            const type = String(cfg?.type || "").toLowerCase();
+            const name = String(cfg?.name || "").toLowerCase();
+            return id === tokenItem || type === tokenLower || name.includes(tokenLower);
+          });
+          if (matched.length > 0) {
+            matched.forEach((cfg: any) => resolvedIds.add(String(cfg.id)));
+          } else {
+            unresolvedTokens.push(tokenItem);
+          }
+        }
+
+        if (requestedTokens.length === 0) {
+          enabledConfigs.forEach((cfg: any) => {
+            if (String(cfg?.type || "").toLowerCase() === "dingtalk") {
+              resolvedIds.add(String(cfg.id));
+            }
+          });
+        }
+
+        ruleConfig.platformIds = Array.from(resolvedIds).join(",");
+
+        const ruleRes = await fetch(`/api/tenants/${tenantId}/notification-rules`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(ruleConfig),
+        });
+
+        const cleanContent = rawContent.replace(notificationRegex, "").trim();
+        if (!ruleRes.ok) {
+          const errData = await ruleRes.json().catch(() => null);
+          const errMsg = errData?.error || `HTTP ${ruleRes.status}`;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? {
+                    ...m,
+                    content:
+                      `${cleanContent}\n\n` +
+                      `已识别到通知规则，但自动创建失败：${errMsg}\n\n` +
+                      `请前往 [IM 配置](/im/settings) 检查钉钉机器人，并在 [通知规则](/im/rules) 页面手动创建。`,
+                  }
+                : m
+            )
+          );
+          return false;
+        }
+
+        const created = await ruleRes.json();
+        const unresolvedText =
+          unresolvedTokens.length > 0
+            ? `\n- 未匹配平台：${unresolvedTokens.join(", ")}（请在 IM 配置页检查）`
+            : "";
+        const pairStatus = resolvedIds.size > 0 ? "已自动完成平台配对" : "未匹配到可用平台配置";
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  content:
+                    `${cleanContent}\n\n` +
+                    `通知规则「${created.name || ruleConfig.name || "未命名规则"}」已自动创建，${pairStatus}。\n\n` +
+                    `**核对入口**：\n` +
+                    `- [查看通知规则](/im/rules?ruleId=${created.id})\n` +
+                    `- [检查 IM 配置](/im/settings)` +
+                    unresolvedText,
+                }
+              : m
+          )
+        );
+        return true;
+      } catch (err) {
+        console.error("创建通知规则失败:", err);
+        return false;
+      }
+    };
+
     setMessages((prev) => [
       ...prev,
       { id: userMsgId, role: "user", content: question, timestamp: Date.now() },
@@ -665,6 +833,8 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
         const data = await res.json();
         const content = data.content || data.error || "无回复";
         setMessages((prev) => prev.map((m) => (m.id === assistantMsgId ? { ...m, content } : m)));
+        await createAlertFromResponse(content);
+        await createNotificationRuleFromResponse(content);
         await createDataSourceFromResponse(content);
         return;
       }
@@ -704,6 +874,8 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       }
 
       if (fullContent) {
+        await createAlertFromResponse(fullContent);
+        await createNotificationRuleFromResponse(fullContent);
         await createDataSourceFromResponse(fullContent);
       }
     } catch (err) {

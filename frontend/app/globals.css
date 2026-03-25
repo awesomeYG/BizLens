@@ -434,7 +434,7 @@ body {
   color: #c4b5fd;
   overflow-wrap: anywhere;
   word-break: break-word;
-  white-space: normal;
+  white-space: pre-wrap;
 }
 
 .prose-chat pre {
@@ -452,9 +452,9 @@ body {
   padding: 0;
   font-size: 0.85em;
   color: #e4e4e7;
-  white-space: pre;
-  overflow-wrap: normal;
-  word-break: normal;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .prose-chat ul, .prose-chat ol {

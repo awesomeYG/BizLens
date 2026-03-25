@@ -79,8 +79,8 @@ export function UnAuthGuard({ children }: { children: React.ReactNode }) {
       const auth = isAuthenticated();
       
       if (auth) {
-        // 已认证，重定向到首页
-        router.replace("/dashboards");
+        // 已认证，进入 AI 对话
+        router.replace("/chat");
         return;
       }
       
