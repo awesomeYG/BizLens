@@ -6,6 +6,7 @@ import (
 	"ai-bi-server/internal/middleware"
 	"ai-bi-server/internal/model"
 	"ai-bi-server/internal/service"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -107,7 +108,7 @@ func main() {
 
 	// 钉钉机器人双向对话服务
 	dingtalkBotService := service.NewDingtalkBotService(db, imService)
-	dingtalkCallbackHandler := handler.NewDingtalkCallbackHandler(dingtalkBotService)
+	dingtalkStreamService := service.NewDingtalkStreamService(db, imService, dingtalkBotService)
 
 	// 初始化系统预置模板
 	if err := dashboardTemplateService.InitSystemTemplates(); err != nil {
@@ -136,9 +137,6 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
 	})
-
-	// 钉钉机器人回调（免鉴权，由钉钉服务器调用）
-	mux.HandleFunc("/api/webhook/dingtalk", dingtalkCallbackHandler.HandleCallback)
 
 	// 认证路由：/api/auth/[register|login|logout|refresh|me|change-password]
 	mux.HandleFunc("/api/auth/", func(w http.ResponseWriter, r *http.Request) {
@@ -585,6 +583,13 @@ func main() {
 		http.NotFound(w, r)
 	})
 	mux.Handle("/api/datasets/", middleware.Auth(authService)(datasetRouter))
+
+	// 启动钉钉 Stream 客户端（异步）
+	go func() {
+		if err := dingtalkStreamService.StartAll(context.Background()); err != nil {
+			log.Printf("钉钉 Stream 客户端启动失败：%v", err)
+		}
+	}()
 
 	// 启动服务
 	addr := fmt.Sprintf(":%s", cfg.Port)

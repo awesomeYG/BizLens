@@ -212,13 +212,13 @@ export default function IMPlatformForm({
           {formData.type === "dingtalk" || formData.type === "feishu" ? (
             <div>
               <label className="block text-xs text-zinc-500 mb-1.5">
-                签名密钥
+                {formData.type === "dingtalk" ? "AppKey:AppSecret" : "签名密钥"}
                 <span className="text-zinc-600 ml-1">(可选，推荐配置)</span>
               </label>
               <input
                 value={formData.secret}
                 onChange={(e) => onFormDataChange({ ...formData, secret: e.target.value })}
-                placeholder="SEC..."
+                placeholder={formData.type === "dingtalk" ? "格式：dingxxxxxxxxx:xxxxxxxxx" : "SEC..."}
                 type="text"
                 className="input-base"
                 autoComplete="off"
@@ -226,7 +226,9 @@ export default function IMPlatformForm({
                 style={{ WebkitTextSecurity: "disc" } as any}
               />
               <p className="text-[10px] text-zinc-600 mt-1">
-                部分平台需要签名密钥以增强安全性
+                {formData.type === "dingtalk"
+                  ? "钉钉企业内部应用的 AppKey 和 AppSecret，用冒号分隔，用于 Stream 模式接收消息"
+                  : "部分平台需要签名密钥以增强安全性"}
               </p>
             </div>
           ) : null}
@@ -259,11 +261,8 @@ export default function IMPlatformForm({
                 <div>
                   <p className="text-xs text-indigo-300 font-medium">双向对话支持</p>
                   <p className="text-[10px] text-zinc-400 mt-1 leading-relaxed">
-                    如需在钉钉群内 @机器人 与 AI 对话，请在钉钉机器人安全设置中开启「自定义关键词」或「加签」，
-                    并将消息接收地址设为：<br />
-                    <code className="text-[10px] text-indigo-300 bg-zinc-900/80 px-1.5 py-0.5 rounded mt-1 inline-block">
-                      {'<'}您的域名{'>'}/api/webhook/dingtalk
-                    </code>
+                    配置 AppKey:AppSecret 后，服务启动时会自动建立 Stream 长连接，
+                    用户在钉钉群 @机器人 即可与 AI 对话，无需公网回调地址。
                   </p>
                 </div>
               </div>

@@ -229,14 +229,16 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
 - Context: Agent 在执行钉钉双向对话功能开发时发现
 - Category: 代码结构
 - Instructions:
-  - 钉钉入站回调接口：POST /api/webhook/dingtalk（免鉴权，由钉钉服务器调用）
-  - 后端 handler：backend/internal/handler/dingtalk_callback_handler.go，解析 outgoing 回调体，异步处理
-  - 后端 service：backend/internal/service/dingtalk_bot_service.go，调用 Next.js /api/chat 获取 AI 回复，通过 sessionWebhook 回发钉钉
-  - 钉钉 outgoing 回调会携带 sessionWebhook（限时回复地址），优先使用它回复，否则 fallback 到 IMConfig 中的 WebhookURL
-  - AI 回复中的 action blocks（dashboard_config/alert_config 等）在发送到钉钉前会被自动剥离
-  - 前端 SimpleChatPanel 增加了"给钉钉发句话'xxx'"的直接发送快捷指令（走 /api/tenants/{id}/notifications/send）
-  - IMPlatformForm 钉钉配置增加了双向对话提示（回调 URL 格式说明）
-  - 钉钉机器人安全设置的加签 secret 复用 IMConfig.Secret 字段，无需新增 model 字段
+  - 钉钉接收消息采用 Stream 模式（官方推荐，无需公网回调地址）
+  - 使用官方 SDK：github.com/open-dingtalk/dingtalk-stream-sdk-go（依赖 gorilla/websocket）
+  - Stream 客户端服务：backend/internal/service/dingtalk_stream_service.go，启动时自动建立 WebSocket 长连接到钉钉网关
+  - Bot 处理服务：backend/internal/service/dingtalk_bot_service.go（复用），调用 Next.js /api/chat 获取 AI 回复
+  - Secret 字段格式改为 `appKey:appSecret`（冒号分隔），来自钉钉企业内部应用
+  - Stream 连接在 main.go 启动时异步建立，后端启动后自动连接所有已启用钉钉配置
+  - IMConfig WebhookURL 仍用于主动发送通知，Secret 字段改为存 appKey:appSecret
+  - AI 回复中的 action blocks 在发送到钉钉前会被自动剥离
+  - 前端 SimpleChatPanel 增加了"给钉钉发句话"直接发送快捷指令（走 /api/tenants/{id}/notifications/send）
+  - 前端 IMPlatformForm 钉钉配置增加了 Stream 模式提示和 AppKey:AppSecret 格式说明
 
 ### Chat 页面大屏自动生成偏好
 - Date: 2026-03-25
