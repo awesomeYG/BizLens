@@ -95,6 +95,8 @@ export default function InsightsPage() {
   const [historySummaries, setHistorySummaries] = useState<DailySummaryData[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [generateSuccess, setGenerateSuccess] = useState(false);
 
   const tenantId = typeof window !== "undefined" ? localStorage.getItem("tenantId") || "demo" : "demo";
 
@@ -146,25 +148,28 @@ export default function InsightsPage() {
 
   const handleGenerate = async () => {
     setGenerating(true);
+    setGenerateError(null);
+    setGenerateSuccess(false);
     try {
       const res = await authFetch(`/api/tenants/${tenantId}/daily-summary/generate`, {
         method: "POST",
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.summary) {
-          setSummary(data.summary);
-          try {
-            setParsedContent(JSON.parse(data.summary.content));
-          } catch {
-            setParsedContent(null);
-          }
-          // Refresh history
-          fetchHistory();
+      const data = await res.json();
+      if (res.ok && data.success && data.summary) {
+        setSummary(data.summary);
+        try {
+          setParsedContent(JSON.parse(data.summary.content));
+        } catch {
+          setParsedContent(null);
         }
+        fetchHistory();
+        setGenerateSuccess(true);
+        setTimeout(() => setGenerateSuccess(false), 3000);
+      } else {
+        setGenerateError(data.error || `生成失败 (${res.status})`);
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      setGenerateError("网络错误，请检查后端服务是否正常运行");
     } finally {
       setGenerating(false);
     }
@@ -191,9 +196,9 @@ export default function InsightsPage() {
   };
 
   const getTrendIcon = (trend: string) => {
-    if (trend === "rising") return { text: "UP", color: "text-emerald-400" };
-    if (trend === "falling") return { text: "DOWN", color: "text-red-400" };
-    return { text: "FLAT", color: "text-zinc-400" };
+    if (trend === "rising") return { text: "上升", color: "text-emerald-400" };
+    if (trend === "falling") return { text: "下降", color: "text-red-400" };
+    return { text: "平稳", color: "text-zinc-400" };
   };
 
   const getSeverityBadge = (severity: string) => {
@@ -204,24 +209,32 @@ export default function InsightsPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
-      <AppHeader title="BizLens" subtitle="Business Insights" />
+      <AppHeader title="BizLens" subtitle="业务洞察" />
 
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold">Business Insights</h1>
+            <h1 className="text-2xl font-bold">业务洞察</h1>
             <p className="text-zinc-400 mt-1">
-              {summary ? `${summary.summaryDate}` : "Core metrics overview, anomaly alerts & trend predictions"}
+              {summary ? `${summary.summaryDate}` : "核心指标概览、异常告警与趋势预测"}
             </p>
           </div>
-          <button
-            onClick={handleGenerate}
-            disabled={generating}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-          >
-            {generating ? "Generating..." : "Generate Summary"}
-          </button>
+          <div className="flex items-center gap-3">
+            {(generateError || generateSuccess) && (
+              <span className={`text-sm ${generateError ? "text-red-400" : "text-emerald-400"}`}>
+                {generateError || (generateSuccess ? "生成成功！" : "")}
+              </span>
+            )}
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {generating && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+              {generating ? "生成中..." : "生成摘要"}
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -229,11 +242,11 @@ export default function InsightsPage() {
             <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : !parsedContent ? (
-          <div className="text-center py-20">
+            <div className="text-center py-20">
             <div className="text-6xl mb-4 opacity-50">[i]</div>
-            <h3 className="text-lg font-medium mb-2">No Summary Available</h3>
+            <h3 className="text-lg font-medium mb-2">暂无摘要</h3>
             <p className="text-zinc-400 mb-6">
-              Click &quot;Generate Summary&quot; to create today&apos;s business insights report
+              点击&quot;生成摘要&quot;创建今日业务洞察报告
             </p>
           </div>
         ) : (
@@ -242,7 +255,7 @@ export default function InsightsPage() {
             <div className={`relative rounded-xl border border-zinc-800 bg-gradient-to-br ${getHealthBg(parsedContent.healthScore)} p-6`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-zinc-400 text-sm mb-1">Business Health Score</p>
+                  <p className="text-zinc-400 text-sm mb-1">业务健康评分</p>
                   <div className="flex items-end gap-2">
                     <span className={`text-5xl font-bold ${getHealthColor(parsedContent.healthScore)}`}>
                       {parsedContent.healthScore}
@@ -269,11 +282,11 @@ export default function InsightsPage() {
                 <div className="text-right">
                   <p className="text-zinc-400 text-sm">{summary?.summaryDate}</p>
                   <p className="text-zinc-500 text-xs mt-1">
-                    {parsedContent.metrics.length} metrics monitored
+                    {parsedContent.metrics.length} 个指标监控中
                   </p>
                   {parsedContent.concerns && parsedContent.concerns.length > 0 && (
                     <p className="text-red-400 text-xs mt-1">
-                      {parsedContent.concerns.length} concerns
+                      {parsedContent.concerns.length} 个需关注项
                     </p>
                   )}
                 </div>
@@ -295,7 +308,7 @@ export default function InsightsPage() {
             {parsedContent.metrics.length > 0 && (
               <div>
                 <h2 className="text-lg font-semibold mb-4">
-                  Core Metrics
+                  核心指标
                   <span className="text-zinc-500 text-sm font-normal ml-2">今日 vs 昨日</span>
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -340,15 +353,15 @@ export default function InsightsPage() {
             {/* Top Changes */}
             {parsedContent.topChanges && parsedContent.topChanges.length > 0 && (
               <div>
-                <h2 className="text-lg font-semibold mb-4">Top Changes</h2>
+                <h2 className="text-lg font-semibold mb-4">变化最大的指标</h2>
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-zinc-800 text-zinc-400">
-                        <th className="text-left px-4 py-3">Metric</th>
-                        <th className="text-right px-4 py-3">Current</th>
-                        <th className="text-right px-4 py-3">Change</th>
-                        <th className="text-right px-4 py-3">Direction</th>
+                        <th className="text-left px-4 py-3">指标</th>
+                        <th className="text-right px-4 py-3">当前值</th>
+                        <th className="text-right px-4 py-3">变化</th>
+                        <th className="text-right px-4 py-3">方向</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -365,7 +378,7 @@ export default function InsightsPage() {
                             </td>
                             <td className="px-4 py-3 text-right">
                               <span className={`px-2 py-0.5 rounded text-xs ${arrow.color} bg-zinc-800`}>
-                                {m.direction.toUpperCase()}
+                                {m.direction === "up" ? "上升" : m.direction === "down" ? "下降" : "平稳"}
                               </span>
                             </td>
                           </tr>
@@ -381,7 +394,7 @@ export default function InsightsPage() {
             {parsedContent.anomalies.length > 0 && (
               <div>
                 <h2 className="text-lg font-semibold mb-4">
-                  Anomaly Alerts
+                  异常告警
                   <span className="ml-2 px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full">
                     {parsedContent.anomalies.length}
                   </span>
@@ -394,7 +407,7 @@ export default function InsightsPage() {
                     >
                       <div className="flex items-center gap-3">
                         <span className={`px-2 py-1 rounded border text-xs font-medium ${getSeverityBadge(a.severity)}`}>
-                          {a.severity.toUpperCase()}
+                          {a.severity === "critical" ? "严重" : a.severity === "warning" ? "警告" : a.severity}
                         </span>
                         <span>{a.metricName || a.metricId}</span>
                       </div>
@@ -410,7 +423,7 @@ export default function InsightsPage() {
             {/* Trend Predictions */}
             {parsedContent.predictions && parsedContent.predictions.length > 0 && (
               <div>
-                <h2 className="text-lg font-semibold mb-4">Trend Predictions</h2>
+                <h2 className="text-lg font-semibold mb-4">趋势预测</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {parsedContent.predictions.map((p, i) => {
                     const trendInfo = getTrendIcon(p.trend);
@@ -424,12 +437,12 @@ export default function InsightsPage() {
                         </div>
                         <div className="flex items-end gap-4 mb-3">
                           <div>
-                            <p className="text-xs text-zinc-500">Current</p>
+                            <p className="text-xs text-zinc-500">当前值</p>
                             <p className="text-lg font-bold">{p.currentValue.toLocaleString()}</p>
                           </div>
                           <div className="text-zinc-500">--&gt;</div>
                           <div>
-                            <p className="text-xs text-zinc-500">Predicted</p>
+                            <p className="text-xs text-zinc-500">预测值</p>
                             <p className="text-lg font-bold text-indigo-400">
                               {p.predictedNext.toLocaleString()}
                             </p>
@@ -457,7 +470,7 @@ export default function InsightsPage() {
 
                         <p className="text-xs text-zinc-500 mt-2">{p.description}</p>
                         <p className="text-xs text-zinc-600 mt-1">
-                          Confidence: {(p.confidence * 100).toFixed(0)}%
+                          置信度: {(p.confidence * 100).toFixed(0)}%
                         </p>
                       </div>
                     );
@@ -469,7 +482,7 @@ export default function InsightsPage() {
             {/* 每周目标达成 */}
             {parsedContent.weeklyTargets && parsedContent.weeklyTargets.length > 0 && (
               <div>
-                <h2 className="text-lg font-semibold mb-4">Weekly Targets</h2>
+                <h2 className="text-lg font-semibold mb-4">每周目标</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {parsedContent.weeklyTargets.map((t, i) => {
                     const trendColors: Record<string, string> = {
@@ -512,7 +525,7 @@ export default function InsightsPage() {
                         </div>
                         <p className="text-xs text-zinc-500">
                           {t.achievementRate > 0 ? `${t.achievementRate.toFixed(0)}%` : "--"}
-                          {t.daysLeft > 0 ? ` · ${t.daysLeft}d left` : ""}
+                          {t.daysLeft > 0 ? ` · 剩余 ${t.daysLeft} 天` : ""}
                         </p>
                         {t.description && (
                           <p className="text-xs text-zinc-600 mt-1 line-clamp-2">{t.description}</p>
@@ -545,7 +558,7 @@ export default function InsightsPage() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-start gap-3 flex-1">
                             <span className={`px-2 py-0.5 rounded border text-xs font-medium mt-0.5 shrink-0 ${severityColors[c.severity] || "bg-zinc-700 text-zinc-300"}`}>
-                              {c.severity.toUpperCase()}
+                              {c.severity === "critical" ? "严重" : c.severity === "warning" ? "警告" : c.severity === "info" ? "提示" : c.severity}
                             </span>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
@@ -623,14 +636,14 @@ export default function InsightsPage() {
             {/* History */}
             {historySummaries.length > 1 && (
               <div>
-                <h2 className="text-lg font-semibold mb-4">History</h2>
+                <h2 className="text-lg font-semibold mb-4">历史记录</h2>
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-zinc-800 text-zinc-400">
-                        <th className="text-left px-4 py-3">Date</th>
-                        <th className="text-right px-4 py-3">Health Score</th>
-                        <th className="text-right px-4 py-3">Status</th>
+                        <th className="text-left px-4 py-3">日期</th>
+                        <th className="text-right px-4 py-3">健康评分</th>
+                        <th className="text-right px-4 py-3">状态</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -642,9 +655,9 @@ export default function InsightsPage() {
                           </td>
                           <td className="px-4 py-3 text-right">
                             {s.sentAt ? (
-                              <span className="text-xs text-emerald-400">Sent</span>
+                              <span className="text-xs text-emerald-400">已发送</span>
                             ) : (
-                              <span className="text-xs text-zinc-500">Generated</span>
+                              <span className="text-xs text-zinc-500">已生成</span>
                             )}
                           </td>
                         </tr>
