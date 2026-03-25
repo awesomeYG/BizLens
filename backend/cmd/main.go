@@ -59,17 +59,21 @@ func main() {
 	}
 	log.Println("数据库迁移完成")
 
-	// SQLite 需要手动生成 UUID (通过 BeforeCreate hook)
-	if cfg.UseSQLite {
-		type BaseEntity struct {
-			ID string `gorm:"type:varchar(50);primaryKey"`
+	// 统一生成字符串主键 ID（若模型存在 ID 字段且为空），避免插入 NULL 触发 not-null constraint。
+	// SQLite/PostgreSQL 都适用；若业务已显式设置 ID，这里不会覆盖。
+	db.Callback().Create().Before("gorm:before_create").Register("uuid_gen", func(tx *gorm.DB) {
+		if tx == nil || tx.Statement == nil || tx.Statement.Schema == nil {
+			return
 		}
-		db.Callback().Create().Before("gorm:before_create").Register("uuid_gen", func(tx *gorm.DB) {
-			if id := tx.Statement.Context.Value("generated_id"); id == nil {
-				tx.Statement.SetColumn("ID", uuid.New().String())
-			}
-		})
-	}
+		f := tx.Statement.Schema.LookUpField("ID")
+		if f == nil {
+			return
+		}
+		_, isZero := f.ValueOf(tx.Statement.Context, tx.Statement.ReflectValue)
+		if isZero {
+			tx.Statement.SetColumn("ID", uuid.NewString())
+		}
+	})
 
 	// 初始化服务和 handler
 	imService := service.NewIMService(db)

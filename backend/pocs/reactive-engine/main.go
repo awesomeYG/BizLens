@@ -318,7 +318,7 @@ func (e *Engine) RunAll() error {
 }
 
 func main() {
-	fmt.Println("=== BizLens v3.0 Reactive Engine POC ===\n")
+	fmt.Println("=== BizLens v3.0 Reactive Engine POC ===")
 
 	// 创建引擎
 	engine := NewEngine()

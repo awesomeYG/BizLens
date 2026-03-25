@@ -93,6 +93,23 @@ export async function request<T>(
     headers,
   });
 
+  const parseBody = async (res: Response): Promise<T> => {
+    // 204/205 按规范无响应体
+    if (res.status === 204 || res.status === 205) {
+      return undefined as unknown as T;
+    }
+    const text = await res.text();
+    if (!text) {
+      return undefined as unknown as T;
+    }
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      // 少数接口可能返回纯文本（例如网关错误页）
+      return text as unknown as T;
+    }
+  };
+
   // 处理 401 错误（尝试刷新 Token）
   if (response.status === 401) {
     const refreshToken = getRefreshToken();
@@ -114,7 +131,7 @@ export async function request<T>(
           throw new Error(await retryResponse.text() || "请求失败");
         }
 
-        return retryResponse.json();
+        return parseBody(retryResponse);
       } catch (err) {
         // 刷新失败，清除 Token
         clearTokens();
@@ -128,7 +145,7 @@ export async function request<T>(
     throw new Error(errorData.error || response.statusText || "请求失败");
   }
 
-  return response.json();
+  return parseBody(response);
 }
 
 /**

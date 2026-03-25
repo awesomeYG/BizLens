@@ -441,8 +441,8 @@ case "${1:-}" in
         ;;
     
     --clean)
-        clean_cache
         stop_all
+        clean_cache
         start_all
         exit 0
         ;;

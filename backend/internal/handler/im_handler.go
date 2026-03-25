@@ -68,8 +68,12 @@ func parseTenantIDStrict(r *http.Request) (string, int, string) {
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
+	// 204/304 按规范不应包含响应体
+	if status == http.StatusNoContent || status == http.StatusNotModified {
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
 }
 
@@ -205,7 +209,7 @@ func (h *IMHandler) DeleteIMConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusNoContent, nil)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // TestIMConfig POST /api/tenants/{id}/im-configs/{configId}/test
