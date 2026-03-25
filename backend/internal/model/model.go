@@ -735,6 +735,17 @@ const (
 	AnomalyFalsePositive AnomalyStatus = "false_positive"
 )
 
+// BusinessCalendar 业务日历（用于降噪策略：节假日/大促自动调高阈值）
+type BusinessCalendar struct {
+	ID        string    `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID  string    `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	Date      string    `gorm:"type:varchar(10);not null;index" json:"date"` // "2026-02-01"
+	Name      string    `gorm:"size:200" json:"name"`                        // "春节假期" / "双十一大促"
+	Type      string    `gorm:"size:20;not null" json:"type"`                // holiday / promotion / maintenance
+	Threshold float64   `gorm:"default:1.5" json:"threshold"`                // 异常检测阈值倍数（默认1.5x，即偏离1.5倍才告警）
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 // AnomalyEvent 异常事件
 type AnomalyEvent struct {
 	ID            string          `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
@@ -812,5 +823,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&MetricBaseline{},
 		&AnomalyEvent{},
 		&DailySummary{},
+		&BusinessCalendar{},
 	)
 }

@@ -143,6 +143,7 @@ func main() {
 
 	// 注入数据依赖（延迟注入避免循环引用）
 	dailySummaryService.SetDataDependencies(dataSourceService, metricService)
+	dailySummaryService.SetRCADependency(rcaService)
 	baselineService.SetDataDependencies(dataSourceService, metricService)
 	schedulerService.SetDataDependencies(dataSourceService, metricService, imService)
 

@@ -17,6 +17,7 @@ type DailySummaryService struct {
 	imService         *IMService
 	dataSourceService *DataSourceService
 	metricService     *MetricService
+	rcaService        *RCAService
 }
 
 // NewDailySummaryService 创建每日摘要服务
@@ -34,14 +35,56 @@ func (s *DailySummaryService) SetDataDependencies(dsSvc *DataSourceService, metr
 	s.metricService = metricSvc
 }
 
-// SummaryContent 摘要内容结构（增强版）
+// SetRCADependency 设置 RCA 服务依赖
+func (s *DailySummaryService) SetRCADependency(rcaSvc *RCAService) {
+	s.rcaService = rcaSvc
+}
+
+// SummaryContent 摘要内容结构（增强版 V2：含根因分析和目标达成）
 type SummaryContent struct {
-	HealthScore int                `json:"healthScore"`
-	Metrics     []MetricSummary    `json:"metrics"`
-	Anomalies   []AnomalySummary   `json:"anomalies"`
-	Trends      []string           `json:"trends"`
-	Predictions []MetricPrediction `json:"predictions,omitempty"` // 趋势预测
-	TopChanges  []MetricSummary    `json:"topChanges,omitempty"`  // 变化最大的指标
+	HealthScore   int                `json:"healthScore"`
+	Metrics       []MetricSummary    `json:"metrics"`
+	Anomalies     []AnomalySummary   `json:"anomalies"`
+	Trends        []string           `json:"trends"`
+	Predictions   []MetricPrediction `json:"predictions,omitempty"`   // 趋势预测
+	TopChanges    []MetricSummary    `json:"topChanges,omitempty"`    // 变化最大的指标
+	Concerns      []ConcernItem      `json:"concerns,omitempty"`      // 需要关注的异常（含 AI 分析和建议）
+	Positives     []PositiveItem     `json:"positives,omitempty"`     // 正面趋势
+	WeeklyTargets []WeeklyTarget     `json:"weeklyTargets,omitempty"` // 每周目标达成率
+}
+
+// ConcernItem 需要关注的异常项（含 AI 分析和建议）
+type ConcernItem struct {
+	MetricID      string   `json:"metricId"`
+	MetricName    string   `json:"metricName,omitempty"`
+	Severity      string   `json:"severity"` // critical/warning/info
+	CurrentValue  float64  `json:"currentValue"`
+	BaselineValue float64  `json:"baselineValue,omitempty"`
+	Change        float64  `json:"change"`              // 变化百分比
+	Analysis      string   `json:"analysis"`            // AI 分析原因
+	Suggestions   []string `json:"suggestions"`         // 建议操作
+	DrillDown     *string  `json:"drillDown,omitempty"` // 维度下钻结果（可选）
+}
+
+// PositiveItem 正面趋势
+type PositiveItem struct {
+	MetricID     string  `json:"metricId"`
+	MetricName   string  `json:"metricName,omitempty"`
+	CurrentValue float64 `json:"currentValue"`
+	Change       float64 `json:"change"` // 正向变化百分比
+	Reason       string  `json:"reason"` // 正面原因描述
+}
+
+// WeeklyTarget 每周目标达成率
+type WeeklyTarget struct {
+	MetricID        string  `json:"metricId"`
+	MetricName      string  `json:"metricName"`
+	CurrentValue    float64 `json:"currentValue"`    // 本周累计值
+	TargetValue     float64 `json:"targetValue"`     // 周目标值（从指标配置中取）
+	AchievementRate float64 `json:"achievementRate"` // 达成率百分比
+	Trend           string  `json:"trend"`           // on_track/at_risk/ahead/behind
+	DaysLeft        int     `json:"daysLeft"`        // 剩余天数
+	Description     string  `json:"description"`     // 描述
 }
 
 // MetricSummary 指标摘要
@@ -76,7 +119,7 @@ type MetricPrediction struct {
 	Description   string    `json:"description"`   // 自然语言描述
 }
 
-// GenerateDailySummary 生成每日摘要（增强版：接入真实数据源）
+// GenerateDailySummary 生成每日摘要（增强版 V2：含 RCA 根因分析 + 目标达成）
 func (s *DailySummaryService) GenerateDailySummary(tenantID string) (*model.DailySummary, error) {
 	today := time.Now().Format("2006-01-02")
 
@@ -113,19 +156,31 @@ func (s *DailySummaryService) GenerateDailySummary(tenantID string) (*model.Dail
 		})
 	}
 
-	// 8. 构建完整摘要内容
+	// 8. [新增] 对每个异常执行 RCA 根因分析，生成 Concerns 列表
+	concerns := s.buildConcernItems(tenantID, anomalies)
+
+	// 9. [新增] 从正常或正向指标中提取正面趋势
+	positives := s.extractPositiveItems(metricSummaries, anomalies)
+
+	// 10. [新增] 计算每周目标达成率
+	weeklyTargets := s.calculateWeeklyTargets(tenantID, metricSummaries)
+
+	// 11. 构建完整摘要内容
 	content := SummaryContent{
-		HealthScore: healthScore,
-		Metrics:     metricSummaries,
-		Anomalies:   anomalySummaries,
-		Trends:      trends,
-		Predictions: predictions,
-		TopChanges:  topChanges,
+		HealthScore:   healthScore,
+		Metrics:       metricSummaries,
+		Anomalies:     anomalySummaries,
+		Trends:        trends,
+		Predictions:   predictions,
+		TopChanges:    topChanges,
+		Concerns:      concerns,
+		Positives:     positives,
+		WeeklyTargets: weeklyTargets,
 	}
 
 	contentJSON, _ := json.Marshal(content)
 
-	// 9. 保存摘要
+	// 12. 保存摘要
 	summary := &model.DailySummary{
 		TenantID:    tenantID,
 		SummaryDate: today,
@@ -543,6 +598,298 @@ func (s *DailySummaryService) generateTrendDescriptions(metrics []MetricSummary,
 	return trends
 }
 
+// buildConcernItems 为每个异常构建 ConcernItem（含 RCA 根因分析和 AI 建议）
+func (s *DailySummaryService) buildConcernItems(tenantID string, anomalies []model.AnomalyEvent) []ConcernItem {
+	concerns := []ConcernItem{}
+
+	for _, anomaly := range anomalies {
+		// 获取指标名称
+		metricName := anomaly.MetricID
+		if s.metricService != nil {
+			if metric, err := s.metricService.GetMetric(anomaly.MetricID); err == nil && metric.DisplayName != "" {
+				metricName = metric.DisplayName
+			}
+		}
+
+		change := 0.0
+		if anomaly.ExpectedValue != 0 {
+			change = ((anomaly.ActualValue - anomaly.ExpectedValue) / math.Abs(anomaly.ExpectedValue)) * 100
+		}
+
+		item := ConcernItem{
+			MetricID:      anomaly.MetricID,
+			MetricName:    metricName,
+			Severity:      string(anomaly.Severity),
+			CurrentValue:  math.Round(anomaly.ActualValue*100) / 100,
+			BaselineValue: math.Round(anomaly.ExpectedValue*100) / 100,
+			Change:        math.Round(change*10) / 10,
+			Suggestions:   []string{},
+		}
+
+		// 如果 RCA 服务可用，对关键异常执行根因分析
+		if s.rcaService != nil && (anomaly.Severity == model.SeverityCritical || anomaly.Severity == model.SeverityWarning) {
+			rcaResult, err := s.rcaService.Analyze(RCARequest{
+				TenantID:  tenantID,
+				MetricID:  anomaly.MetricID,
+				TimeRange: "7d",
+				MaxDepth:  2,
+			})
+			if err == nil && rcaResult != nil {
+				item.Analysis = rcaResult.Summary
+				item.Suggestions = rcaResult.Suggestions
+				// 如果有维度下钻结果，取最关键的
+				if len(rcaResult.DrillDowns) > 0 {
+					for _, dd := range rcaResult.DrillDowns {
+						if len(dd.Items) > 0 {
+							// 取贡献度最大的维度项
+							maxItem := dd.Items[0]
+							for _, it := range dd.Items[1:] {
+								if it.Contribution > maxItem.Contribution {
+									maxItem = it
+								}
+							}
+							if maxItem.Contribution > 10 {
+								drillStr := fmt.Sprintf("%s: %s 变化 %.1f%%（贡献度 %.1f%%）",
+									dd.DimensionName, maxItem.Value, maxItem.ChangeRate, maxItem.Contribution)
+								item.DrillDown = &drillStr
+							}
+							break
+						}
+					}
+				}
+			}
+		}
+
+		// 如果没有 RCA 结果，使用规则化分析
+		if item.Analysis == "" {
+			changeDir := "下降"
+			if anomaly.Direction == "up" {
+				changeDir = "上升"
+			}
+			item.Analysis = fmt.Sprintf("%s 较基线%s %.1f%%，偏离 %.1f 个标准差",
+				metricName, changeDir, math.Abs(change), anomaly.Deviation)
+		}
+
+		// 如果没有建议，生成规则化建议
+		if len(item.Suggestions) == 0 {
+			item.Suggestions = s.generateDefaultSuggestions(anomaly, change)
+		}
+
+		concerns = append(concerns, item)
+	}
+
+	return concerns
+}
+
+// generateDefaultSuggestions 根据异常类型生成默认建议
+func (s *DailySummaryService) generateDefaultSuggestions(anomaly model.AnomalyEvent, change float64) []string {
+	suggestions := []string{}
+
+	if anomaly.Severity == model.SeverityCritical {
+		suggestions = append(suggestions, "建议立即关注：该指标偏离基线过大")
+	}
+
+	if anomaly.Direction == "down" {
+		suggestions = append(suggestions, "建议检查相关业务数据和操作日志")
+		suggestions = append(suggestions, "可点击下方「根因分析」获取详细信息")
+	} else {
+		suggestions = append(suggestions, "当前上升趋势良好，建议持续监控")
+	}
+
+	return suggestions
+}
+
+// extractPositiveItems 从指标中提取正面趋势
+func (s *DailySummaryService) extractPositiveItems(metrics []MetricSummary, anomalies []model.AnomalyEvent) []PositiveItem {
+	positives := []PositiveItem{}
+
+	// 创建一个集合，记录异常指标 ID
+	anomalyMetricIDs := make(map[string]bool)
+	for _, a := range anomalies {
+		anomalyMetricIDs[a.MetricID] = true
+	}
+
+	// 找出变化率 > 5% 且不是异常的指标
+	for _, m := range metrics {
+		// 跳过有异常的指标
+		if anomalyMetricIDs[m.MetricID] || anomalyMetricIDs[m.Name] {
+			continue
+		}
+
+		// 只保留正向变化且变化显著的
+		if m.Direction == "up" && m.Change > 5 {
+			reason := "近期表现良好，环比上升"
+			// 根据变化率给出不同描述
+			if m.Change > 20 {
+				reason = "大幅增长，环比上升"
+			} else if m.Change > 10 {
+				reason = "稳步增长，环比上升"
+			}
+			positives = append(positives, PositiveItem{
+				MetricID:     m.MetricID,
+				MetricName:   m.DisplayName,
+				CurrentValue: m.CurrentValue,
+				Change:       m.Change,
+				Reason:       reason,
+			})
+		}
+	}
+
+	return positives
+}
+
+// calculateWeeklyTargets 计算每周目标达成率
+func (s *DailySummaryService) calculateWeeklyTargets(tenantID string, metrics []MetricSummary) []WeeklyTarget {
+	targets := []WeeklyTarget{}
+
+	if s.metricService == nil || s.dataSourceService == nil {
+		return targets
+	}
+
+	// 获取已确认/活跃的指标
+	confirmedMetrics, _ := s.metricService.ListMetrics(tenantID, "", "confirmed")
+	if len(confirmedMetrics) == 0 {
+		confirmedMetrics, _ = s.metricService.ListMetrics(tenantID, "", "active")
+	}
+
+	// 获取数据源
+	dataSources, _ := s.dataSourceService.ListDataSources(tenantID)
+	var activeDS *model.DataSource
+	for _, ds := range dataSources {
+		if ds.Status == "connected" {
+			activeDS = &ds
+			break
+		}
+	}
+
+	now := time.Now()
+
+	// 计算本周是第几周，以及本周开始/结束日期
+	year := now.Year()
+	yearDay := now.YearDay()
+	week := yearDay / 7
+	if yearDay%7 != 0 {
+		week++
+	}
+	weekStart := getWeekStart(int(year), week)
+
+	// 剩余天数
+	daysInWeek := 7
+	dayOfWeek := int(now.Weekday())
+	if dayOfWeek == 0 {
+		dayOfWeek = 7
+	}
+	daysLeft := daysInWeek - dayOfWeek
+
+	for _, metric := range confirmedMetrics {
+		if metric.BaseTable == "" || metric.BaseField == "" {
+			continue
+		}
+
+		// 查询本周累计值
+		var weekTotal float64
+		if activeDS != nil {
+			weekTotal = s.queryMetricForRange(activeDS, &metric, weekStart, now)
+		}
+
+		// 从 metric.Tags 或其他地方尝试获取目标值
+		// 目前 MVP 阶段：使用日均值 * 7 作为周目标
+		dayAvg := 0.0
+		if dayOfWeek > 0 {
+			dayAvg = weekTotal / float64(dayOfWeek)
+		}
+		targetValue := dayAvg * 7
+
+		// 如果本周已有数据，但变化率明显上升/下降，重新估算
+		// 计算上周同期总量，用于设定合理目标
+		lastWeekStart := weekStart.Add(-7 * 24 * time.Hour)
+		lastWeekTotal := 0.0
+		if activeDS != nil {
+			lastWeekTotal = s.queryMetricForRange(activeDS, &metric, lastWeekStart, weekStart)
+		}
+
+		trend := "on_track"
+		if targetValue > 0 && dayOfWeek > 0 {
+			// 进度评估 = (当前累计 / 目标) / (已过天数 / 7)
+			// 如果进度比 > 1.1 说明 ahead，< 0.85 说明 at_risk
+			expectedProgress := float64(dayOfWeek) / 7.0
+			actualProgress := 0.0
+			if targetValue > 0 {
+				actualProgress = weekTotal / targetValue
+			}
+			completionRatio := 0.0
+			if expectedProgress > 0 {
+				completionRatio = actualProgress / expectedProgress
+			}
+			if completionRatio >= 1.1 {
+				trend = "ahead"
+			} else if completionRatio < 0.85 {
+				trend = "at_risk"
+			}
+
+			// 重新计算目标值：基于上周实际 * 增长目标（默认 5%）
+			if lastWeekTotal > 0 {
+				targetValue = lastWeekTotal * 1.05
+			}
+		}
+
+		achievementRate := 0.0
+		description := ""
+		if targetValue > 0 {
+			achievementRate = math.Round((weekTotal/targetValue)*10000) / 100
+			if trend == "ahead" {
+				description = fmt.Sprintf("本周累计 %.0f，预计本周达成率约 %.0f%%（领先目标）",
+					weekTotal, achievementRate)
+			} else if trend == "at_risk" {
+				description = fmt.Sprintf("本周累计 %.0f，距目标 %.0f 还差约 %.0f，需加快节奏",
+					weekTotal, targetValue, targetValue-weekTotal)
+			} else {
+				description = fmt.Sprintf("本周累计 %.0f，目标 %.0f，当前达成率约 %.0f%%",
+					weekTotal, targetValue, achievementRate)
+			}
+		} else {
+			description = fmt.Sprintf("本周累计 %.0f（日均 %.0f）", weekTotal, dayAvg)
+		}
+
+		// 只添加有实际数据的指标
+		if weekTotal > 0 || lastWeekTotal > 0 {
+			targets = append(targets, WeeklyTarget{
+				MetricID:        metric.ID,
+				MetricName:      metric.DisplayName,
+				CurrentValue:    math.Round(weekTotal*100) / 100,
+				TargetValue:     math.Round(targetValue*100) / 100,
+				AchievementRate: achievementRate,
+				Trend:           trend,
+				DaysLeft:        daysLeft,
+				Description:     description,
+			})
+		}
+	}
+
+	return targets
+}
+
+// getWeekStart 获取指定年/周的第一天（周一）
+func getWeekStart(year, week int) time.Time {
+	// 找到该年 1 月 1 日
+	jan1 := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
+	// 计算第 1 周的周一
+	// ISO 8601：1 月 4 日所在的周是第 1 周，周一是该周第一天
+	isoWeek := week
+	if isoWeek < 1 {
+		isoWeek = 1
+	}
+	// 找到 year 年 1 月 1 日是周几（周一=0）
+	dayOfWeek := int(jan1.Weekday()) - 1
+	if dayOfWeek < 0 {
+		dayOfWeek = 6
+	}
+	// 第 1 周周一
+	week1Monday := jan1.AddDate(0, 0, -dayOfWeek)
+	// 第 isoWeek 周周一
+	return week1Monday.AddDate(0, 0, (isoWeek-1)*7)
+}
+
 // ListSummaries 查询历史摘要
 func (s *DailySummaryService) ListSummaries(tenantID string, limit int) ([]model.DailySummary, error) {
 	var summaries []model.DailySummary
@@ -576,18 +923,18 @@ func (s *DailySummaryService) SendDailySummary(tenantID string, platformIDs []st
 	var content SummaryContent
 	json.Unmarshal([]byte(summary.Content), &content)
 
-	// 构建增强版消息
+	// 构建增强版 V2 消息（匹配文档规划格式）
 	message := fmt.Sprintf(
-		"[每日业务摘要]\n\n"+
-			"日期: %s\n"+
-			"健康评分: %d/100\n\n",
+		"========== BizLens 每日业务摘要 ==========\n"+
+			"日期：%s\n\n"+
+			"[健康评分] %d/100\n\n",
 		summary.SummaryDate,
 		content.HealthScore,
 	)
 
 	// 核心指标速览
 	if len(content.Metrics) > 0 {
-		message += "-- 核心指标 --\n"
+		message += "[核心指标速览]\n"
 		for _, m := range content.Metrics {
 			arrow := "~"
 			if m.Direction == "up" {
@@ -599,29 +946,68 @@ func (s *DailySummaryService) SendDailySummary(tenantID string, platformIDs []st
 			if name == "" {
 				name = m.Name
 			}
-			message += fmt.Sprintf("  %s: %.0f (%s%.1f%%)\n", name, m.CurrentValue, arrow, math.Abs(m.Change))
+			message += fmt.Sprintf("  %s: %.0f  同比 %s%.1f%%\n", name, m.CurrentValue, arrow, math.Abs(m.Change))
 		}
 		message += "\n"
 	}
 
-	// 异常告警
-	if len(content.Anomalies) > 0 {
-		message += "-- 需要关注 --\n"
-		for _, a := range content.Anomalies {
-			message += fmt.Sprintf("  [%s] %s: %.1f%% 变化\n", a.Severity, a.MetricID, a.Change)
+	// 需要关注（增强版：含 AI 分析和建议）
+	if len(content.Concerns) > 0 {
+		message += fmt.Sprintf("[需要关注] %d 项\n", len(content.Concerns))
+		for i, c := range content.Concerns {
+			message += fmt.Sprintf("  %d. %s 当前 %.0f（基线 %.0f，变化 %.1f%%）\n", i+1, c.MetricName, c.CurrentValue, c.BaselineValue, c.Change)
+			if c.Analysis != "" {
+				message += fmt.Sprintf("     -> AI 分析：%s\n", c.Analysis)
+			}
+			for j, sug := range c.Suggestions {
+				if j < 2 { // 最多显示2条建议
+					message += fmt.Sprintf("     -> 建议：%s\n", sug)
+				}
+			}
 		}
 		message += "\n"
-	} else {
-		message += "今日无异常，业务运行正常\n\n"
+	} else if len(content.Anomalies) > 0 {
+		message += fmt.Sprintf("[需要关注] %d 项\n", len(content.Anomalies))
+		for i, a := range content.Anomalies {
+			message += fmt.Sprintf("  %d. %s: %.1f%% 变化\n", i+1, a.MetricName, a.Change)
+		}
+		message += "\n"
+	}
+
+	// 正面趋势
+	if len(content.Positives) > 0 {
+		message += fmt.Sprintf("[正面趋势] %d 项\n", len(content.Positives))
+		for i, p := range content.Positives {
+			message += fmt.Sprintf("  %d. %s 升至 %.0f（环比 +%.1f%%）\n", i+1, p.MetricName, p.CurrentValue, p.Change)
+			if p.Reason != "" {
+				message += fmt.Sprintf("     -> %s\n", p.Reason)
+			}
+		}
+		message += "\n"
+	}
+
+	// 每周目标达成
+	if len(content.WeeklyTargets) > 0 {
+		message += "[本周目标达成]\n"
+		for _, t := range content.WeeklyTargets {
+			if t.AchievementRate > 0 {
+				message += fmt.Sprintf("  %s: %.0f / %.0f（达成率 %.0f%%，%s）\n",
+					t.MetricName, t.CurrentValue, t.TargetValue, t.AchievementRate, t.Trend)
+			}
+		}
+		message += "\n"
 	}
 
 	// 趋势预测
 	if len(content.Predictions) > 0 {
-		message += "-- 趋势预测 --\n"
+		message += "[趋势预测]\n"
 		for _, p := range content.Predictions {
 			message += fmt.Sprintf("  %s\n", p.Description)
 		}
+		message += "\n"
 	}
+
+	message += "==========================================\n"
 
 	// 推送
 	s.imService.SendNotification(tenantID, platformIDs, "daily_summary", "每日业务摘要", message, true)

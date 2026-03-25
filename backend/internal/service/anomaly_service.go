@@ -24,7 +24,7 @@ func NewAnomalyService(db *gorm.DB, baselineService *BaselineService, imService 
 	}
 }
 
-// DetectAnomaly 检测指标异常
+// DetectAnomaly 检测指标异常（含降噪策略）
 func (s *AnomalyService) DetectAnomaly(tenantID, metricID string, actualValue float64) (*model.AnomalyEvent, error) {
 	// 1. 获取基线
 	baseline, err := s.baselineService.GetBaseline(tenantID, metricID, "daily")
@@ -38,20 +38,25 @@ func (s *AnomalyService) DetectAnomaly(tenantID, metricID string, actualValue fl
 		deviation = math.Abs(actualValue-baseline.ExpectedValue) / baseline.StdDev
 	}
 
-	// 3. 判断是否异常（偏离 > 2σ）
-	if deviation < 2.0 {
+	// 3. 降噪策略 1：检查业务日历（节假日/大促期间调高阈值）
+	adjustedThreshold := s.getBusinessCalendarThreshold(tenantID)
+	if deviation < adjustedThreshold {
 		return nil, nil // 正常，无异常
 	}
 
-	// 4. 降噪：检查最小沉默期（4 小时内同一指标不重复推送）
+	// 4. 降噪策略 2：检查最小沉默期（4 小时内同一指标不重复推送）
 	if s.isInSilencePeriod(tenantID, metricID, 4*time.Hour) {
 		return nil, nil
 	}
 
-	// 5. 确定严重度
-	severity := model.SeverityWarning
-	if deviation >= 3.0 {
-		severity = model.SeverityCritical
+	// 5. 降噪策略 3：严重度衰减
+	// 检查该指标是否已有 open 状态的异常
+	existingAnomalies := s.getExistingOpenAnomalies(tenantID, metricID)
+	severity := s.determineSeverityWithDecay(existingAnomalies, deviation)
+
+	// 如果严重度被衰减到 info 以下，则不推送
+	if severity == "" {
+		return nil, nil
 	}
 
 	// 6. 确定方向
@@ -131,6 +136,92 @@ func (s *AnomalyService) isInSilencePeriod(tenantID, metricID string, duration t
 		Count(&count)
 
 	return count > 0
+}
+
+// getBusinessCalendarThreshold 获取业务日历调整后的异常检测阈值
+// 节假日/大促期间自动调高阈值以减少误报
+func (s *AnomalyService) getBusinessCalendarThreshold(tenantID string) float64 {
+	baseThreshold := 2.0
+
+	today := time.Now().Format("2006-01-02")
+	var calendar model.BusinessCalendar
+	err := s.db.Where("tenant_id = ? AND date = ?", tenantID, today).First(&calendar).Error
+	if err != nil {
+		return baseThreshold
+	}
+
+	// 如果命中业务日历，按配置的阈值倍数调整
+	if calendar.Threshold > baseThreshold {
+		return calendar.Threshold
+	}
+	return baseThreshold
+}
+
+// getExistingOpenAnomalies 获取该指标已有的 open 异常
+func (s *AnomalyService) getExistingOpenAnomalies(tenantID, metricID string) []model.AnomalyEvent {
+	var anomalies []model.AnomalyEvent
+	s.db.Where("tenant_id = ? AND metric_id = ? AND status = ?",
+		tenantID, metricID, model.AnomalyOpen).
+		Order("detected_at DESC").
+		Limit(3).
+		Find(&anomalies)
+	return anomalies
+}
+
+// determineSeverityWithDecay 严重度衰减：持续异常但无恶化则降低严重度
+// - 已有 critical 异常超过 24h 且无新增恶化 -> 降为 warning
+// - 已有 warning 异常超过 48h 且无新增恶化 -> 降为 info
+// - 偏离程度比上次更大 -> 保持或升级
+func (s *AnomalyService) determineSeverityWithDecay(existingAnomalies []model.AnomalyEvent, currentDeviation float64) model.AnomalySeverity {
+	// 基础严重度判断
+	baseSeverity := model.SeverityInfo
+	if currentDeviation >= 3.0 {
+		baseSeverity = model.SeverityCritical
+	} else if currentDeviation >= 2.0 {
+		baseSeverity = model.SeverityWarning
+	}
+
+	if len(existingAnomalies) == 0 {
+		return baseSeverity
+	}
+
+	latest := existingAnomalies[0]
+	elapsedHours := time.Since(latest.DetectedAt).Hours()
+
+	// 如果当前偏离比已有异常更大，不衰减
+	if currentDeviation > latest.Deviation*1.1 {
+		return baseSeverity
+	}
+
+	// 严重度衰减规则
+	switch latest.Severity {
+	case model.SeverityCritical:
+		// Critical 超过 24h 无恶化 -> 降为 warning
+		if elapsedHours > 24 {
+			return model.SeverityWarning
+		}
+		return model.SeverityCritical
+
+	case model.SeverityWarning:
+		// Warning 超过 48h 无恶化 -> 降为 info
+		if elapsedHours > 48 {
+			return model.SeverityInfo
+		}
+		// Warning 超过 24h 无恶化 -> 降为 info（更保守的衰减）
+		if elapsedHours > 24 {
+			return model.SeverityInfo
+		}
+		return model.SeverityWarning
+
+	case model.SeverityInfo:
+		// Info 超过 72h -> 不推送
+		if elapsedHours > 72 {
+			return ""
+		}
+		return model.SeverityInfo
+	}
+
+	return baseSeverity
 }
 
 // ListAnomalies 获取异常列表
