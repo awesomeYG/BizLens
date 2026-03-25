@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -223,10 +224,12 @@ func cleanAtPrefix(text string) string {
 	return text
 }
 
-// stripActionBlocks 去除 AI 回复中的 ```xxx_config ... ``` 代码块
+// stripActionBlocks 去除 AI 回复中的 ```xxx_config ... ``` 代码块以及 <think>...</think> 思考标签
 func stripActionBlocks(content string) string {
+	// 先去除 <think>...</think> 思考标签
+	result := strings.TrimSpace(regexp.MustCompile(`<think>[\s\S]*?</think>`).ReplaceAllString(content, ""))
+
 	blockTypes := []string{"dashboard_config", "alert_config", "notification_rule", "datasource_config", "report_config"}
-	result := content
 	for _, bt := range blockTypes {
 		for {
 			start := strings.Index(result, "```"+bt)
