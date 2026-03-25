@@ -166,7 +166,13 @@ export default function InsightsPage() {
         setGenerateSuccess(true);
         setTimeout(() => setGenerateSuccess(false), 3000);
       } else {
-        setGenerateError(data.error || `生成失败 (${res.status})`);
+        const errorMsg = data.error || `生成失败 (${res.status})`;
+        // 特殊错误：数据源或指标未配置
+        if (errorMsg.includes("no_active_data_source") || errorMsg.includes("no_metrics")) {
+          setGenerateError("请先在数据源页面配置数据库并确认要监控的指标");
+        } else {
+          setGenerateError(errorMsg);
+        }
       }
     } catch (err) {
       setGenerateError("网络错误，请检查后端服务是否正常运行");
@@ -248,6 +254,15 @@ export default function InsightsPage() {
             <p className="text-zinc-400 mb-6">
               点击&quot;生成摘要&quot;创建今日业务洞察报告
             </p>
+            <p className="text-zinc-500 text-sm mb-6">
+              首次使用？请先在&quot;数据源&quot;页面连接您的数据库
+            </p>
+            <a
+              href="/data-sources"
+              className="inline-block px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors"
+            >
+              前往数据源配置
+            </a>
           </div>
         ) : (
           <div className="space-y-6">

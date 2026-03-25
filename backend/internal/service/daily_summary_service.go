@@ -123,6 +123,29 @@ type MetricPrediction struct {
 func (s *DailySummaryService) GenerateDailySummary(tenantID string) (*model.DailySummary, error) {
 	today := time.Now().Format("2006-01-02")
 
+	// 前置检查：确保已配置数据源和指标
+	if s.dataSourceService == nil || s.metricService == nil {
+		return nil, fmt.Errorf("data source or metric service not initialized")
+	}
+	dataSources, _ := s.dataSourceService.ListDataSources(tenantID)
+	var activeDS *model.DataSource
+	for _, ds := range dataSources {
+		if ds.Status == "connected" {
+			activeDS = &ds
+			break
+		}
+	}
+	if activeDS == nil {
+		return nil, fmt.Errorf("no_active_data_source: 请先在数据源页面配置并连接您的数据库")
+	}
+	metrics, _ := s.metricService.ListMetrics(tenantID, "", "confirmed")
+	if len(metrics) == 0 {
+		metrics, _ = s.metricService.ListMetrics(tenantID, "", "active")
+	}
+	if len(metrics) == 0 {
+		return nil, fmt.Errorf("no_metrics: 请先在数据源页面发现并确认要监控的指标")
+	}
+
 	// 1. 获取今日异常
 	anomalies, _ := s.anomalyService.ListAnomalies(tenantID, model.AnomalyOpen, 20)
 
