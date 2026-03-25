@@ -1,6 +1,7 @@
 package service
 
 import (
+	"ai-bi-server/internal/model"
 	"log"
 	"time"
 
@@ -13,8 +14,12 @@ type SchedulerService struct {
 	baselineService     *BaselineService
 	anomalyService      *AnomalyService
 	dailySummaryService *DailySummaryService
+	dataSourceService   *DataSourceService
+	metricService       *MetricService
+	imService           *IMService
 }
 
+// NewSchedulerService 创建调度服务
 func NewSchedulerService(
 	db *gorm.DB,
 	baselineService *BaselineService,
@@ -27,6 +32,13 @@ func NewSchedulerService(
 		anomalyService:      anomalyService,
 		dailySummaryService: dailySummaryService,
 	}
+}
+
+// SetDataDependencies 设置数据依赖（延迟注入）
+func (s *SchedulerService) SetDataDependencies(dsSvc *DataSourceService, metricSvc *MetricService, imSvc *IMService) {
+	s.dataSourceService = dsSvc
+	s.metricService = metricSvc
+	s.imService = imSvc
 }
 
 // Start 启动调度任务
@@ -45,7 +57,8 @@ func (s *SchedulerService) runHourlyTasks() {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
-	// 立即执行一次
+	// 启动后延迟 30 秒执行第一次（等待服务初始化完成）
+	time.Sleep(30 * time.Second)
 	s.executeHourlyTasks()
 
 	for range ticker.C {
@@ -53,33 +66,89 @@ func (s *SchedulerService) runHourlyTasks() {
 	}
 }
 
+// executeHourlyTasks 执行每小时任务（遍历所有租户和指标）
 func (s *SchedulerService) executeHourlyTasks() {
 	log.Println("执行每小时任务：基线学习 + 异常检测")
 
-	// TODO: 遍历所有租户和指标
-	// 这里简化为示例
-	tenantID := "demo"
-	metricID := "gmv"
+	// 1. 获取所有租户
+	tenants := s.getAllTenants()
 
-	// 1. 学习基线
-	if err := s.baselineService.LearnBaseline(tenantID, metricID, "daily", 7); err != nil {
-		log.Printf("基线学习失败: %v", err)
+	for _, tenant := range tenants {
+		s.processMetricsForTenant(tenant.ID)
+	}
+}
+
+// processMetricsForTenant 处理单个租户的所有指标
+func (s *SchedulerService) processMetricsForTenant(tenantID string) {
+	// 获取租户的已确认/活跃指标
+	var metrics []model.Metric
+	if s.metricService != nil {
+		confirmed, _ := s.metricService.ListMetrics(tenantID, "", "confirmed")
+		active, _ := s.metricService.ListMetrics(tenantID, "", "active")
+		metrics = append(confirmed, active...)
 	}
 
-	// 2. 检测异常（模拟实际值）
-	actualValue := 85000.0 // TODO: 从数据源查询实际值
-	anomaly, err := s.anomalyService.DetectAnomaly(tenantID, metricID, actualValue)
-	if err != nil {
-		log.Printf("异常检测失败: %v", err)
+	if len(metrics) == 0 {
 		return
 	}
 
-	// 3. 如果有异常，推送通知
-	if anomaly != nil {
-		platformIDs := []string{} // TODO: 从租户配置获取
-		s.anomalyService.NotifyAnomaly(tenantID, anomaly, platformIDs)
-		log.Printf("检测到异常并已推送: %s", anomaly.ID)
+	// 获取租户的 IM 平台 ID（用于异常通知）
+	platformIDs := s.getTenantPlatformIDs(tenantID)
+
+	for _, metric := range metrics {
+		// 1. 学习基线
+		if err := s.baselineService.LearnBaseline(tenantID, metric.ID, "daily", 7); err != nil {
+			log.Printf("[%s] 基线学习失败 metric=%s: %v", tenantID, metric.ID, err)
+			continue
+		}
+
+		// 2. 查询当前值
+		actualValue, err := s.baselineService.QueryCurrentValue(tenantID, metric.ID)
+		if err != nil {
+			log.Printf("[%s] 查询当前值失败 metric=%s: %v", tenantID, metric.ID, err)
+			continue
+		}
+
+		if actualValue == 0 {
+			continue // 当前值为 0，可能无数据，跳过
+		}
+
+		// 3. 检测异常
+		anomaly, err := s.anomalyService.DetectAnomaly(tenantID, metric.ID, actualValue)
+		if err != nil {
+			log.Printf("[%s] 异常检测失败 metric=%s: %v", tenantID, metric.ID, err)
+			continue
+		}
+
+		// 4. 如果有异常，推送通知
+		if anomaly != nil {
+			log.Printf("[%s] 检测到异常: metric=%s, value=%.2f, deviation=%.2f",
+				tenantID, metric.ID, actualValue, anomaly.Deviation)
+
+			if len(platformIDs) > 0 {
+				s.anomalyService.NotifyAnomaly(tenantID, anomaly, platformIDs)
+			}
+		}
 	}
+}
+
+// getAllTenants 获取所有租户
+func (s *SchedulerService) getAllTenants() []model.Tenant {
+	var tenants []model.Tenant
+	s.db.Find(&tenants)
+	return tenants
+}
+
+// getTenantPlatformIDs 获取租户已启用的 IM 平台 ID
+func (s *SchedulerService) getTenantPlatformIDs(tenantID string) []string {
+	var configs []model.IMConfig
+	s.db.Where("tenant_id = ? AND is_active = ?", tenantID, true).Find(&configs)
+
+	ids := make([]string, 0, len(configs))
+	for _, c := range configs {
+		ids = append(ids, c.ID)
+	}
+	return ids
 }
 
 // runDailySummaryTask 每日摘要任务
@@ -100,14 +169,18 @@ func (s *SchedulerService) runDailySummaryTask() {
 	}
 }
 
+// executeDailySummary 执行每日摘要（遍历所有租户）
 func (s *SchedulerService) executeDailySummary() {
 	log.Println("执行每日摘要任务")
 
-	// TODO: 遍历所有租户
-	tenantID := "demo"
-	platformIDs := []string{} // TODO: 从租户配置获取
+	tenants := s.getAllTenants()
+	for _, tenant := range tenants {
+		platformIDs := s.getTenantPlatformIDs(tenant.ID)
 
-	if err := s.dailySummaryService.SendDailySummary(tenantID, platformIDs); err != nil {
-		log.Printf("发送每日摘要失败: %v", err)
+		if err := s.dailySummaryService.SendDailySummary(tenant.ID, platformIDs); err != nil {
+			log.Printf("[%s] 发送每日摘要失败: %v", tenant.ID, err)
+		} else {
+			log.Printf("[%s] 每日摘要已发送", tenant.ID)
+		}
 	}
 }

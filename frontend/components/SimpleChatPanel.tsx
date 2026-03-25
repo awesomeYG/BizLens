@@ -138,6 +138,7 @@ function removeActionBlocks(content: string): string {
     .replace(/```alert_config\s*\n[\s\S]*?\n```/g, "")
     .replace(/```notification_rule\s*\n[\s\S]*?\n```/g, "")
     .replace(/```report_config\s*\n[\s\S]*?\n```/g, "")
+    .replace(/```rca_request\s*\n[\s\S]*?\n```/g, "")
     .trim();
 }
 

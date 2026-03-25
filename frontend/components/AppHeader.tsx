@@ -85,6 +85,7 @@ export default function AppHeader({
   /* 默认导航项 */
   const defaultNavItems: NavItem[] = [
     { href: "/chat", label: "AI 对话" },
+    { href: "/insights", label: "Insights" },
     { href: "/dashboards", label: "数据大屏" },
     { href: "/reports", label: "报表" },
   ];
