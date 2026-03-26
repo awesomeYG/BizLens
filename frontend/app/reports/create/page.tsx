@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/user-store";
 import { request } from "@/lib/auth/api";
 import AppHeader from "@/components/AppHeader";
 import SectionRenderer from "@/components/dashboard/SectionRenderer";
+import CustomBlockEditor from "@/components/dashboard/CustomBlockEditor";
 import type {
   Report,
   CreateReportRequest,
@@ -529,78 +530,136 @@ function ReportCreateContent() {
               ) : (
                 <div className="space-y-3">
                   {sections.map((sec, index) => (
-                    <div
-                      key={index}
-                      className="rounded-lg border border-zinc-800 bg-zinc-900 p-4"
-                    >
-                      <div className="flex items-center gap-3">
-                        {/* 排序 */}
-                        <div className="flex flex-col gap-0.5">
-                          <button
-                            onClick={() => moveSection(index, "up")}
-                            disabled={index === 0}
-                            className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30 transition-colors"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => moveSection(index, "down")}
-                            disabled={index === sections.length - 1}
-                            className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30 transition-colors"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                            </svg>
-                          </button>
-                        </div>
-
-                        {/* 类型标签 */}
-                        <span className="px-2 py-1 rounded text-xs font-medium bg-indigo-900/40 text-indigo-400 whitespace-nowrap">
-                          {SECTION_TYPE_INFO.find((c) => c.id === sec.type)?.name || sec.type}
-                        </span>
-
-                        {/* 标题输入 */}
-                        <input
-                          type="text"
-                          value={sec.title || ""}
-                          onChange={(e) =>
-                            updateSection(index, { title: e.target.value })
-                          }
-                          placeholder="区块标题"
-                          className="flex-1 px-3 py-1.5 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-                        />
-
-                        {/* 宽度控制 */}
-                        <div className="flex items-center gap-1">
-                          <label className="text-xs text-zinc-600 whitespace-nowrap">宽度:</label>
-                          <select
-                            value={sec.colSpan || 12}
-                            onChange={(e) =>
+                    <div key={index}>
+                      {sec.type === "custom" ? (
+                        /* 自定义区块：展开编辑器 */
+                        <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
+                          {/* 紧凑顶栏 */}
+                          <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800">
+                            <span className="px-2 py-1 rounded text-xs font-medium bg-indigo-900/40 text-indigo-400 whitespace-nowrap">
+                              自定义
+                            </span>
+                            <input
+                              type="text"
+                              value={sec.title || ""}
+                              onChange={(e) =>
+                                updateSection(index, { title: e.target.value })
+                              }
+                              placeholder="区块标题"
+                              className="flex-1 px-3 py-1.5 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                            />
+                            <div className="flex items-center gap-1">
+                              <label className="text-xs text-zinc-600 whitespace-nowrap">宽度:</label>
+                              <select
+                                value={sec.colSpan || 12}
+                                onChange={(e) =>
+                                  updateSection(index, {
+                                    colSpan: parseInt(e.target.value),
+                                  })
+                                }
+                                className="px-2 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs focus:outline-none focus:border-indigo-500"
+                              >
+                                <option value={4}>1/3</option>
+                                <option value={6}>1/2</option>
+                                <option value={8}>2/3</option>
+                                <option value={12}>整行</option>
+                              </select>
+                            </div>
+                            <button
+                              onClick={() => removeSection(index)}
+                              className="text-zinc-600 hover:text-red-400 transition-colors p-1"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="CurrentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                          {/* 自定义编辑器 */}
+                          <CustomBlockEditor
+                            initialData={sec.dataConfig}
+                            initialOption={sec.chartConfig}
+                            title={sec.title}
+                            onChange={(dataConfig, chartConfig) => {
                               updateSection(index, {
-                                colSpan: parseInt(e.target.value),
-                              })
-                            }
-                            className="px-2 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs focus:outline-none focus:border-indigo-500"
-                          >
-                            <option value={4}>1/3</option>
-                            <option value={6}>1/2</option>
-                            <option value={8}>2/3</option>
-                            <option value={12}>整行</option>
-                          </select>
+                                dataConfig,
+                                chartConfig,
+                              });
+                            }}
+                          />
                         </div>
+                      ) : (
+                        /* 普通区块：紧凑编辑行 */
+                        <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+                          <div className="flex items-center gap-3">
+                            {/* 排序 */}
+                            <div className="flex flex-col gap-0.5">
+                              <button
+                                onClick={() => moveSection(index, "up")}
+                                disabled={index === 0}
+                                className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="CurrentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => moveSection(index, "down")}
+                                disabled={index === sections.length - 1}
+                                className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="CurrentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                                </svg>
+                              </button>
+                            </div>
 
-                        {/* 删除 */}
-                        <button
-                          onClick={() => removeSection(index)}
-                          className="text-zinc-600 hover:text-red-400 transition-colors p-1"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
+                            {/* 类型标签 */}
+                            <span className="px-2 py-1 rounded text-xs font-medium bg-indigo-900/40 text-indigo-400 whitespace-nowrap">
+                              {SECTION_TYPE_INFO.find((c) => c.id === sec.type)?.name || sec.type}
+                            </span>
+
+                            {/* 标题输入 */}
+                            <input
+                              type="text"
+                              value={sec.title || ""}
+                              onChange={(e) =>
+                                updateSection(index, { title: e.target.value })
+                              }
+                              placeholder="区块标题"
+                              className="flex-1 px-3 py-1.5 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                            />
+
+                            {/* 宽度控制 */}
+                            <div className="flex items-center gap-1">
+                              <label className="text-xs text-zinc-600 whitespace-nowrap">宽度:</label>
+                              <select
+                                value={sec.colSpan || 12}
+                                onChange={(e) =>
+                                  updateSection(index, {
+                                    colSpan: parseInt(e.target.value),
+                                  })
+                                }
+                                className="px-2 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs focus:outline-none focus:border-indigo-500"
+                              >
+                                <option value={4}>1/3</option>
+                                <option value={6}>1/2</option>
+                                <option value={8}>2/3</option>
+                                <option value={12}>整行</option>
+                              </select>
+                            </div>
+
+                            {/* 删除 */}
+                            <button
+                              onClick={() => removeSection(index)}
+                              className="text-zinc-600 hover:text-red-400 transition-colors p-1"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="CurrentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

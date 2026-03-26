@@ -62,6 +62,7 @@ export interface GaugeData {
   value: number;
   min?: number;
   max?: number;
+  color?: string;
 }
 
 /** 雷达图数据 */
