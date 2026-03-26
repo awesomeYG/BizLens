@@ -139,6 +139,13 @@ func (s *MetricService) AutoDiscoverMetrics(tenantID string, dataSourceID string
 		}
 	}
 
+	// 将发现的指标保存到数据库
+	for _, metric := range metrics {
+		if err := s.CreateMetric(&metric); err != nil {
+			return nil, fmt.Errorf("failed to save auto-discovered metric %s: %v", metric.Name, err)
+		}
+	}
+
 	return metrics, nil
 }
 
