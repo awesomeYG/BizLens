@@ -104,15 +104,17 @@ export default function AlertConfigPage() {
         title="告警规则配置"
         backHref="/alerts"
         backLabel="智能告警"
-        actions={
-          <button onClick={openNew} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-lg shadow-indigo-500/30">
-            + 新建规则
-          </button>
-        }
       />
 
       <main className="p-6 max-w-3xl mx-auto space-y-3">
         <IMSectionNav current="alerts" />
+        {events.length > 0 && (
+          <div className="flex justify-end">
+            <button onClick={openNew} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-lg shadow-indigo-500/30">
+              + 新建规则
+            </button>
+          </div>
+        )}
         {events.length === 0 && (
           <div className="text-center py-20 text-zinc-500">
             暂无告警规则，点击右上角新建，或在 <Link href="/chat" className="text-indigo-400 hover:underline">AI 对话</Link> 中用自然语言创建

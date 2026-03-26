@@ -147,17 +147,6 @@ export default function IMSettingsPage() {
       <AppHeader
         title="IM 平台集成"
         backHref="/"
-        actions={
-          <button
-            onClick={() => setShowForm(true)}
-            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-lg shadow-indigo-500/30 flex items-center gap-1.5"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            添加平台
-          </button>
-        }
       />
 
       {/* Hero Section */}
@@ -192,6 +181,19 @@ export default function IMSettingsPage() {
 
         {/* Platform Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {/* 添加平台卡片 */}
+          <button
+            onClick={() => setShowForm(true)}
+            className="rounded-2xl border-2 border-dashed border-zinc-700/50 hover:border-indigo-500/50 bg-zinc-900/50 hover:bg-zinc-900/80 flex flex-col items-center justify-center gap-3 p-8 transition-all aspect-[4/3] group"
+          >
+            <div className="w-12 h-12 rounded-xl bg-zinc-800 group-hover:bg-indigo-500/10 flex items-center justify-center transition-colors">
+              <svg className="w-6 h-6 text-zinc-500 group-hover:text-indigo-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <span className="text-sm text-zinc-500 group-hover:text-zinc-300 transition-colors">添加平台</span>
+          </button>
+
           {configs.map((config) => {
             const meta = IM_PLATFORMS_LIST.find((p) => p.type === config.type);
             if (!meta) return null;
@@ -267,7 +269,7 @@ export default function IMSettingsPage() {
 
       {/* Toast Notification */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 animate-fade-in">
+        <div className="fixed bottom-24 right-6 z-50 animate-fade-in">
           <div className={`glass-card rounded-xl px-4 py-3 flex items-center gap-3 border ${
             toast.type === "success" ? "border-emerald-500/30 bg-emerald-500/10" : "border-red-500/30 bg-red-500/10"
           }`}>
