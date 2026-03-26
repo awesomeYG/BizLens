@@ -1,4 +1,4 @@
-# DataMind - AI-Native BI 产品实现总结
+# BizLens - AI-Native BI 产品实现总结
 
 ## 已完成的工作
 
@@ -63,7 +63,7 @@
 ## 产品差异化
 
 ### vs 传统 BI (Tableau, PowerBI)
-| 维度 | 传统 BI | DataMind |
+| 维度 | 传统 BI | BizLens |
 |------|---------|----------|
 | 学习成本 | 高 (需要培训) | 零 (会聊天就会用) |
 | 上手时间 | 数周 | 分钟级 |
@@ -72,7 +72,7 @@
 | 功能 | 复杂全面 | 极简核心 |
 
 ### vs Querio / ThoughtSpot
-| 维度 | Querio/ThoughtSpot | DataMind |
+| 维度 | Querio/ThoughtSpot | BizLens |
 |------|-------------------|----------|
 | UI 风格 | 企业级专业 | 高端极简 (Linear 风) |
 | 功能复杂度 | 中等 | 极简 |
@@ -187,7 +187,7 @@
 ### 获客策略
 1. **PLG (Product-Led Growth)**
    - 免费版足够好用，自然传播
-   - 内置"通过 DataMind 制作"水印
+    - 内置"通过 BizLens 制作"水印
 
 2. **内容营销**
    - 数据分析最佳实践博客
@@ -243,4 +243,4 @@
 
 ---
 
-**DataMind - 让每个企业都拥有 AI 数据分析师**
+**BizLens - 让每个企业都拥有 AI 数据分析师**
