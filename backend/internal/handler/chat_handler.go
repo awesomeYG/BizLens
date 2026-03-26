@@ -13,14 +13,20 @@ import (
 
 type ChatHandler struct {
 	chatService *service.ChatService
+	chatAISvc   *service.ChatAIService
 }
 
 type renameConversationRequest struct {
 	Title string `json:"title"`
 }
 
-func NewChatHandler(chatService *service.ChatService) *ChatHandler {
-	return &ChatHandler{chatService: chatService}
+type SendMessageRequest struct {
+	Message      string `json:"message"`
+	DataSourceID string `json:"dataSourceId,omitempty"`
+}
+
+func NewChatHandler(chatService *service.ChatService, chatAISvc *service.ChatAIService) *ChatHandler {
+	return &ChatHandler{chatService: chatService, chatAISvc: chatAISvc}
 }
 
 func (h *ChatHandler) HandleConversations(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +58,18 @@ func (h *ChatHandler) HandleConversations(w http.ResponseWriter, r *http.Request
 
 	parts := strings.Split(sub, "/")
 	conversationID := parts[0]
-	if conversationID == "" || len(parts) > 1 {
+	if conversationID == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	// /chat-conversations/{cid}/messages
+	if len(parts) == 2 && parts[1] == "messages" {
+		h.sendMessage(w, r, tenantID, userID, conversationID)
+		return
+	}
+
+	if len(parts) > 1 {
 		http.NotFound(w, r)
 		return
 	}
@@ -144,6 +161,30 @@ func (h *ChatHandler) renameConversation(w http.ResponseWriter, r *http.Request,
 	}
 
 	writeJSON(w, http.StatusOK, conversation)
+}
+
+// sendMessage POST /api/tenants/{id}/chat-conversations/{cid}/messages
+// 发送消息并触发 AI 处理（NL -> SQL -> 返回结果）
+func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request, tenantID, userID, conversationID string) {
+	var req SendMessageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "请求参数错误")
+		return
+	}
+
+	if strings.TrimSpace(req.Message) == "" {
+		writeError(w, http.StatusBadRequest, "消息内容不能为空")
+		return
+	}
+
+	// 调用 AI 服务处理消息
+	result, err := h.chatAISvc.SendMessage(tenantID, userID, conversationID, req.Message, req.DataSourceID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *ChatHandler) deleteConversation(w http.ResponseWriter, _ *http.Request, tenantID, userID, conversationID string) {

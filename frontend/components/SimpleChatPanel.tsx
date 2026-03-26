@@ -785,6 +785,24 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       conversationId = conversation.id;
     }
 
+    // 先立即把用户消息和当前对话持久化到后端
+    // 再触发 AI 处理，这样即使页面关闭用户消息也不会丢失
+    try {
+      const allMsgsNow = [
+        ...toPersistedMessages(messages),
+        { id: crypto.randomUUID(), role: "user", content: question, timestamp: Date.now() } as ChatMessage,
+      ];
+      await request(`/tenants/${tenantId}/chat-conversations/${conversationId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          title: buildConversationTitle(allMsgsNow),
+          messages: allMsgsNow,
+        }),
+      });
+    } catch {
+      // 持久化失败不影响 AI 处理
+    }
+
     const userMsgId = crypto.randomUUID();
     const assistantMsgId = crypto.randomUUID();
 

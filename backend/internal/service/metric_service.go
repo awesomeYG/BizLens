@@ -122,6 +122,17 @@ func (s *MetricService) AutoDiscoverMetrics(tenantID string, dataSourceID string
 					rec.DisplayName, dataType, agg, rec.Confidence,
 				)
 				metric.Description = fmt.Sprintf("AI 分析推荐（置信度 %.0f%%）：%s", rec.Confidence*100, rec.Reason)
+
+				// 复合指标：填充公式和依赖信息
+				if rec.IsComposite || rec.Formula != "" {
+					metric.Formula = rec.Formula
+					if rec.Dependencies != nil {
+						depsJSON, _ := json.Marshal(rec.Dependencies)
+						metric.DependentMetrics = string(depsJSON)
+					}
+					metric.Description = fmt.Sprintf("AI 分析推荐（复合指标，置信度 %.0f%%）：%s", rec.Confidence*100, rec.Reason)
+				}
+
 				metrics = append(metrics, metric)
 			}
 			// AI 分析结果已生成指标，直接返回

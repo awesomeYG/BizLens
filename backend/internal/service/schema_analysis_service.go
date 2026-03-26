@@ -502,6 +502,7 @@ func (s *SchemaAnalysisService) buildSystemPrompt() string {
 2. **排除技术字段**：忽略纯技术性的、不承载业务信息的字段（如 id、created_at、updated_at、deleted_at、version、sort_order、is_deleted 等）
 3. **指标识别**：真正的业务指标应该是可聚合的、有业务衡量意义的数值字段
 4. **有意义的命名**：推荐的中文名应该简洁、准确、符合 BI 规范
+5. **主动推荐复合指标**：发现基础指标后，主动推断有价值的派生/复合指标
 
 ## 语义类型定义
 
@@ -521,6 +522,31 @@ func (s *SchemaAnalysisService) buildSystemPrompt() string {
 - **AVG**: 平均值类（平均单价、平均评分、平均时长）
 - **MAX/MIN**: 极值类（最大订单额、最高分）
 - **COUNT(DISTINCT)**: 去重计数（去重用户数、去重商品数）
+
+## 复合指标推荐（重要！）
+
+发现基础指标后，**必须主动推断并推荐以下常见复合指标**：
+
+### 交易类业务
+- **转化率** = SUM(转化事件数) / SUM(曝光/访问数) * 100
+  例如：支付转化率 = SUM(payment_count) / SUM(order_count) * 100
+  - 适用场景：下单->支付转化、广告点击->下单转化、注册->首单转化
+- **客单价** = SUM(支付金额) / COUNT(DISTINCT user_id)
+  - 适用场景：已知销售额和用户数时，推荐"客单价"指标
+- **退货率** = SUM(退货数量/金额) / SUM(销售数量/金额) * 100
+  - 适用场景：同时存在 sales_amount 和 refund_amount 字段时
+- **复购率** = COUNT(DISTINCT 有2次以上购买的用户) / COUNT(DISTINCT 总用户)
+  - 适用场景：订单表包含 user_id 和 created_at
+
+### 用户类业务
+- **DAU（日活跃用户）** = COUNT(DISTINCT user_id WHERE date = today)
+- **新增注册用户数** = COUNT(*) WHERE created_at IN (today)
+- **留存率** = 次日留存用户数 / 首日新增用户数 * 100
+
+### 业务规则
+- 复合指标的 aggregation 字段填 "COMPOSITE"，formula 字段写清楚计算公式
+- confidence 适当降低到 0.6-0.8（因为需要多表关联，假设计算环境支持）
+- 只要 schema 中能找到构成复合指标的字段，就必须推荐，不要只推荐单字段基础指标
 
 ## 关键判断标准
 

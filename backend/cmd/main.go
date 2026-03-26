@@ -161,7 +161,8 @@ func main() {
 	reportService := service.NewReportService(db)
 	reportHandler := handler.NewReportHandler(reportService)
 	chatService := service.NewChatService(db)
-	chatHandler := handler.NewChatHandler(chatService)
+	chatAIService := service.NewChatAIService(db, llmService, dataSourceService)
+	chatHandler := handler.NewChatHandler(chatService, chatAIService)
 
 	// 钉钉机器人双向对话服务
 	dingtalkBotService := service.NewDingtalkBotService(db, imService)

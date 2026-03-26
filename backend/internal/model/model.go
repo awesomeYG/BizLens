@@ -278,10 +278,14 @@ type MetricRecommendation struct {
 	Table       string  `json:"table"`
 	Field       string  `json:"field"`
 	DisplayName string  `json:"displayName"` // 中文展示名
-	DataType    string  `json:"dataType"`    // number/currency/ratio
-	Aggregation string  `json:"aggregation"` // SUM/COUNT/AVG
+	DataType    string  `json:"dataType"`    // number/currency/ratio/composite
+	Aggregation string  `json:"aggregation"` // SUM/COUNT/AVG/MAX/MIN/COUNT_DISTINCT/COMPOSITE
 	Confidence  float64 `json:"confidence"`
 	Reason      string  `json:"reason,omitempty"`
+	// 复合指标专用字段
+	IsComposite  bool     `json:"isComposite,omitempty"`  // 是否为复合指标
+	Formula      string   `json:"formula,omitempty"`      // 计算公式（如 "SUM(amount) / COUNT(DISTINCT user_id)"）
+	Dependencies []string `json:"dependencies,omitempty"` // 依赖的字段（如 ["orders.amount", "orders.user_id"]）
 }
 
 // DimensionRecommendation AI 推荐的维度
