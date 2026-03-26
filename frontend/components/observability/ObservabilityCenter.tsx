@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import HealthScoreCard from "./HealthScoreCard";
 import MetricKpiCard from "./MetricKpiCard";
@@ -86,7 +86,11 @@ export default function ObservabilityCenter() {
     }
   }, []);
 
+  // 使用 ref 避免 React Strict Mode 导致的双重请求
+  const loadDataRef = useRef(false);
   useEffect(() => {
+    if (loadDataRef.current) return;
+    loadDataRef.current = true;
     loadData();
   }, [loadData]);
 

@@ -194,12 +194,14 @@ func (h *ObservabilityHandler) getCoreMetrics(w http.ResponseWriter, r *http.Req
 	// 复用 DailySummaryService 的指标查询能力
 	summary, err := h.dailySummaryService.GenerateDailySummary(tenantID)
 	if err != nil {
+		// 无数据源/无指标时返回空数据，前端可正常展示骨架屏
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
 			"data": map[string]interface{}{
-				"metrics": []interface{}{},
-				"message": err.Error(),
+				"metrics":     []interface{}{},
+				"predictions": []interface{}{},
+				"topChanges":  []interface{}{},
 			},
 		})
 		return
@@ -208,7 +210,16 @@ func (h *ObservabilityHandler) getCoreMetrics(w http.ResponseWriter, r *http.Req
 	// 解析摘要内容获取指标数据
 	var content service.SummaryContent
 	if err := json.Unmarshal([]byte(summary.Content), &content); err != nil {
-		http.Error(w, "Failed to parse summary content", http.StatusInternalServerError)
+		// JSON 解析失败也返回空数据而非 500，避免页面一直 loading
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"data": map[string]interface{}{
+				"metrics":     []interface{}{},
+				"predictions": []interface{}{},
+				"topChanges":  []interface{}{},
+			},
+		})
 		return
 	}
 
@@ -293,6 +304,7 @@ func (h *ObservabilityHandler) updateAnomalyStatus(w http.ResponseWriter, r *htt
 func (h *ObservabilityHandler) getInsights(w http.ResponseWriter, r *http.Request, tenantID string) {
 	summary, err := h.dailySummaryService.GenerateDailySummary(tenantID)
 	if err != nil {
+		// 无数据源/无指标时返回空洞察，前端可正常展示
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success":  true,
@@ -303,6 +315,7 @@ func (h *ObservabilityHandler) getInsights(w http.ResponseWriter, r *http.Reques
 
 	var content service.SummaryContent
 	if err := json.Unmarshal([]byte(summary.Content), &content); err != nil {
+		// JSON 解析失败也返回空洞察，避免页面一直 loading
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success":  true,

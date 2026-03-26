@@ -105,7 +105,6 @@ func (s *NotificationRuleService) TriggerRule(tenantID, ruleID string) (map[stri
 		_, err := s.imService.SendNotification(
 			tenantID,
 			platformIDs,
-			string(rule.RuleType),
 			rule.MessageTitle,
 			rule.MessageTemplate,
 			true,
@@ -475,6 +474,6 @@ func (s *NotificationRuleService) generateParseMessage(result *NLQueryParseResul
 
 // SendNotification 发送通知（封装 IM 服务）
 func (s *NotificationRuleService) SendNotification(tenantID string, platformIDs []string, title, content string) error {
-	_, err := s.imService.SendNotification(tenantID, platformIDs, "custom", title, content, true)
+	_, err := s.imService.SendNotification(tenantID, platformIDs, title, content, true)
 	return err
 }

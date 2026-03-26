@@ -115,7 +115,7 @@ func (s *AnomalyService) NotifyAnomaly(tenantID string, anomaly *model.AnomalyEv
 	)
 
 	// 推送到所有平台
-	s.imService.SendNotification(tenantID, platformIDs, "anomaly_alert", "异常告警", message, true)
+	s.imService.SendNotification(tenantID, platformIDs, "异常告警", message, true)
 
 	// 更新通知时间
 	now := time.Now()

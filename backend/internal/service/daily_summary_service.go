@@ -1033,7 +1033,7 @@ func (s *DailySummaryService) SendDailySummary(tenantID string, platformIDs []st
 	message += "==========================================\n"
 
 	// 推送
-	s.imService.SendNotification(tenantID, platformIDs, "daily_summary", "每日业务摘要", message, true)
+	s.imService.SendNotification(tenantID, platformIDs, "每日业务摘要", message, true)
 
 	// 更新发送时间
 	now := time.Now()
