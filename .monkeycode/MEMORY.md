@@ -284,15 +284,24 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - AnomalyService 中的 `DetectAnomaly` 自动使用 BaselineService 获取基线，结合实际值做偏离检测
   - 所有服务初始化完成后在 main.go 中调用 `SetDataDependencies` 注入依赖
 
-### 预设公司数据
-- Date: 2026-03-25
-- Context: 用户要求预设开发阶段默认公司信息，避免每次重新输入
-- Category: 环境配置
+### 观测中心（业务健康监控）架构
+- Date: 2026-03-26
+- Context: Agent 在执行数据大屏重构时发现
+- Category: 代码结构
 - Instructions:
-  - 公司信息预设值定义在 `frontend/lib/user-store.ts` 的 `EMPTY_COMPANY_INFO` 常量中
-  - 分析偏好预设值定义在 `DEFAULT_COMPANY_PROFILE` 常量中（analysisFocuses + recommendedMetrics）
-  - 当前预设：长亭科技 / 互联网 / 8人 / 全球 / 企业级 AI 开发平台 / 收支平衡 / 分析偏好：注册用户增量、用户粘度
-  - MOCK_DATA（快速测试数据）也同步更新为相同配置
-  - `loginUser` 和 `syncCurrentUser` 已改造：对新用户（非同一人）主动使用 `EMPTY_COMPANY_INFO` 和 `DEFAULT_COMPANY_PROFILE` 而非 `undefined`，确保预设值在登录时即持久化到 localStorage
-  - `onboarding/page.tsx` 的 `useEffect` 中调用 `saveOnboardingDraft` 将预设值立即持久化，避免用户跳转到设置中心时数据丢失
-  - 如需修改默认公司信息，编辑上述两个常量即可
+  - 大屏模块已重构为"业务健康观测中心"，对齐 product-direction-2026Q2.md 的"业务雷达站"定位
+  - `/dashboards` 页面改为 Tab 布局：默认显示"观测中心"（原模板画廊降级为"我的看板"Tab）
+  - 观测中心组件位于 `frontend/components/observability/`，包含：
+    - HealthScoreCard（圆环进度条健康评分 + 趋势 Sparkline）
+    - MetricKpiCard（增强版 KPI 卡片，含同比环比 + Sparkline + 异常状态边框）
+    - AnomalyFeed（时间线布局异常事件，含展开详情 + 操作按钮）
+    - InsightCarousel（水平滚动洞察卡片，正面/负面/中性分类）
+    - DailySummarySection（可折叠摘要面板 + 历史列表）
+    - OnboardingGuide（未配置数据源时的引导页）
+    - ObservabilityCenter（主组件，组装所有子组件）
+  - 后端新增统一 API Handler：`backend/internal/handler/observability_handler.go`
+  - API 端点统一在 `/api/tenants/{id}/observability/*`：health-score、core-metrics、anomalies、insights、summaries、rca/analyze
+  - 前端 API 封装：`frontend/lib/observability-api.ts`
+  - 导航文案已更新："数据大屏" -> "观测中心"（AppHeader.tsx）
+  - 设计文档：`.monkeycode/specs/dashboard-redesign-observability/`（requirements.md + design.md + tasklist.md）
+
