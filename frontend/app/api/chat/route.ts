@@ -647,6 +647,7 @@ export async function POST(req: NextRequest) {
 
           let toolCallId = "";
           let toolCallArgs = "";
+          let toolCallName = "";
           let hasToolCall = false;
           let assistantContent = "";
 
@@ -668,6 +669,7 @@ export async function POST(req: NextRequest) {
               hasToolCall = true;
               const tc = delta.tool_calls[0];
               if (tc.id) toolCallId = tc.id;
+              if (tc.function?.name) toolCallName = tc.function.name;
               if (tc.function?.arguments) {
                 toolCallArgs += tc.function.arguments;
               }
@@ -725,9 +727,23 @@ export async function POST(req: NextRequest) {
             );
 
             // 第三阶段：把 tool 结果反馈给 AI，让它生成自然语言确认
+            const assistantToolCallMessage: OpenAI.Chat.ChatCompletionAssistantMessageParam = {
+              role: "assistant",
+              content: assistantContent || null,
+              tool_calls: [
+                {
+                  id: toolCallId,
+                  type: "function",
+                  function: {
+                    name: toolCallName || "send_im_message",
+                    arguments: toolCallArgs,
+                  },
+                },
+              ],
+            };
             const followUpMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
               ...allMessages,
-              { role: "assistant", content: assistantContent },
+              assistantToolCallMessage,
               {
                 role: "tool" as const,
                 tool_call_id: toolCallId,

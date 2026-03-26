@@ -2,11 +2,13 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
 	"ai-bi-server/internal/model"
 	"ai-bi-server/internal/service"
+	"gorm.io/gorm"
 )
 
 // MetricHandler 指标处理器
@@ -43,6 +45,12 @@ func (h *MetricHandler) AutoDiscoverMetrics(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		msg := err.Error()
 		status := http.StatusInternalServerError
+
+		// 数据源不存在（常见：tenantId 不匹配 / id 错）
+		if errors.Is(err, gorm.ErrRecordNotFound) || strings.Contains(msg, "data source not found") {
+			status = http.StatusNotFound
+			msg = "数据源不存在或不属于当前租户"
+		}
 		// 常见可恢复错误：Schema 未同步/为空/解析失败/缺少结构字段
 		if strings.Contains(msg, "schema info is empty") ||
 			strings.Contains(msg, "failed to parse schema info") ||
@@ -230,7 +238,18 @@ func (h *MetricHandler) AutoDiscoverDimensions(w http.ResponseWriter, r *http.Re
 
 	dimensions, err := h.dimensionService.AutoDiscoverDimensions(tenantID, dataSourceID)
 	if err != nil {
-		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusInternalServerError)
+		status := http.StatusInternalServerError
+		msg := err.Error()
+		if errors.Is(err, gorm.ErrRecordNotFound) || strings.Contains(msg, "data source not found") {
+			status = http.StatusNotFound
+			msg = "数据源不存在或不属于当前租户"
+		}
+		if strings.Contains(msg, "failed to parse schema info") ||
+			strings.Contains(msg, "schema info missing structure field") {
+			status = http.StatusBadRequest
+			msg = "数据源暂无可用表结构信息，请在数据源设置中重新保存/同步表结构后再试"
+		}
+		http.Error(w, `{"error": "`+msg+`"}`, status)
 		return
 	}
 
@@ -254,7 +273,18 @@ func (h *MetricHandler) AutoDiscoverRelationships(w http.ResponseWriter, r *http
 
 	relationships, err := h.relationshipService.AutoDiscoverRelationships(tenantID, dataSourceID)
 	if err != nil {
-		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusInternalServerError)
+		status := http.StatusInternalServerError
+		msg := err.Error()
+		if errors.Is(err, gorm.ErrRecordNotFound) || strings.Contains(msg, "data source not found") {
+			status = http.StatusNotFound
+			msg = "数据源不存在或不属于当前租户"
+		}
+		if strings.Contains(msg, "failed to parse schema info") ||
+			strings.Contains(msg, "schema info missing structure field") {
+			status = http.StatusBadRequest
+			msg = "数据源暂无可用表结构信息，请在数据源设置中重新保存/同步表结构后再试"
+		}
+		http.Error(w, `{"error": "`+msg+`"}`, status)
 		return
 	}
 

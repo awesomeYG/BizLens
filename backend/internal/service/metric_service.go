@@ -2,11 +2,13 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"ai-bi-server/internal/model"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -81,7 +83,11 @@ func (s *MetricService) AutoDiscoverMetrics(tenantID string, dataSourceID string
 	// 获取数据源
 	var dataSource model.DataSource
 	if err := s.db.First(&dataSource, "id = ? AND tenant_id = ?", dataSourceID, tenantID).Error; err != nil {
-		return nil, fmt.Errorf("data source not found: %v", err)
+		// 让上层能用 errors.Is(err, gorm.ErrRecordNotFound) 判断 404
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("data source not found: %w", err)
+		}
+		return nil, fmt.Errorf("failed to load data source: %w", err)
 	}
 
 	if strings.TrimSpace(dataSource.SchemaInfo) == "" {
@@ -121,20 +127,20 @@ func (s *MetricService) AutoDiscoverMetrics(tenantID string, dataSourceID string
 
 			// 识别金额字段
 			if isAmountField(colName, colType) {
-				metric := s.createAutoMetric(tenantID, tableName, colName, "GMV", model.MetricTypeCurrency, model.AggSum, 0.9)
+				metric := s.createAutoMetric(tenantID, dataSourceID, tableName, colName, "GMV", model.MetricTypeCurrency, model.AggSum, 0.9)
 				metrics = append(metrics, metric)
 			}
 
 			// 识别数量字段
 			if isQuantityField(colName, colType) {
-				metric := s.createAutoMetric(tenantID, tableName, colName, "数量", model.MetricTypeNumber, model.AggSum, 0.8)
+				metric := s.createAutoMetric(tenantID, dataSourceID, tableName, colName, "数量", model.MetricTypeNumber, model.AggSum, 0.8)
 				metrics = append(metrics, metric)
 			}
 		}
 
 		// 识别计数指标（基于表名）
 		if isTransactionTable(tableName) {
-			metric := s.createAutoMetric(tenantID, tableName, "id", "订单量", model.MetricTypeNumber, model.AggCount, 0.85)
+			metric := s.createAutoMetric(tenantID, dataSourceID, tableName, "id", "订单量", model.MetricTypeNumber, model.AggCount, 0.85)
 			metrics = append(metrics, metric)
 		}
 	}
@@ -151,7 +157,7 @@ func (s *MetricService) AutoDiscoverMetrics(tenantID string, dataSourceID string
 
 // createAutoMetric 创建自动发现的指标
 func (s *MetricService) createAutoMetric(
-	tenantID, tableName, fieldName, displayName string,
+	tenantID, dataSourceID, tableName, fieldName, displayName string,
 	dataType model.MetricDataType,
 	aggregation model.MetricAggregation,
 	confidence float64,
@@ -162,6 +168,7 @@ func (s *MetricService) createAutoMetric(
 	return model.Metric{
 		ID:              generateID("metric"),
 		TenantID:        tenantID,
+		DataSourceID:    dataSourceID,
 		Name:            strings.ToUpper(fieldName),
 		DisplayName:     displayName,
 		Description:     fmt.Sprintf("AI 自动发现：%s 的 %s", tableName, displayName),
@@ -255,7 +262,7 @@ func isTransactionTable(tableName string) bool {
 
 // generateID 生成 ID（简单实现，生产环境应该用 UUID）
 func generateID(prefix string) string {
-	return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
+	return fmt.Sprintf("%s_%s", prefix, uuid.NewString())
 }
 
 // DimensionService 维度服务
@@ -272,7 +279,10 @@ func (s *DimensionService) AutoDiscoverDimensions(tenantID string, dataSourceID 
 	// 获取数据源
 	var dataSource model.DataSource
 	if err := s.db.First(&dataSource, "id = ? AND tenant_id = ?", dataSourceID, tenantID).Error; err != nil {
-		return nil, fmt.Errorf("data source not found: %v", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("data source not found: %w", err)
+		}
+		return nil, fmt.Errorf("failed to load data source: %w", err)
 	}
 
 	// 解析表结构信息（使用 SchemaInfo）
@@ -421,7 +431,10 @@ func (s *RelationshipService) AutoDiscoverRelationships(tenantID string, dataSou
 	// 获取数据源
 	var dataSource model.DataSource
 	if err := s.db.First(&dataSource, "id = ? AND tenant_id = ?", dataSourceID, tenantID).Error; err != nil {
-		return nil, fmt.Errorf("data source not found: %v", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("data source not found: %w", err)
+		}
+		return nil, fmt.Errorf("failed to load data source: %w", err)
 	}
 
 	// 解析表结构信息（使用 SchemaInfo）

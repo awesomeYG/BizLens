@@ -335,6 +335,7 @@ const (
 type Metric struct {
 	ID               string            `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
 	TenantID         string            `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	DataSourceID     string            `gorm:"type:varchar(50);not null;index" json:"dataSourceId"`
 	Name             string            `gorm:"size:100;not null" json:"name"`          // 指标名称（如"GMV"）
 	DisplayName      string            `gorm:"size:200" json:"displayName"`            // 显示名称（如"成交总额"）
 	Description      string            `gorm:"size:500" json:"description"`            // 描述
@@ -355,7 +356,7 @@ type Metric struct {
 	DeletedAt        gorm.DeletedAt    `gorm:"index" json:"-"`
 
 	Tenant     Tenant     `gorm:"foreignKey:TenantID" json:"-"`
-	DataSource DataSource `gorm:"foreignKey:BaseTable" json:"-"` // 通过表名关联数据源
+	DataSource DataSource `gorm:"foreignKey:DataSourceID" json:"-"`
 }
 
 // MetricLineage 指标血缘（追踪指标来源和使用）
@@ -763,7 +764,7 @@ type DailySummary struct {
 
 // AutoMigrate 自动迁移所有表
 func AutoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	if err := db.AutoMigrate(
 		&Tenant{},
 		&User{},
 		&IMConfig{},
@@ -808,5 +809,22 @@ func AutoMigrate(db *gorm.DB) error {
 		&AnomalyEvent{},
 		&DailySummary{},
 		&BusinessCalendar{},
-	)
+	); err != nil {
+		return err
+	}
+
+	// 修复历史遗留外键：早期版本曾把 metrics.base_table 误关联到 data_sources，导致 fk_metrics_data_source 约束错误。
+	// 这里统一确保 fk_metrics_data_source 约束在 metrics.data_source_id 上。
+	if db.Dialector != nil && db.Dialector.Name() == "postgres" {
+		_ = db.Exec(`ALTER TABLE "metrics" DROP CONSTRAINT IF EXISTS "fk_metrics_data_source"`).Error
+		_ = db.Exec(`
+			ALTER TABLE "metrics"
+			ADD CONSTRAINT "fk_metrics_data_source"
+			FOREIGN KEY ("data_source_id") REFERENCES "data_sources"("id")
+			ON UPDATE CASCADE
+			ON DELETE RESTRICT
+		`).Error
+	}
+
+	return nil
 }
