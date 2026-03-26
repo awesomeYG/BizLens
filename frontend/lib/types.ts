@@ -64,6 +64,37 @@ export interface GaugeData {
   max?: number;
 }
 
+/** 雷达图数据 */
+export interface RadarSeriesData {
+  name: string;
+  values: number[];
+}
+
+/** 散点图数据项 */
+export interface ScatterItem {
+  x: number;
+  y: number;
+}
+
+/** 散点图数据 */
+export interface ScatterSeriesData {
+  name: string;
+  values: ScatterItem[];
+}
+
+/** 热力图数据项 */
+export interface HeatmapItem {
+  x: number;
+  y: number;
+  value: number;
+}
+
+/** 散点图/热力图数据 */
+export interface ScatterSeries {
+  name: string;
+  values: (ScatterItem | number[]) | HeatmapItem[];
+}
+
 /** 泛化的大屏区块数据 -- 每个 Section 携带自己的数据 */
 export interface SectionData {
   kpiItems?: KpiItem[];
@@ -74,6 +105,15 @@ export interface SectionData {
   funnelItems?: FunnelItem[];
   tableData?: TableData;
   gaugeData?: GaugeData;
+  // 雷达图数据
+  radarIndicator?: string[];
+  radarSeries?: RadarSeriesData[];
+  // 散点图数据
+  scatterSeries?: ScatterSeries[];
+  // 热力图数据
+  heatmapSeries?: ScatterSeries[];
+  // 自定义数据
+  customData?: Record<string, any>;
 }
 
 export type DataSourceType =

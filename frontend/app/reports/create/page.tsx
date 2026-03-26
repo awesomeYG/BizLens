@@ -31,16 +31,27 @@ const REPORT_CATEGORIES = [
   { id: "marketing", name: "营销" },
 ];
 
-const CHART_TYPES: { id: DashboardSectionType; name: string; icon: string }[] = [
-  { id: "kpi", name: "KPI 卡片", icon: "K" },
-  { id: "line", name: "折线图", icon: "L" },
-  { id: "bar", name: "柱状图", icon: "B" },
-  { id: "pie", name: "饼图", icon: "P" },
-  { id: "area", name: "面积图", icon: "A" },
-  { id: "table", name: "表格", icon: "T" },
-  { id: "funnel", name: "漏斗图", icon: "F" },
-  { id: "gauge", name: "仪表盘", icon: "G" },
-  { id: "ranking", name: "排行榜", icon: "R" },
+// SECTION_TYPE_INFO 从 types.ts 中的 DashboardSectionType 枚举动态映射，
+// 避免与 SectionRenderer 支持的区块类型不一致。
+// 列表来源：backend/internal/model/section_type.go AllSectionTypes
+const SECTION_TYPE_INFO: { id: DashboardSectionType; name: string; icon: string; category: "basic" | "advanced" }[] = [
+  { id: "kpi",     name: "KPI 卡片", icon: "K", category: "basic" },
+  { id: "line",    name: "折线图", icon: "L", category: "basic" },
+  { id: "bar",     name: "柱状图", icon: "B", category: "basic" },
+  { id: "pie",     name: "饼图",   icon: "P", category: "basic" },
+  { id: "area",    name: "面积图", icon: "A", category: "basic" },
+  { id: "table",   name: "表格",   icon: "T", category: "basic" },
+  { id: "funnel",  name: "漏斗图", icon: "F", category: "basic" },
+  { id: "gauge",   name: "仪表盘", icon: "G", category: "basic" },
+  { id: "ranking", name: "排行榜", icon: "R", category: "basic" },
+  { id: "trend",   name: "趋势图", icon: "N", category: "basic" },
+  { id: "radar",   name: "雷达图", icon: "D", category: "advanced" },
+  { id: "scatter", name: "散点图", icon: "S", category: "advanced" },
+  { id: "heatmap", name: "热力图", icon: "H", category: "advanced" },
+  { id: "map",     name: "地图",   icon: "M", category: "advanced" },
+  { id: "insight", name: "AI 洞察", icon: "I", category: "advanced" },
+  { id: "alert",   name: "告警",   icon: "!", category: "advanced" },
+  { id: "custom",  name: "自定义", icon: "+", category: "advanced" },
 ];
 
 /** 生成示例数据 */
@@ -59,6 +70,7 @@ function generateSampleData(type: DashboardSectionType): Record<string, any> {
       };
     case "line":
     case "area":
+    case "trend":
       return {
         categories: months,
         series: [
@@ -119,6 +131,68 @@ function generateSampleData(type: DashboardSectionType): Record<string, any> {
             ["产品D", 60, 18000, "15%"],
           ],
         },
+      };
+    case "radar":
+      return {
+        categories: ["销售", "营销", "技术", "运营", "客服", "财务"],
+        series: [{
+          name: "当前",
+          values: [80, 75, 65, 85, 60, 70],
+        }],
+      };
+    case "scatter":
+      return {
+        categories: months,
+        series: [{
+          name: "数据点",
+          values: [
+            [120, 200], [132, 180], [101, 220], [134, 160],
+            [90, 240], [150, 190],
+          ],
+        }],
+      };
+    case "heatmap":
+      return {
+        categories: ["周一", "周二", "周三", "周四", "周五", "周六", "周日"],
+        series: [{
+          name: "访问量",
+          values: [
+            [120, 340, 650], [230, 450, 800], [180, 320, 700],
+            [300, 500, 900], [280, 420, 750], [150, 300, 600], [80, 150, 300],
+          ],
+        }],
+      };
+    case "map":
+      return {
+        pieItems: [
+          { name: "华东", value: 420 },
+          { name: "华北", value: 280 },
+          { name: "华南", value: 350 },
+          { name: "西南", value: 180 },
+          { name: "西北", value: 90 },
+        ],
+      };
+    case "insight":
+      return {
+        kpiItems: [
+          { label: "发现", value: "3", trend: "up", trendValue: "+2", color: "#38bdf8" },
+          { label: "异常", value: "1", trend: "down", trendValue: "-1", color: "#f87171" },
+          { label: "建议", value: "5", trend: "up", trendValue: "+3", color: "#34d399" },
+        ],
+      };
+    case "alert":
+      return {
+        kpiItems: [
+          { label: "活跃告警", value: "2", trend: "down", trendValue: "-1", color: "#f87171" },
+          { label: "已确认", value: "3", trend: "flat", trendValue: "0", color: "#fbbf24" },
+          { label: "已恢复", value: "8", trend: "up", trendValue: "+5", color: "#34d399" },
+        ],
+      };
+    case "custom":
+      return {
+        kpiItems: [
+          { label: "自定义指标", value: "--", color: "#38bdf8" },
+        ],
       };
     default:
       return {};
@@ -201,7 +275,7 @@ function ReportCreateContent() {
   const addSection = (chartType: DashboardSectionType) => {
     const newSection: CreateReportSectionRequest = {
       type: chartType,
-      title: CHART_TYPES.find((c) => c.id === chartType)?.name || "新区块",
+      title: SECTION_TYPE_INFO.find((c) => c.id === chartType)?.name || "新区块",
       colSpan: chartType === "kpi" ? 12 : 6,
       rowSpan: 1,
       sortOrder: sections.length,
@@ -433,7 +507,7 @@ function ReportCreateContent() {
 
               {/* 添加区块按钮网格 */}
               <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2 mb-6">
-                {CHART_TYPES.map((chart) => (
+                {SECTION_TYPE_INFO.map((chart) => (
                   <button
                     key={chart.id}
                     onClick={() => addSection(chart.id)}
@@ -484,7 +558,7 @@ function ReportCreateContent() {
 
                         {/* 类型标签 */}
                         <span className="px-2 py-1 rounded text-xs font-medium bg-indigo-900/40 text-indigo-400 whitespace-nowrap">
-                          {CHART_TYPES.find((c) => c.id === sec.type)?.name || sec.type}
+                          {SECTION_TYPE_INFO.find((c) => c.id === sec.type)?.name || sec.type}
                         </span>
 
                         {/* 标题输入 */}

@@ -8,50 +8,32 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"ai-bi-server/internal/dto"
 	"ai-bi-server/internal/model"
 )
 
-// ReportDTO 报表数据传输对象
+// ReportDTO 报表数据传输对象（区块部分复用统一 SectionDTO）
 type ReportDTO struct {
-	ID              string             `json:"id"`
-	TenantID        string             `json:"tenantId"`
-	Title           string             `json:"title"`
-	Description     string             `json:"description"`
-	Type            string             `json:"type"`
-	Status          string             `json:"status"`
-	Category        string             `json:"category"`
-	Tags            []string           `json:"tags"`
-	DataSourceID    string             `json:"dataSourceId,omitempty"`
-	LayoutConfig    string             `json:"layoutConfig,omitempty"`
-	ColorPalette    string             `json:"colorPalette,omitempty"`
-	ScheduleEnabled bool               `json:"scheduleEnabled"`
-	ScheduleCron    string             `json:"scheduleCron,omitempty"`
-	AIGenerated     bool               `json:"aiGenerated"`
-	AIPrompt        string             `json:"aiPrompt,omitempty"`
-	ViewCount       int                `json:"viewCount"`
-	CreatedBy       string             `json:"createdBy"`
-	Sections        []ReportSectionDTO `json:"sections,omitempty"`
-	CreatedAt       time.Time          `json:"createdAt"`
-	UpdatedAt       time.Time          `json:"updatedAt"`
-}
-
-// ReportSectionDTO 报表区块数据传输对象
-type ReportSectionDTO struct {
-	ID          string                 `json:"id"`
-	ReportID    string                 `json:"reportId"`
-	Type        string                 `json:"type"`
-	Title       string                 `json:"title,omitempty"`
-	Metrics     []string               `json:"metrics,omitempty"`
-	Dimensions  []string               `json:"dimensions,omitempty"`
-	ChartConfig map[string]interface{} `json:"chartConfig,omitempty"`
-	DataConfig  map[string]interface{} `json:"dataConfig,omitempty"`
-	SortOrder   int                    `json:"sortOrder"`
-	ColSpan     int                    `json:"colSpan"`
-	RowSpan     int                    `json:"rowSpan"`
-	TimeGrain   string                 `json:"timeGrain,omitempty"`
-	TopN        int                    `json:"topN,omitempty"`
-	Comparison  string                 `json:"comparison,omitempty"`
-	FilterExpr  string                 `json:"filterExpr,omitempty"`
+	ID              string           `json:"id"`
+	TenantID        string           `json:"tenantId"`
+	Title           string           `json:"title"`
+	Description     string           `json:"description"`
+	Type            string           `json:"type"`
+	Status          string           `json:"status"`
+	Category        string           `json:"category"`
+	Tags            []string         `json:"tags"`
+	DataSourceID    string           `json:"dataSourceId,omitempty"`
+	LayoutConfig    string           `json:"layoutConfig,omitempty"`
+	ColorPalette    string           `json:"colorPalette,omitempty"`
+	ScheduleEnabled bool             `json:"scheduleEnabled"`
+	ScheduleCron    string           `json:"scheduleCron,omitempty"`
+	AIGenerated     bool             `json:"aiGenerated"`
+	AIPrompt        string           `json:"aiPrompt,omitempty"`
+	ViewCount       int              `json:"viewCount"`
+	CreatedBy       string           `json:"createdBy"`
+	Sections        []dto.SectionDTO `json:"sections,omitempty"`
+	CreatedAt       time.Time        `json:"createdAt"`
+	UpdatedAt       time.Time        `json:"updatedAt"`
 }
 
 // ConvertReportToDTO 将 Report 模型转换为 DTO
@@ -61,9 +43,9 @@ func ConvertReportToDTO(report model.Report) ReportDTO {
 		json.Unmarshal([]byte(report.Tags), &tags)
 	}
 
-	var sections []ReportSectionDTO
+	sections := make([]dto.SectionDTO, 0, len(report.Sections))
 	for _, s := range report.Sections {
-		sections = append(sections, ConvertReportSectionToDTO(s))
+		sections = append(sections, dto.FromReportSection(s, report.ID))
 	}
 
 	return ReportDTO{
@@ -87,47 +69,6 @@ func ConvertReportToDTO(report model.Report) ReportDTO {
 		Sections:        sections,
 		CreatedAt:       report.CreatedAt,
 		UpdatedAt:       report.UpdatedAt,
-	}
-}
-
-// ConvertReportSectionToDTO 将 ReportSection 模型转换为 DTO
-func ConvertReportSectionToDTO(s model.ReportSection) ReportSectionDTO {
-	var metrics []string
-	if s.Metrics != "" {
-		json.Unmarshal([]byte(s.Metrics), &metrics)
-	}
-
-	var dimensions []string
-	if s.Dimensions != "" {
-		json.Unmarshal([]byte(s.Dimensions), &dimensions)
-	}
-
-	var chartConfig map[string]interface{}
-	if s.ChartConfig != "" {
-		json.Unmarshal([]byte(s.ChartConfig), &chartConfig)
-	}
-
-	var dataConfig map[string]interface{}
-	if s.DataConfig != "" {
-		json.Unmarshal([]byte(s.DataConfig), &dataConfig)
-	}
-
-	return ReportSectionDTO{
-		ID:          s.ID,
-		ReportID:    s.ReportID,
-		Type:        string(s.Type),
-		Title:       s.Title,
-		Metrics:     metrics,
-		Dimensions:  dimensions,
-		ChartConfig: chartConfig,
-		DataConfig:  dataConfig,
-		SortOrder:   s.SortOrder,
-		ColSpan:     s.ColSpan,
-		RowSpan:     s.RowSpan,
-		TimeGrain:   s.TimeGrain,
-		TopN:        s.TopN,
-		Comparison:  s.Comparison,
-		FilterExpr:  s.FilterExpr,
 	}
 }
 
@@ -160,7 +101,7 @@ func (s *ReportService) ListReports(tenantID string, status string, category str
 		return nil, err
 	}
 
-	var result []ReportDTO
+	result := make([]ReportDTO, 0, len(reports))
 	for _, r := range reports {
 		result = append(result, ConvertReportToDTO(r))
 	}
@@ -185,36 +126,19 @@ func (s *ReportService) GetReport(tenantID, id string) (*ReportDTO, error) {
 	return &dto, nil
 }
 
-// CreateReportRequest 创建报表请求
+// CreateReportRequest 创建报表请求（区块部分复用统一 CreateSectionRequest）
 type CreateReportRequest struct {
-	Title        string                 `json:"title"`
-	Description  string                 `json:"description"`
-	Type         string                 `json:"type"`
-	Category     string                 `json:"category"`
-	Tags         []string               `json:"tags"`
-	DataSourceID string                 `json:"dataSourceId"`
-	LayoutConfig string                 `json:"layoutConfig"`
-	ColorPalette string                 `json:"colorPalette"`
-	AIGenerated  bool                   `json:"aiGenerated"`
-	AIPrompt     string                 `json:"aiPrompt"`
-	Sections     []CreateSectionRequest `json:"sections"`
-}
-
-// CreateSectionRequest 创建区块请求
-type CreateSectionRequest struct {
-	Type        string                 `json:"type"`
-	Title       string                 `json:"title"`
-	Metrics     []string               `json:"metrics"`
-	Dimensions  []string               `json:"dimensions"`
-	ChartConfig map[string]interface{} `json:"chartConfig"`
-	DataConfig  map[string]interface{} `json:"dataConfig"`
-	SortOrder   int                    `json:"sortOrder"`
-	ColSpan     int                    `json:"colSpan"`
-	RowSpan     int                    `json:"rowSpan"`
-	TimeGrain   string                 `json:"timeGrain"`
-	TopN        int                    `json:"topN"`
-	Comparison  string                 `json:"comparison"`
-	FilterExpr  string                 `json:"filterExpr"`
+	Title        string                     `json:"title"`
+	Description  string                     `json:"description"`
+	Type         string                     `json:"type"`
+	Category     string                     `json:"category"`
+	Tags         []string                   `json:"tags"`
+	DataSourceID string                     `json:"dataSourceId"`
+	LayoutConfig string                     `json:"layoutConfig"`
+	ColorPalette string                     `json:"colorPalette"`
+	AIGenerated  bool                       `json:"aiGenerated"`
+	AIPrompt     string                     `json:"aiPrompt"`
+	Sections     []dto.CreateSectionRequest `json:"sections"`
 }
 
 // CreateReport 创建报表（含区块）
@@ -264,7 +188,7 @@ func (s *ReportService) CreateReport(tenantID, userID string, req CreateReportRe
 		}
 
 		for i, sec := range req.Sections {
-			section := s.buildSection(tenantID, report.ID, sec, i)
+			section := s.buildSectionFromDTO(tenantID, report.ID, sec, i)
 			if err := tx.Create(&section).Error; err != nil {
 				return err
 			}
@@ -280,16 +204,16 @@ func (s *ReportService) CreateReport(tenantID, userID string, req CreateReportRe
 
 // UpdateReportRequest 更新报表请求
 type UpdateReportRequest struct {
-	Title        *string                 `json:"title,omitempty"`
-	Description  *string                 `json:"description,omitempty"`
-	Type         *string                 `json:"type,omitempty"`
-	Status       *string                 `json:"status,omitempty"`
-	Category     *string                 `json:"category,omitempty"`
-	Tags         *[]string               `json:"tags,omitempty"`
-	DataSourceID *string                 `json:"dataSourceId,omitempty"`
-	LayoutConfig *string                 `json:"layoutConfig,omitempty"`
-	ColorPalette *string                 `json:"colorPalette,omitempty"`
-	Sections     *[]CreateSectionRequest `json:"sections,omitempty"`
+	Title        *string                     `json:"title,omitempty"`
+	Description  *string                     `json:"description,omitempty"`
+	Type         *string                     `json:"type,omitempty"`
+	Status       *string                     `json:"status,omitempty"`
+	Category     *string                     `json:"category,omitempty"`
+	Tags         *[]string                   `json:"tags,omitempty"`
+	DataSourceID *string                     `json:"dataSourceId,omitempty"`
+	LayoutConfig *string                     `json:"layoutConfig,omitempty"`
+	ColorPalette *string                     `json:"colorPalette,omitempty"`
+	Sections     *[]dto.CreateSectionRequest `json:"sections,omitempty"`
 }
 
 // UpdateReport 更新报表
@@ -344,7 +268,7 @@ func (s *ReportService) UpdateReport(tenantID, id string, req UpdateReportReques
 			}
 			// 创建新区块
 			for i, sec := range *req.Sections {
-				section := s.buildSection(tenantID, id, sec, i)
+				section := s.buildSectionFromDTO(tenantID, id, sec, i)
 				if err := tx.Create(&section).Error; err != nil {
 					return err
 				}
@@ -439,8 +363,8 @@ func (s *ReportService) DuplicateReport(tenantID, id, userID string) (*ReportDTO
 	return s.GetReport(tenantID, newReport.ID)
 }
 
-// buildSection 构建 ReportSection 模型
-func (s *ReportService) buildSection(tenantID, reportID string, req CreateSectionRequest, index int) model.ReportSection {
+// buildSectionFromDTO 根据统一 CreateSectionRequest 构建 ReportSection 模型
+func (s *ReportService) buildSectionFromDTO(tenantID, reportID string, req dto.CreateSectionRequest, index int) model.ReportSection {
 	metricsJSON := ""
 	if len(req.Metrics) > 0 {
 		b, _ := json.Marshal(req.Metrics)
@@ -456,11 +380,7 @@ func (s *ReportService) buildSection(tenantID, reportID string, req CreateSectio
 		b, _ := json.Marshal(req.ChartConfig)
 		chartJSON = string(b)
 	}
-	dataJSON := ""
-	if req.DataConfig != nil {
-		b, _ := json.Marshal(req.DataConfig)
-		dataJSON = string(b)
-	}
+	dataJSON := req.DataConfig
 
 	colSpan := req.ColSpan
 	if colSpan <= 0 {

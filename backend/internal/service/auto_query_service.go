@@ -1,11 +1,126 @@
 package service
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"ai-bi-server/internal/model"
 )
+
+// ==================== 查询缓存层 ====================
+
+// CacheEntry 缓存条目
+type CacheEntry struct {
+	Value     *AutoQueryResult
+	ExpiresAt time.Time
+}
+
+// QueryCache 查询结果内存缓存
+type QueryCache struct {
+	entries    map[string]*CacheEntry
+	mu         sync.RWMutex
+	defaultTTL time.Duration
+}
+
+// NewQueryCache 创建查询缓存（默认 TTL 为 5 分钟）
+func NewQueryCache(ttlMinutes int) *QueryCache {
+	c := &QueryCache{
+		entries:    make(map[string]*CacheEntry),
+		defaultTTL: 5 * time.Minute,
+	}
+	if ttlMinutes > 0 {
+		c.defaultTTL = time.Duration(ttlMinutes) * time.Minute
+	}
+	// 启动后台清理 goroutine
+	go c.cleanupLoop()
+	return c
+}
+
+// buildCacheKey 生成缓存键
+func (c *QueryCache) buildCacheKey(tenantID string, req *AutoQueryRequest) string {
+	h := sha256.New()
+	h.Write([]byte(tenantID))
+	for _, ds := range req.DataSources {
+		h.Write([]byte(ds.ID))
+		for _, t := range ds.TablesInfo {
+			h.Write([]byte(t.Name))
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil))[:32]
+}
+
+// Get 获取缓存（如果存在且未过期）
+func (c *QueryCache) Get(tenantID string, req *AutoQueryRequest) *AutoQueryResult {
+	key := c.buildCacheKey(tenantID, req)
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if entry, ok := c.entries[key]; ok && time.Now().Before(entry.ExpiresAt) {
+		return entry.Value
+	}
+	return nil
+}
+
+// Set 设置缓存
+func (c *QueryCache) Set(tenantID string, req *AutoQueryRequest, result *AutoQueryResult) {
+	key := c.buildCacheKey(tenantID, req)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries[key] = &CacheEntry{
+		Value:     result,
+		ExpiresAt: time.Now().Add(c.defaultTTL),
+	}
+}
+
+// Invalidate 主动失效缓存
+func (c *QueryCache) Invalidate(tenantID string, dataSourceID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// 失效以该数据源 ID 为前缀的所有缓存条目
+	keysToDelete := make([]string, 0)
+	for key := range c.entries {
+		// 简单策略：直接清除所有（精确匹配需要存储 key->dataSourceIDs 映射）
+		// 在数据源变更时调用 InvalidateAll 清除所有缓存
+		_ = dataSourceID
+		keysToDelete = append(keysToDelete, key)
+	}
+	for _, k := range keysToDelete {
+		delete(c.entries, k)
+	}
+}
+
+// InvalidateAll 清除所有缓存
+func (c *QueryCache) InvalidateAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries = make(map[string]*CacheEntry)
+}
+
+// cleanupLoop 后台定期清理过期条目
+func (c *QueryCache) cleanupLoop() {
+	ticker := time.NewTicker(2 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		c.mu.Lock()
+		now := time.Now()
+		for key, entry := range c.entries {
+			if now.After(entry.ExpiresAt) {
+				delete(c.entries, key)
+			}
+		}
+		c.mu.Unlock()
+	}
+}
+
+// Size 返回当前缓存条目数量（用于监控）
+func (c *QueryCache) Size() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.entries)
+}
 
 // AutoQueryRequest AutoQuery 请求
 type AutoQueryRequest struct {
@@ -77,15 +192,37 @@ type QuerySampleRows struct {
 // AutoQueryService 自动查询服务
 type AutoQueryService struct {
 	dataSourceService *DataSourceService
+	cache             *QueryCache
 }
 
 // NewAutoQueryService 创建 AutoQuery 服务
-func NewAutoQueryService(dataSourceService *DataSourceService) *AutoQueryService {
-	return &AutoQueryService{dataSourceService: dataSourceService}
+// cacheEnabled: 是否启用查询缓存（默认启用，TTL 5分钟）
+func NewAutoQueryService(dataSourceService *DataSourceService, cacheEnabled bool, cacheTTLMinutes int) *AutoQueryService {
+	var cache *QueryCache
+	if cacheEnabled {
+		if cacheTTLMinutes <= 0 {
+			cacheTTLMinutes = 5
+		}
+		cache = NewQueryCache(cacheTTLMinutes)
+	}
+	return &AutoQueryService{dataSourceService: dataSourceService, cache: cache}
+}
+
+// GetCache 获取缓存实例（用于报表刷新服务）
+func (s *AutoQueryService) GetCache() *QueryCache {
+	return s.cache
 }
 
 // AutoQuery 根据数据源上下文自动生成并执行聚合查询
+// 启用缓存时，相同数据源和表的查询结果会被缓存（默认 5 分钟）
 func (s *AutoQueryService) AutoQuery(tenantID string, req AutoQueryRequest) (*AutoQueryResult, error) {
+	// 缓存命中检查
+	if s.cache != nil {
+		if cached := s.cache.Get(tenantID, &req); cached != nil {
+			return cached, nil
+		}
+	}
+
 	result := &AutoQueryResult{
 		TotalCount:    make(map[string]interface{}),
 		Distributions: make([]QueryDistribution, 0),
@@ -154,6 +291,13 @@ func (s *AutoQueryService) AutoQuery(tenantID string, req AutoQueryRequest) (*Au
 	}
 
 	return result, nil
+}
+
+// StoreToCache 主动将查询结果存入缓存（用于预热）
+func (s *AutoQueryService) StoreToCache(tenantID string, req *AutoQueryRequest, result *AutoQueryResult) {
+	if s.cache != nil {
+		s.cache.Set(tenantID, req, result)
+	}
 }
 
 // generatedQuery 存储生成的查询信息

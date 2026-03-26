@@ -125,16 +125,17 @@ func main() {
 	analysisHandler := handler.NewAnalysisHandler(analysisService)
 	aiConfigService := service.NewAIConfigService(db)
 
-	// AutoQuery 服务（用于 dashboard 生成前的自动数据查询）
-	autoQueryService := service.NewAutoQueryService(dataSourceService)
+	// AutoQuery 服务（用于 dashboard 生成前的自动数据查询，启用 5 分钟查询缓存）
+	autoQueryService := service.NewAutoQueryService(dataSourceService, true, 5)
 	autoQueryHandler := handler.NewAutoQueryHandler(autoQueryService)
 
 	// WebSocket 实时推送服务
 	wsHub := service.NewHub()
 	go wsHub.Run()
 	wsHandler := handler.NewWebSocketHandler(wsHub)
-	// dashboardRefreshService 可在需要时启动（如 Dashboard 访问时）
-	_ = service.NewDashboardRefreshService(wsHub, autoQueryService, dataSourceService, 5*time.Second)
+	// 实时刷新服务（支持大屏和报表，启用查询缓存避免重复查询）
+	refreshService := service.NewRefreshService(wsHub, autoQueryService, dataSourceService, 5*time.Second)
+	_ = refreshService
 
 	aiConfigHandler := handler.NewAIConfigHandler(aiConfigService)
 

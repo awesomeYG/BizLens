@@ -9,29 +9,30 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"ai-bi-server/internal/dto"
 	"ai-bi-server/internal/model"
 )
 
-// DashboardTemplateDTO 模板数据传输对象
+// DashboardTemplateDTO 模板数据传输对象（复用统一 SectionDTO）
 type DashboardTemplateDTO struct {
-	ID           string       `json:"id"`
-	Name         string       `json:"name"`
-	Description  string       `json:"description"`
-	Category     string       `json:"category"`
-	Icon         string       `json:"icon"`
-	IsSystem     bool         `json:"isSystem"`
-	IsPublic     bool         `json:"isPublic"`
-	Tags         []string     `json:"tags"`
-	LayoutConfig string       `json:"layoutConfig"`
-	ColorPalette string       `json:"colorPalette"`
-	ColorTone    string       `json:"colorTone"`
-	UsageCount   int          `json:"usageCount"`
-	Sections     []SectionDTO `json:"sections,omitempty"`
-	CreatedAt    time.Time    `json:"createdAt"`
-	UpdatedAt    time.Time    `json:"updatedAt"`
+	ID           string           `json:"id"`
+	Name         string           `json:"name"`
+	Description  string           `json:"description"`
+	Category     string           `json:"category"`
+	Icon         string           `json:"icon"`
+	IsSystem     bool             `json:"isSystem"`
+	IsPublic     bool             `json:"isPublic"`
+	Tags         []string         `json:"tags"`
+	LayoutConfig string           `json:"layoutConfig"`
+	ColorPalette string           `json:"colorPalette"`
+	ColorTone    string           `json:"colorTone"`
+	UsageCount   int              `json:"usageCount"`
+	Sections     []dto.SectionDTO `json:"sections,omitempty"`
+	CreatedAt    time.Time        `json:"createdAt"`
+	UpdatedAt    time.Time        `json:"updatedAt"`
 }
 
-// DashboardInstanceDTO 实例数据传输对象
+// DashboardInstanceDTO 实例数据传输对象（复用统一 SectionDTO）
 type DashboardInstanceDTO struct {
 	ID              string                `json:"id"`
 	TemplateID      string                `json:"templateId"`
@@ -47,29 +48,9 @@ type DashboardInstanceDTO struct {
 	LastRefreshedAt *time.Time            `json:"lastRefreshedAt"`
 	ViewCount       int                   `json:"viewCount"`
 	Template        *DashboardTemplateDTO `json:"template,omitempty"`
-	Sections        []SectionDTO          `json:"sections,omitempty"`
+	Sections        []dto.SectionDTO      `json:"sections,omitempty"`
 	CreatedAt       time.Time             `json:"createdAt"`
 	UpdatedAt       time.Time             `json:"updatedAt"`
-}
-
-// SectionDTO 区块数据传输对象
-type SectionDTO struct {
-	ID           string                 `json:"id"`
-	Type         string                 `json:"type"`
-	Title        string                 `json:"title,omitempty"`
-	Metrics      []string               `json:"metrics,omitempty"`
-	Dimensions   []string               `json:"dimensions,omitempty"`
-	ChartConfig  map[string]interface{} `json:"chartConfig,omitempty"`
-	Row          int                    `json:"row"`
-	Col          int                    `json:"col"`
-	Width        int                    `json:"width"`
-	Height       int                    `json:"height"`
-	Priority     int                    `json:"priority"`
-	TimeGrain    string                 `json:"timeGrain,omitempty"`
-	TopN         int                    `json:"topN,omitempty"`
-	Comparison   string                 `json:"comparison,omitempty"`
-	SplitBy      string                 `json:"splitBy,omitempty"`
-	AutoGenerate bool                   `json:"autoGenerate"`
 }
 
 // ConvertTemplateToDTO 转换模板为 DTO
@@ -79,9 +60,9 @@ func ConvertTemplateToDTO(template model.DashboardTemplate) DashboardTemplateDTO
 		json.Unmarshal([]byte(template.Tags), &tags)
 	}
 
-	var sections []SectionDTO
+	sections := make([]dto.SectionDTO, 0, len(template.Sections))
 	for _, s := range template.Sections {
-		sections = append(sections, ConvertSectionToDTO(s))
+		sections = append(sections, dto.FromDashboardSection(s, dto.OwnerTemplate, template.ID))
 	}
 
 	return DashboardTemplateDTO{
@@ -105,15 +86,15 @@ func ConvertTemplateToDTO(template model.DashboardTemplate) DashboardTemplateDTO
 
 // ConvertInstanceToDTO 转换实例为 DTO
 func ConvertInstanceToDTO(instance model.DashboardInstance) DashboardInstanceDTO {
-	var sections []SectionDTO
+	sections := make([]dto.SectionDTO, 0, len(instance.Sections))
 	for _, s := range instance.Sections {
-		sections = append(sections, ConvertSectionToDTO(s))
+		sections = append(sections, dto.FromDashboardSection(s, dto.OwnerDashboardInstance, instance.ID))
 	}
 
 	var templateDTO *DashboardTemplateDTO
 	if instance.Template.ID != "" {
-		dto := ConvertTemplateToDTO(instance.Template)
-		templateDTO = &dto
+		d := ConvertTemplateToDTO(instance.Template)
+		templateDTO = &d
 	}
 
 	return DashboardInstanceDTO{
@@ -134,43 +115,6 @@ func ConvertInstanceToDTO(instance model.DashboardInstance) DashboardInstanceDTO
 		Sections:        sections,
 		CreatedAt:       instance.CreatedAt,
 		UpdatedAt:       instance.UpdatedAt,
-	}
-}
-
-// ConvertSectionToDTO 转换区块为 DTO
-func ConvertSectionToDTO(section model.DashboardSection) SectionDTO {
-	var metrics []string
-	if section.Metrics != "" {
-		json.Unmarshal([]byte(section.Metrics), &metrics)
-	}
-
-	var dimensions []string
-	if section.Dimensions != "" {
-		json.Unmarshal([]byte(section.Dimensions), &dimensions)
-	}
-
-	var chartConfig map[string]interface{}
-	if section.ChartConfig != "" {
-		json.Unmarshal([]byte(section.ChartConfig), &chartConfig)
-	}
-
-	return SectionDTO{
-		ID:           section.ID,
-		Type:         string(section.Type),
-		Title:        section.Title,
-		Metrics:      metrics,
-		Dimensions:   dimensions,
-		ChartConfig:  chartConfig,
-		Row:          section.Row,
-		Col:          section.Col,
-		Width:        section.Width,
-		Height:       section.Height,
-		Priority:     section.Priority,
-		TimeGrain:    section.TimeGrain,
-		TopN:         section.TopN,
-		Comparison:   section.Comparison,
-		SplitBy:      section.SplitBy,
-		AutoGenerate: section.AutoGenerate,
 	}
 }
 
