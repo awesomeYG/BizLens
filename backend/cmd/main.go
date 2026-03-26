@@ -141,6 +141,9 @@ func main() {
 	// 每日摘要 Handler
 	dailySummaryHandler := handler.NewDailySummaryHandler(dailySummaryService)
 
+	// 观测中心统一 Handler
+	observabilityHandler := handler.NewObservabilityHandler(db, anomalyService, dailySummaryService, baselineService, rcaService)
+
 	// 注入数据依赖（延迟注入避免循环引用）
 	dailySummaryService.SetDataDependencies(dataSourceService, metricService)
 	dailySummaryService.SetRCADependency(rcaService)
@@ -568,6 +571,12 @@ func main() {
 		// /api/tenants/{tenantId}/daily-summary[/latest|/generate]
 		if len(parts) >= 2 && parts[1] == "daily-summary" {
 			dailySummaryHandler.HandleDailySummary(w, r)
+			return
+		}
+
+		// /api/tenants/{tenantId}/observability/...
+		if len(parts) >= 2 && parts[1] == "observability" {
+			observabilityHandler.HandleObservability(w, r)
 			return
 		}
 
