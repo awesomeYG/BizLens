@@ -157,6 +157,7 @@ function removeActionBlocks(content: string): string {
     .replace(/```notification_rule\s*\n[\s\S]*?\n```/g, "")
     .replace(/```report_config\s*\n[\s\S]*?\n```/g, "")
     .replace(/```rca_request\s*\n[\s\S]*?\n```/g, "")
+    .replace(/```direct_message\s*\n[\s\S]*?\n```/g, "")
     .trim();
 }
 
@@ -1013,6 +1014,93 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       }
     };
 
+    // 直接发送钉钉消息（通过 direct_message block 触发）
+    const sendDirectMessageFromResponse = async (rawContent: string) => {
+      const directMsgRegex = /```direct_message\s*\n([\s\S]*?)\n```/;
+      const directMatch = directMsgRegex.exec(rawContent);
+      if (!directMatch) return false;
+
+      try {
+        const msgConfig = JSON.parse(directMatch[1]);
+        const token = getAccessToken();
+        const authHeaders: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) authHeaders["Authorization"] = `Bearer ${token}`;
+
+        // 先获取已启用的钉钉配置
+        const imRes = await fetch(`/api/tenants/${tenantId}/im-configs`, { headers: authHeaders });
+        const imConfigs = imRes.ok ? await imRes.json() : [];
+        const enabledConfigs = Array.isArray(imConfigs) ? imConfigs.filter((c: any) => c?.enabled) : [];
+        const dingCfg = enabledConfigs.find((c: any) => String(c?.type || "").toLowerCase() === "dingtalk");
+
+        if (!dingCfg) {
+          const cleanContent = rawContent.replace(directMsgRegex, "").trim();
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? {
+                    ...m,
+                    content:
+                      cleanContent +
+                      "\n\n**发送到钉钉失败**：未找到已启用的钉钉配置。\n\n请先前往 [IM 配置](/im/settings) 添加并启用钉钉机器人。",
+                  }
+                : m
+            )
+          );
+          return false;
+        }
+
+        // 调用发送接口
+        const sendRes = await fetch(`/api/tenants/${tenantId}/notifications/send`, {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({
+            platformIds: [String(dingCfg.id)],
+            templateType: "chat_direct",
+            title: "",
+            content: msgConfig.content || "",
+            markdown: msgConfig.markdown || false,
+          }),
+        });
+
+        const cleanContent = rawContent.replace(directMsgRegex, "").trim();
+
+        if (!sendRes.ok) {
+          const errData = await sendRes.json().catch(() => null);
+          const errMsg = errData?.error || `HTTP ${sendRes.status}`;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? {
+                    ...m,
+                    content:
+                      cleanContent +
+                      `\n\n**发送到钉钉失败**：${errMsg}\n\n请检查 [IM 配置](/im/settings) 中的钉钉 Webhook 与密钥是否正确。`,
+                  }
+                : m
+            )
+          );
+          return false;
+        }
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  content:
+                    cleanContent +
+                    "\n\n**已发送到钉钉**：消息发送成功，机器人已将内容推送到你的钉钉群/对话中。",
+                }
+              : m
+          )
+        );
+        return true;
+      } catch (err) {
+        console.error("Direct message send failed:", err);
+        return false;
+      }
+    };
+
     const createDashboardFromResponse = async (rawContent: string) => {
       const config = extractDashboardConfig(rawContent);
       if (!config) return false;
@@ -1176,6 +1264,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
         await createNotificationRuleFromResponse(content);
         await createDataSourceFromResponse(content);
         await createDashboardFromResponse(content);
+        await sendDirectMessageFromResponse(content);
         return;
       }
 
@@ -1218,6 +1307,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
         await createNotificationRuleFromResponse(fullContent);
         await createDataSourceFromResponse(fullContent);
         await createDashboardFromResponse(fullContent);
+        await sendDirectMessageFromResponse(fullContent);
       }
     } catch (err) {
       const isManualAbort = manualStopRef.current || (err instanceof DOMException && err.name === "AbortError");
