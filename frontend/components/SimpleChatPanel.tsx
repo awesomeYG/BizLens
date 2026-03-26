@@ -71,8 +71,8 @@ function parseConnectionUriFromText(text: string): ParsedConnection | null {
       ssl:
         scheme === "postgresql"
           ? ["1", "true", "require", "verify-ca", "verify-full"].includes(
-              (url.searchParams.get("sslmode") || url.searchParams.get("ssl") || "").toLowerCase()
-            )
+            (url.searchParams.get("sslmode") || url.searchParams.get("ssl") || "").toLowerCase()
+          )
           : undefined,
     };
   } catch {
@@ -267,11 +267,10 @@ function MessageBubble({
       {isUser ? <UserAvatar name={userName} /> : <AiAvatar />}
       <div className={`w-fit min-w-0 max-w-[75%] group ${isUser ? "items-end" : "items-start"} flex flex-col`}>
         <div
-          className={`relative min-w-0 overflow-hidden rounded-2xl px-4 py-3 text-sm leading-relaxed transition-shadow ${
-            isUser
+          className={`relative min-w-0 overflow-hidden rounded-2xl px-4 py-3 text-sm leading-relaxed transition-shadow ${isUser
               ? "rounded-tr-md bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-500/15"
               : "rounded-tl-md bg-zinc-800/50 border border-zinc-700/30 text-zinc-200 backdrop-blur-sm"
-          }`}
+            }`}
         >
           {message.files?.length ? (
             <div className={`mb-2 flex items-center gap-1.5 text-xs ${isUser ? "text-indigo-200/70" : "text-zinc-500"}`}>
@@ -745,16 +744,16 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
-                  ...m,
-                  content:
-                    `${cleanContent}\n\n数据源「${created.name || dsConfig.name}」已自动配置成功！\n\n` +
-                    `**连接详情**：\n` +
-                    `- 类型：${(dsConfig.type || "").toUpperCase()}\n` +
-                    `- 主机：${dsConfig.connection?.host}:${dsConfig.connection?.port}\n` +
-                    `- 数据库：${dsConfig.connection?.database}\n` +
-                    `- 状态：已连接\n\n` +
-                    `你可以前往 [数据源管理](/settings/data-sources) 页面查看详情，或直接开始数据分析。`,
-                }
+                ...m,
+                content:
+                  `${cleanContent}\n\n数据源「${created.name || dsConfig.name}」已自动配置成功！\n\n` +
+                  `**连接详情**：\n` +
+                  `- 类型：${(dsConfig.type || "").toUpperCase()}\n` +
+                  `- 主机：${dsConfig.connection?.host}:${dsConfig.connection?.port}\n` +
+                  `- 数据库：${dsConfig.connection?.database}\n` +
+                  `- 状态：已连接\n\n` +
+                  `你可以前往 [数据源管理](/settings/data-sources) 页面查看详情，或直接开始数据分析。`,
+              }
               : m
           )
         );
@@ -790,12 +789,12 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
             prev.map((m) =>
               m.id === assistantMsgId
                 ? {
-                    ...m,
-                    content:
-                      `${cleanContent}\n\n` +
-                      `已识别到告警意图，但自动创建告警规则失败：${errMsg}\n\n` +
-                      `你可以前往 [告警配置](/alerts/config) 页面手动检查。`,
-                  }
+                  ...m,
+                  content:
+                    `${cleanContent}\n\n` +
+                    `已识别到告警意图，但自动创建告警规则失败：${errMsg}\n\n` +
+                    `你可以前往 [告警配置](/alerts/config) 页面手动检查。`,
+                }
                 : m
             )
           );
@@ -807,12 +806,12 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
-                  ...m,
-                  content:
-                    `${cleanContent}\n\n` +
-                    `告警规则「${created.name || alertConfig.name}」已自动创建。\n\n` +
-                    `可前往 [告警配置](/alerts/config) 页面查看和调整。`,
-                }
+                ...m,
+                content:
+                  `${cleanContent}\n\n` +
+                  `告警规则「${created.name || alertConfig.name}」已自动创建。\n\n` +
+                  `可前往 [告警配置](/alerts/config) 页面查看和调整。`,
+              }
               : m
           )
         );
@@ -891,12 +890,12 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
             prev.map((m) =>
               m.id === assistantMsgId
                 ? {
-                    ...m,
-                    content:
-                      `${cleanContent}\n\n` +
-                      `已识别到通知规则，但自动创建失败：${errMsg}\n\n` +
-                      `请前往 [IM 配置](/im/settings) 检查钉钉机器人，并在 [通知规则](/im/rules) 页面手动创建。`,
-                  }
+                  ...m,
+                  content:
+                    `${cleanContent}\n\n` +
+                    `已识别到通知规则，但自动创建失败：${errMsg}\n\n` +
+                    `请前往 [IM 配置](/im/settings) 检查钉钉机器人，并在 [通知规则](/im/rules) 页面手动创建。`,
+                }
                 : m
             )
           );
@@ -914,15 +913,15 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
-                  ...m,
-                  content:
-                    `${cleanContent}\n\n` +
-                    `通知规则「${created.name || ruleConfig.name || "未命名规则"}」已自动创建，${pairStatus}。\n\n` +
-                    `**核对入口**：\n` +
-                    `- [查看通知规则](/im/rules?ruleId=${created.id})\n` +
-                    `- [检查 IM 配置](/im/settings)` +
-                    unresolvedText,
-                }
+                ...m,
+                content:
+                  `${cleanContent}\n\n` +
+                  `通知规则「${created.name || ruleConfig.name || "未命名规则"}」已自动创建，${pairStatus}。\n\n` +
+                  `**核对入口**：\n` +
+                  `- [查看通知规则](/im/rules?ruleId=${created.id})\n` +
+                  `- [检查 IM 配置](/im/settings)` +
+                  unresolvedText,
+              }
               : m
           )
         );
@@ -946,9 +945,9 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
-                  ...m,
-                  content: `${cleanContent}\n\n[check] 大屏「${saved.title}」已自动创建，可前往 /dashboards?id=${saved.id} 查看。`,
-                }
+                ...m,
+                content: `${cleanContent}\n\n[check] 大屏「${saved.title}」已自动创建，可前往 /dashboards?id=${saved.id} 查看。`,
+              }
               : m
           )
         );
@@ -1003,34 +1002,34 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           const errMsg = errData?.error || `HTTP ${dsRes.status}`;
           const diagnosis = errData?.connectionDiagnosis as
             | {
-                dnsMessage?: string;
-                tcpMessage?: string;
-                tlsMessage?: string;
-                authMessage?: string;
-                recommendedSSL?: string;
-                diagnosisSummary?: string;
-              }
+              dnsMessage?: string;
+              tcpMessage?: string;
+              tlsMessage?: string;
+              authMessage?: string;
+              recommendedSSL?: string;
+              diagnosisSummary?: string;
+            }
             | undefined;
           const diagnosisText = diagnosis
             ? `\n\n**连接诊断**：\n` +
-              `- DNS：${diagnosis.dnsMessage || "未返回"}\n` +
-              `- TCP：${diagnosis.tcpMessage || "未返回"}\n` +
-              `- TLS：${diagnosis.tlsMessage || "未返回"}\n` +
-              `- 鉴权：${diagnosis.authMessage || "未返回"}\n` +
-              `- 建议 SSL：${diagnosis.recommendedSSL || "未返回"}\n` +
-              `- 结论：${diagnosis.diagnosisSummary || "未返回"}`
+            `- DNS：${diagnosis.dnsMessage || "未返回"}\n` +
+            `- TCP：${diagnosis.tcpMessage || "未返回"}\n` +
+            `- TLS：${diagnosis.tlsMessage || "未返回"}\n` +
+            `- 鉴权：${diagnosis.authMessage || "未返回"}\n` +
+            `- 建议 SSL：${diagnosis.recommendedSSL || "未返回"}\n` +
+            `- 结论：${diagnosis.diagnosisSummary || "未返回"}`
             : "";
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsgId
                 ? {
-                    ...m,
-                    content:
-                      `已识别到数据库连接串，但自动配置失败：${errMsg}\n\n` +
-                      diagnosisText +
-                      `\n\n` +
-                      `请确认连接串可访问，或前往 [数据源管理](/settings/data-sources) 页面查看。`,
-                  }
+                  ...m,
+                  content:
+                    `已识别到数据库连接串，但自动配置失败：${errMsg}\n\n` +
+                    diagnosisText +
+                    `\n\n` +
+                    `请确认连接串可访问，或前往 [数据源管理](/settings/data-sources) 页面查看。`,
+                }
                 : m
             )
           );
@@ -1043,15 +1042,15 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
-                  ...m,
-                  content:
-                    `已为你自动配置数据源「${finalName}」。\n\n` +
-                    `- 类型：${parsedConn.type.toUpperCase()}\n` +
-                    `- 主机：${parsedConn.host}:${parsedConn.port}\n` +
-                    `- 数据库：${parsedConn.database}\n` +
-                    `- 用户名：${parsedConn.username}\n\n` +
-                    `现在可以直接继续提问分析，例如“帮我看下最近7天的销售趋势”。`,
-                }
+                ...m,
+                content:
+                  `已为你自动配置数据源「${finalName}」。\n\n` +
+                  `- 类型：${parsedConn.type.toUpperCase()}\n` +
+                  `- 主机：${parsedConn.host}:${parsedConn.port}\n` +
+                  `- 数据库：${parsedConn.database}\n` +
+                  `- 用户名：${parsedConn.username}\n\n` +
+                  `现在可以直接继续提问分析，例如“帮我看下最近7天的销售趋势”。`,
+              }
               : m
           )
         );
@@ -1259,11 +1258,11 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
             prev.map((m) =>
               m.id === assistantMsgId
                 ? {
-                    ...m,
-                    content:
-                      `未找到已启用的钉钉配置，无法发送。\n\n` +
-                      `请先前往 [IM 配置](/im/settings) 添加并启用钉钉机器人。`,
-                  }
+                  ...m,
+                  content:
+                    `未找到已启用的钉钉配置，无法发送。\n\n` +
+                    `请先前往 [IM 配置](/im/settings) 添加并启用钉钉机器人。`,
+                }
                 : m
             )
           );
@@ -1289,11 +1288,11 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
             prev.map((m) =>
               m.id === assistantMsgId
                 ? {
-                    ...m,
-                    content:
-                      `发送到钉钉失败：${errMsg}\n\n` +
-                      `请检查 Webhook 与密钥是否正确，或在 [IM 配置](/im/settings) 重新测试。`,
-                  }
+                  ...m,
+                  content:
+                    `发送到钉钉失败：${errMsg}\n\n` +
+                    `请检查 Webhook 与密钥是否正确，或在 [IM 配置](/im/settings) 重新测试。`,
+                }
                 : m
             )
           );
@@ -1304,9 +1303,9 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
-                  ...m,
-                  content: `已将消息发送到钉钉：${directMsg}`,
-                }
+                ...m,
+                content: `已将消息发送到钉钉：${directMsg}`,
+              }
               : m
           )
         );
@@ -1315,9 +1314,9 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
-                  ...m,
-                  content: `发送到钉钉时出现错误：${err instanceof Error ? err.message : "未知错误"}`,
-                }
+                ...m,
+                content: `发送到钉钉时出现错误：${err instanceof Error ? err.message : "未知错误"}`,
+              }
               : m
           )
         );
@@ -1444,11 +1443,10 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
             return (
               <div key={item.id} className="min-w-[240px] lg:min-w-0 lg:mb-3">
                 <div
-                  className={`group rounded-2xl border p-3 transition ${
-                    active
+                  className={`group rounded-2xl border p-3 transition ${active
                       ? "border-indigo-500/40 bg-indigo-500/10 shadow-lg shadow-indigo-500/10"
                       : "border-zinc-800/60 bg-zinc-900/35 hover:border-zinc-700/80 hover:bg-zinc-900/60"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
@@ -1564,11 +1562,11 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
                             prev.map((x) =>
                               x.id === m.id
                                 ? {
-                                    ...x,
-                                    content:
-                                      removeActionBlocks(x.content) +
-                                      `\n\n[check] 大屏「${saved.title}」已保存，可前往 /dashboards?id=${saved.id} 查看。`,
-                                  }
+                                  ...x,
+                                  content:
+                                    removeActionBlocks(x.content) +
+                                    `\n\n[check] 大屏「${saved.title}」已保存，可前往 /dashboards?id=${saved.id} 查看。`,
+                                }
                                 : x
                             )
                           );
@@ -1577,11 +1575,11 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
                             prev.map((x) =>
                               x.id === m.id
                                 ? {
-                                    ...x,
-                                    content:
-                                      removeActionBlocks(x.content) +
-                                      `\n\n[error] 保存大屏失败：${err instanceof Error ? err.message : "未知错误"}`,
-                                  }
+                                  ...x,
+                                  content:
+                                    removeActionBlocks(x.content) +
+                                    `\n\n[error] 保存大屏失败：${err instanceof Error ? err.message : "未知错误"}`,
+                                }
                                 : x
                             )
                           );

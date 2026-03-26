@@ -195,7 +195,7 @@ USE_SQLITE=true
 # 认证配置
 JWT_SECRET=your-secret-key-change-in-production
 ENV=development
-ACCESS_TOKEN_EXPIRE=30          # Access Token 过期时间（分钟）
+ACCESS_TOKEN_EXPIRE=120          # Access Token 过期时间（分钟）
 REFRESH_TOKEN_EXPIRE=7          # Refresh Token 过期时间（天）
 MAX_LOGIN_ATTEMPTS=5            # 最大登录尝试次数
 ACCOUNT_LOCK_DURATION=30        # 账户锁定时间（分钟）

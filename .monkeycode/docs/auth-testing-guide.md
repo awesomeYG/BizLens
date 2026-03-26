@@ -43,7 +43,7 @@ export DB_NAME=ai_bi
 
 # JWT 配置
 export JWT_SECRET="your-secret-key-change-in-production"
-export ACCESS_TOKEN_EXPIRE=30
+export ACCESS_TOKEN_EXPIRE=120
 export REFRESH_TOKEN_EXPIRE=7
 ```
 
