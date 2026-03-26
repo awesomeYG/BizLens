@@ -19,7 +19,7 @@ export default function OnboardingGuide({ hasDataSource, hasMetrics }: Onboardin
       label: "配置核心指标",
       description: "发现并确认业务指标（如 GMV、订单量、转化率），AI 将据此建立监控基线",
       done: hasMetrics,
-      href: "/data-sources",
+      href: "/settings/data-sources?tab=metrics",
     },
     {
       label: "开始监控",
