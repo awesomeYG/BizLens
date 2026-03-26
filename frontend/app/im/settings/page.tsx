@@ -11,6 +11,7 @@ import IMSectionNav from "@/components/IMSectionNav";
 import EmptyState from "@/components/ui/EmptyState";
 import { Toast } from "@/components/ui/Toast";
 import { SkeletonGrid } from "@/components/ui/Skeleton";
+import HeroSection from "@/components/ui/HeroSection";
 
 export default function IMSettingsPage() {
   const [hydrated, setHydrated] = useState(false);
@@ -153,30 +154,15 @@ export default function IMSettingsPage() {
       />
 
       {/* Hero Section */}
-      <div className="relative overflow-hidden border-b border-zinc-800/50">
-        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 via-purple-500/5 to-pink-500/5" />
-        <div className="relative max-w-7xl mx-auto px-6 py-12">
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-zinc-100 mb-2">IM 平台集成</h1>
-              <p className="text-zinc-400 text-sm max-w-xl">
-                配置和管理您的即时通讯平台，实现 AI 消息推送、告警通知和自动化报告
-              </p>
-            </div>
-            <div className="flex gap-6">
-              <div className="text-right">
-                <div className="text-2xl font-bold text-emerald-400">{connectedCount}</div>
-                <div className="text-xs text-zinc-500">运行中</div>
-              </div>
-              <div className="w-px h-10 bg-zinc-800" />
-              <div className="text-right">
-                <div className="text-2xl font-bold text-zinc-100">{totalCount}</div>
-                <div className="text-xs text-zinc-500">总计</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <HeroSection
+        title="IM 平台集成"
+        description="配置和管理您的即时通讯平台，实现 AI 消息推送、告警通知和自动化报告"
+        maxWidth="7xl"
+        stats={[
+          { label: "运行中", value: connectedCount, color: "text-emerald-400" },
+          { label: "总计", value: totalCount },
+        ]}
+      />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">

@@ -25,6 +25,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { Toast } from "@/components/ui/Toast";
 import TabSwitcher from "@/components/ui/TabSwitcher";
 import { SkeletonCard } from "@/components/ui/Skeleton";
+import HeroSection from "@/components/ui/HeroSection";
 
 type TabType = "quick_alert" | "auto_rule" | "history";
 
@@ -251,6 +252,17 @@ function AlertsContent() {
       <AppHeader
         title="告警与通知"
         backHref="/"
+      />
+
+      {/* Hero Section */}
+      <HeroSection
+        title="告警与通知"
+        description="设置智能告警规则，当指标异常时自动发送通知"
+        stats={[
+          { label: "快速告警", value: quickAlerts.length },
+          { label: "自动规则", value: autoRules.length },
+          { label: "触发次数", value: logs.length, color: "text-amber-400" },
+        ]}
         actions={
           <button
             onClick={() => openNew(tab === "history" ? "quick_alert" : tab)}

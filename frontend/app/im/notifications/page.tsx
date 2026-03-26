@@ -12,6 +12,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { Toast } from "@/components/ui/Toast";
 import TabSwitcher from "@/components/ui/TabSwitcher";
 import { SkeletonListItem } from "@/components/ui/Skeleton";
+import HeroSection from "@/components/ui/HeroSection";
 
 export default function NotificationsPage() {
   const [tenantId, setTenantId] = useState("");
@@ -108,24 +109,17 @@ export default function NotificationsPage() {
         title="通知中心"
         backHref="/im/settings"
         backLabel="返回设置"
-        actions={
-          <div className="flex items-center gap-4 text-xs text-zinc-500">
-            <span>成功：<span className="text-emerald-400">{sentCount}</span></span>
-            <span>失败：<span className="text-red-400">{failCount}</span></span>
-          </div>
-        }
       />
 
       {/* Hero Section */}
-      <div className="relative overflow-hidden border-b border-zinc-800/50">
-        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 via-purple-500/5 to-pink-500/5" />
-        <div className="relative max-w-5xl mx-auto px-6 py-10">
-          <h1 className="text-2xl font-bold text-zinc-100 mb-2">通知中心</h1>
-          <p className="text-zinc-400 text-sm">
-            向多个 IM 平台发送通知消息，支持自定义模板和 Markdown 格式
-          </p>
-        </div>
-      </div>
+      <HeroSection
+        title="通知中心"
+        description="向多个 IM 平台发送通知消息，支持自定义模板和 Markdown 格式"
+        stats={[
+          { label: "成功", value: sentCount, color: "text-emerald-400" },
+          { label: "失败", value: failCount, color: "text-red-400" },
+        ]}
+      />
 
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-6 py-8">
