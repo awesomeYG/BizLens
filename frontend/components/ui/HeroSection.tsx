@@ -25,7 +25,7 @@ export default function HeroSection({
   actions,
   className = "",
 }: HeroSectionProps) {
-  const maxWidthClass = maxWidth === "5xl" ? "max-w-5xl" : "max-w-7xl";
+  const maxWidthClass = maxWidth === "5xl" ? "max-w-7xl" : "max-w-7xl";
   const paddingY = stats ? "py-12" : "py-10";
 
   return (
