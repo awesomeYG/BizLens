@@ -84,16 +84,22 @@ func (s *MetricService) AutoDiscoverMetrics(tenantID string, dataSourceID string
 		return nil, fmt.Errorf("data source not found: %v", err)
 	}
 
-	// 解析表结构信息
-	var tableInfo map[string]interface{}
-	if err := json.Unmarshal([]byte(dataSource.TableInfo), &tableInfo); err != nil {
-		return nil, fmt.Errorf("failed to parse table info: %v", err)
+	// 解析表结构信息（使用 SchemaInfo）
+	var schemaInfo map[string]interface{}
+	if err := json.Unmarshal([]byte(dataSource.SchemaInfo), &schemaInfo); err != nil {
+		return nil, fmt.Errorf("failed to parse schema info: %v", err)
+	}
+
+	// 获取表结构映射：structure[tableName] = columns
+	structure, ok := schemaInfo["structure"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("schema info missing structure field")
 	}
 
 	metrics := []model.Metric{}
 
 	// 分析表结构，自动发现指标
-	for tableName, columns := range tableInfo {
+	for tableName, columns := range structure {
 		columnList, ok := columns.([]interface{})
 		if !ok {
 			continue
@@ -106,7 +112,7 @@ func (s *MetricService) AutoDiscoverMetrics(tenantID string, dataSourceID string
 				continue
 			}
 
-			colName, _ := colInfo["name"].(string)
+			colName, _ := colInfo["field"].(string)
 			colType, _ := colInfo["type"].(string)
 
 			// 识别金额字段
@@ -258,16 +264,22 @@ func (s *DimensionService) AutoDiscoverDimensions(tenantID string, dataSourceID 
 		return nil, fmt.Errorf("data source not found: %v", err)
 	}
 
-	// 解析表结构信息
-	var tableInfo map[string]interface{}
-	if err := json.Unmarshal([]byte(dataSource.TableInfo), &tableInfo); err != nil {
-		return nil, fmt.Errorf("failed to parse table info: %v", err)
+	// 解析表结构信息（使用 SchemaInfo）
+	var schemaInfo map[string]interface{}
+	if err := json.Unmarshal([]byte(dataSource.SchemaInfo), &schemaInfo); err != nil {
+		return nil, fmt.Errorf("failed to parse schema info: %v", err)
+	}
+
+	// 获取表结构映射：structure[tableName] = columns
+	structure, ok := schemaInfo["structure"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("schema info missing structure field")
 	}
 
 	dimensions := []model.Dimension{}
 
 	// 分析表结构，自动发现维度
-	for tableName, columns := range tableInfo {
+	for tableName, columns := range structure {
 		columnList, ok := columns.([]interface{})
 		if !ok {
 			continue
@@ -279,7 +291,7 @@ func (s *DimensionService) AutoDiscoverDimensions(tenantID string, dataSourceID 
 				continue
 			}
 
-			colName, _ := colInfo["name"].(string)
+			colName, _ := colInfo["field"].(string)
 			colType, _ := colInfo["type"].(string)
 
 			// 识别时间维度
@@ -401,19 +413,25 @@ func (s *RelationshipService) AutoDiscoverRelationships(tenantID string, dataSou
 		return nil, fmt.Errorf("data source not found: %v", err)
 	}
 
-	// 解析表结构信息
-	var tableInfo map[string]interface{}
-	if err := json.Unmarshal([]byte(dataSource.TableInfo), &tableInfo); err != nil {
-		return nil, fmt.Errorf("failed to parse table info: %v", err)
+	// 解析表结构信息（使用 SchemaInfo）
+	var schemaInfo map[string]interface{}
+	if err := json.Unmarshal([]byte(dataSource.SchemaInfo), &schemaInfo); err != nil {
+		return nil, fmt.Errorf("failed to parse schema info: %v", err)
 	}
+
+	// 获取表名列表
+	tablesRaw, _ := schemaInfo["tables"].([]interface{})
+	tables := make([]string, 0, len(tablesRaw))
+	for _, t := range tablesRaw {
+		if name, ok := t.(string); ok {
+			tables = append(tables, name)
+		}
+	}
+
+	// 获取表结构映射
+	structure, _ := schemaInfo["structure"].(map[string]interface{})
 
 	relationships := []model.Relationship{}
-	tables := make([]string, 0)
-
-	// 收集所有表名
-	for tableName := range tableInfo {
-		tables = append(tables, tableName)
-	}
 
 	// 分析表之间的关系
 	for i, table1 := range tables {
@@ -423,7 +441,7 @@ func (s *RelationshipService) AutoDiscoverRelationships(tenantID string, dataSou
 			}
 
 			// 尝试发现外键关系
-			if rel, found := s.findForeignKeyRelationship(tenantID, table1, table2, tableInfo); found {
+			if rel, found := s.findForeignKeyRelationship(tenantID, table1, table2, structure); found {
 				relationships = append(relationships, rel)
 			}
 		}
