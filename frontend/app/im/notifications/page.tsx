@@ -8,6 +8,10 @@ import { IM_PLATFORM_REGISTRY, type IMPlatformConfig, type NotificationRecord, t
 import IMPlatformIcon from "@/components/IMPlatformIcon";
 import AppHeader from "@/components/AppHeader";
 import IMSectionNav from "@/components/IMSectionNav";
+import EmptyState from "@/components/ui/EmptyState";
+import { Toast } from "@/components/ui/Toast";
+import TabSwitcher from "@/components/ui/TabSwitcher";
+import { SkeletonListItem } from "@/components/ui/Skeleton";
 
 export default function NotificationsPage() {
   const [tenantId, setTenantId] = useState("");
@@ -128,30 +132,32 @@ export default function NotificationsPage() {
         <IMSectionNav current="notifications" />
 
         {/* Tab Switcher */}
-        <div className="flex gap-1 bg-zinc-900/80 rounded-xl p-1 w-fit mb-6 border border-zinc-800/50">
-          {(["send", "history"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                tab === t ? "bg-zinc-800 text-zinc-100 shadow-sm" : "text-zinc-500 hover:text-zinc-300"
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                {t === "send" ? (
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                )}
-                {t === "send" ? "发送通知" : "发送历史"}
-              </span>
-            </button>
-          ))}
-        </div>
+        <TabSwitcher
+          tabs={[
+            {
+              key: "send",
+              label: "发送通知",
+              icon: (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              ),
+            },
+            {
+              key: "history",
+              label: "发送历史",
+              icon: (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              ),
+              count: history.length,
+            },
+          ]}
+          activeTab={tab}
+          onTabChange={(key) => setTab(key as "send" | "history")}
+          className="mb-6"
+        />
 
         {tab === "send" ? (
           <div className="grid lg:grid-cols-5 gap-6">
@@ -305,15 +311,15 @@ export default function NotificationsPage() {
           /* History Tab */
           <div className="space-y-3">
             {history.length === 0 ? (
-              <div className="text-center py-20">
-                <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-zinc-900 flex items-center justify-center">
+              <EmptyState
+                icon={
                   <svg className="w-10 h-10 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-zinc-200 mb-2">暂无发送记录</h3>
-                <p className="text-zinc-500 text-sm">发送的通知消息将在此显示历史记录</p>
-              </div>
+                }
+                title="暂无发送记录"
+                description="发送的通知消息将在此显示历史记录"
+              />
             ) : (
               history.map((record) => {
                 const meta = IM_PLATFORM_REGISTRY[record.platformType];
@@ -357,26 +363,7 @@ export default function NotificationsPage() {
       </main>
 
       {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 right-6 z-50 animate-fade-in">
-          <div className={`glass-card rounded-xl px-4 py-3 flex items-center gap-3 border ${
-            toast.type === "success" ? "border-emerald-500/30 bg-emerald-500/10" : "border-red-500/30 bg-red-500/10"
-          }`}>
-            {toast.type === "success" ? (
-              <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            )}
-            <span className={`text-sm font-medium ${toast.type === "success" ? "text-emerald-400" : "text-red-400"}`}>
-              {toast.message}
-            </span>
-          </div>
-        </div>
-      )}
+      {toast && <Toast message={toast.message} type={toast.type} />}
     </div>
   );
 }

@@ -8,6 +8,9 @@ import IMPlatformCard from "@/components/IMPlatformCard";
 import IMPlatformForm from "@/components/IMPlatformForm";
 import AppHeader from "@/components/AppHeader";
 import IMSectionNav from "@/components/IMSectionNav";
+import EmptyState from "@/components/ui/EmptyState";
+import { Toast } from "@/components/ui/Toast";
+import { SkeletonGrid } from "@/components/ui/Skeleton";
 
 export default function IMSettingsPage() {
   const [hydrated, setHydrated] = useState(false);
@@ -213,45 +216,33 @@ export default function IMSettingsPage() {
 
         {/* Empty State */}
         {configs.length === 0 && !loading && (
-          <div className="text-center py-20">
-            <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-zinc-900 flex items-center justify-center">
+          <EmptyState
+            icon={
               <svg className="w-10 h-10 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-zinc-200 mb-2">暂无 IM 平台配置</h3>
-            <p className="text-zinc-500 text-sm mb-6">添加您的第一个即时通讯平台，开始接收智能通知</p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="group relative inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-zinc-100 transition-all duration-200 bg-zinc-900/80 border border-zinc-700/60 hover:border-indigo-500/50 hover:bg-zinc-800/90 hover:shadow-lg hover:shadow-indigo-500/10 active:scale-[0.97]"
-            >
-              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-indigo-500/15 text-indigo-400 transition-colors group-hover:bg-indigo-500/25">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-              </span>
-              添加平台
-            </button>
-          </div>
+            }
+            title="暂无 IM 平台配置"
+            description="添加您的第一个即时通讯平台，开始接收智能通知"
+            action={
+              <button
+                onClick={() => setShowForm(true)}
+                className="group relative inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-zinc-100 transition-all duration-200 bg-zinc-900/80 border border-zinc-700/60 hover:border-indigo-500/50 hover:bg-zinc-800/90 hover:shadow-lg hover:shadow-indigo-500/10 active:scale-[0.97]"
+              >
+                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-indigo-500/15 text-indigo-400 transition-colors group-hover:bg-indigo-500/25">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                </span>
+                添加平台
+              </button>
+            }
+          />
         )}
 
         {/* Loading State */}
         {loading && (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="glass-card rounded-2xl p-5 space-y-4 animate-pulse">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-zinc-800" />
-                  <div className="flex-1">
-                    <div className="h-4 bg-zinc-800 rounded w-24 mb-2" />
-                    <div className="h-3 bg-zinc-800 rounded w-16" />
-                  </div>
-                </div>
-                <div className="h-8 bg-zinc-800 rounded" />
-                <div className="h-4 bg-zinc-800 rounded w-32" />
-              </div>
-            ))}
-          </div>
+          <SkeletonGrid count={3} columns={3} />
         )}
       </main>
 
@@ -268,26 +259,7 @@ export default function IMSettingsPage() {
       )}
 
       {/* Toast Notification */}
-      {toast && (
-        <div className="fixed bottom-24 right-6 z-50 animate-fade-in">
-          <div className={`glass-card rounded-xl px-4 py-3 flex items-center gap-3 border ${
-            toast.type === "success" ? "border-emerald-500/30 bg-emerald-500/10" : "border-red-500/30 bg-red-500/10"
-          }`}>
-            {toast.type === "success" ? (
-              <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            )}
-            <span className={`text-sm font-medium ${toast.type === "success" ? "text-emerald-400" : "text-red-400"}`}>
-              {toast.message}
-            </span>
-          </div>
-        </div>
-      )}
+      {toast && <Toast message={toast.message} type={toast.type} />}
     </div>
   );
 }

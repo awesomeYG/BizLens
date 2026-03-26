@@ -21,6 +21,10 @@ import {
 } from "@/lib/im";
 import AppHeader from "@/components/AppHeader";
 import IMSectionNav from "@/components/IMSectionNav";
+import EmptyState from "@/components/ui/EmptyState";
+import { Toast } from "@/components/ui/Toast";
+import TabSwitcher from "@/components/ui/TabSwitcher";
+import { SkeletonCard } from "@/components/ui/Skeleton";
 
 type TabType = "quick_alert" | "auto_rule" | "history";
 
@@ -44,6 +48,7 @@ function AlertsContent() {
   const [editingItem, setEditingItem] = useState<UnifiedAlertItem | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   // 表单状态
   const [formType, setFormType] = useState<AlertSourceType>("quick_alert");
@@ -88,6 +93,13 @@ function AlertsContent() {
     if (!tenantId) return;
     loadData();
   }, [tenantId]);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const loadData = async () => {
     setLoading(true);
@@ -157,6 +169,7 @@ function AlertsContent() {
     setShowForm(false);
     setEditingItem(null);
     resetForm();
+    setToast({ message: editingItem ? "规则已更新" : "规则已创建", type: "success" });
     await loadData();
   };
 
@@ -192,6 +205,7 @@ function AlertsContent() {
       method: "DELETE",
       headers: authHeaders(),
     });
+    setToast({ message: "规则已删除", type: "success" });
     await loadData();
   };
 
@@ -251,23 +265,16 @@ function AlertsContent() {
         <IMSectionNav current="alerts" />
 
         {/* Tab 导航 */}
-        <div className="flex gap-1 bg-zinc-900/80 rounded-xl p-1 w-fit mb-6 border border-zinc-800/50">
-          {([
-            { key: "quick_alert" as TabType, label: "快速告警", count: enabledQuickAlerts.length },
-            { key: "auto_rule" as TabType, label: "自动规则", count: enabledAutoRules.length },
-            { key: "history" as TabType, label: "触发历史", count: logs.length },
-          ] as const).map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                tab === t.key ? "bg-zinc-800 text-zinc-100 shadow-sm" : "text-zinc-500 hover:text-zinc-300"
-              }`}>
-              {t.label}
-              <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                tab === t.key ? "bg-indigo-500/20 text-indigo-300" : "bg-zinc-800 text-zinc-500"
-              }`}>{t.count}</span>
-            </button>
-          ))}
-        </div>
+        <TabSwitcher
+          tabs={[
+            { key: "quick_alert", label: "快速告警", count: enabledQuickAlerts.length },
+            { key: "auto_rule", label: "自动规则", count: enabledAutoRules.length },
+            { key: "history", label: "触发历史", count: logs.length },
+          ]}
+          activeTab={tab}
+          onTabChange={(key) => setTab(key as TabType)}
+          className="mb-6"
+        />
 
         {/* 提示信息 */}
         <div className="glass-card rounded-xl p-4 mb-6 border-indigo-500/20">
@@ -282,27 +289,49 @@ function AlertsContent() {
         {/* ========== 快速告警 Tab ========== */}
         {tab === "quick_alert" && (
           <div>
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              {[
-                { value: quickAlerts.length, label: "快速告警", color: "text-indigo-400" },
-                { value: enabledQuickAlerts.length, label: "已启用", color: "text-emerald-400" },
-                { value: logs.filter(l => l.sourceType === "quick_alert").length, label: "触发次数", color: "text-amber-400" },
-              ].map((item) => (
-                <div key={item.label} className="glass-card rounded-xl p-5 text-center">
-                  <div className={`text-3xl font-bold ${item.color} tracking-tight`}>{item.value}</div>
-                  <div className="text-xs text-zinc-500 mt-1">{item.label}</div>
+            {/* Loading State */}
+            {loading ? (
+              <div className="space-y-6">
+                <div className="grid grid-cols-3 gap-4">
+                  {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
                 </div>
-              ))}
-            </div>
+                <div className="space-y-3">
+                  {[1, 2].map(i => <SkeletonCard key={i} rows={2} />)}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  {[
+                    { value: quickAlerts.length, label: "快速告警", color: "text-indigo-400" },
+                    { value: enabledQuickAlerts.length, label: "已启用", color: "text-emerald-400" },
+                    { value: logs.filter(l => l.sourceType === "quick_alert").length, label: "触发次数", color: "text-amber-400" },
+                  ].map((item) => (
+                    <div key={item.label} className="glass-card rounded-xl p-5 text-center">
+                      <div className={`text-3xl font-bold ${item.color} tracking-tight`}>{item.value}</div>
+                      <div className="text-xs text-zinc-500 mt-1">{item.label}</div>
+                    </div>
+                  ))}
+                </div>
 
-            <div className="space-y-3">
-              {quickAlerts.length === 0 && (
-                <div className="text-center py-16 text-zinc-500">
-                  暂无快速告警，点击右上角新建，或在 <Link href="/chat" className="text-indigo-400 hover:underline ml-1">AI 对话</Link> 中创建
-                </div>
+                <div className="space-y-3">
+                  {quickAlerts.length === 0 && (
+                <EmptyState
+                  title="暂无快速告警"
+                  description={
+                    <>
+                      点击右上角新建，或在{" "}
+                      <Link href="/chat" className="text-indigo-400 hover:underline">
+                        AI 对话
+                      </Link>{" "}
+                      中创建
+                    </>
+                  }
+                  className="py-16"
+                />
               )}
               {quickAlerts.map(item => (
-                <div key={item.id} className="glass-card rounded-xl p-5 animate-fade-in">
+                <div key={item.id} className="glass-card rounded-xl p-5 animate-fade-in hover:border-zinc-700/50 transition-all">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1.5">
@@ -332,33 +361,56 @@ function AlertsContent() {
                 </div>
               ))}
             </div>
+              </>
+            )}
           </div>
         )}
 
         {/* ========== 自动规则 Tab ========== */}
         {tab === "auto_rule" && (
           <div>
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              {[
-                { value: autoRules.length, label: "自动规则", color: "text-purple-400" },
-                { value: enabledAutoRules.length, label: "已启用", color: "text-emerald-400" },
-                { value: logs.filter(l => l.sourceType === "auto_rule").length, label: "触发次数", color: "text-amber-400" },
-              ].map((item) => (
-                <div key={item.label} className="glass-card rounded-xl p-5 text-center">
-                  <div className={`text-3xl font-bold ${item.color} tracking-tight`}>{item.value}</div>
-                  <div className="text-xs text-zinc-500 mt-1">{item.label}</div>
+            {loading ? (
+              <div className="space-y-6">
+                <div className="grid grid-cols-3 gap-4">
+                  {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
                 </div>
-              ))}
-            </div>
+                <div className="space-y-3">
+                  {[1, 2].map(i => <SkeletonCard key={i} rows={2} />)}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  {[
+                    { value: autoRules.length, label: "自动规则", color: "text-purple-400" },
+                    { value: enabledAutoRules.length, label: "已启用", color: "text-emerald-400" },
+                    { value: logs.filter(l => l.sourceType === "auto_rule").length, label: "触发次数", color: "text-amber-400" },
+                  ].map((item) => (
+                    <div key={item.label} className="glass-card rounded-xl p-5 text-center">
+                      <div className={`text-3xl font-bold ${item.color} tracking-tight`}>{item.value}</div>
+                      <div className="text-xs text-zinc-500 mt-1">{item.label}</div>
+                    </div>
+                  ))}
+                </div>
 
-            <div className="space-y-3">
-              {autoRules.length === 0 && (
-                <div className="text-center py-16 text-zinc-500">
-                  暂无自动规则，点击右上角新建，或在 <Link href="/chat" className="text-indigo-400 hover:underline ml-1">AI 对话</Link> 中创建
-                </div>
+                <div className="space-y-3">
+                  {autoRules.length === 0 && (
+                <EmptyState
+                  title="暂无自动规则"
+                  description={
+                    <>
+                      点击右上角新建，或在{" "}
+                      <Link href="/chat" className="text-indigo-400 hover:underline">
+                        AI 对话
+                      </Link>{" "}
+                      中创建
+                    </>
+                  }
+                  className="py-16"
+                />
               )}
               {autoRules.map(item => (
-                <div key={item.id} className="glass-card rounded-xl p-5 animate-fade-in">
+                <div key={item.id} className="glass-card rounded-xl p-5 animate-fade-in hover:border-zinc-700/50 transition-all">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1.5">
@@ -389,50 +441,74 @@ function AlertsContent() {
                 </div>
               ))}
             </div>
+              </>
+            )}
           </div>
         )}
 
         {/* ========== 触发历史 Tab ========== */}
         {tab === "history" && (
           <div>
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              {[
-                { value: logs.length, label: "总触发次数", color: "text-zinc-400" },
-                { value: logs.filter(l => l.status === "sent").length, label: "成功", color: "text-emerald-400" },
-                { value: logs.filter(l => l.status === "failed").length, label: "失败", color: "text-red-400" },
-              ].map((item) => (
-                <div key={item.label} className="glass-card rounded-xl p-5 text-center">
-                  <div className={`text-3xl font-bold ${item.color} tracking-tight`}>{item.value}</div>
-                  <div className="text-xs text-zinc-500 mt-1">{item.label}</div>
+            {loading ? (
+              <div className="space-y-6">
+                <div className="grid grid-cols-3 gap-4">
+                  {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
                 </div>
-              ))}
-            </div>
-
-            <div className="space-y-3">
-              {recentLogs.length === 0 && (
-                <p className="text-center py-16 text-zinc-500">暂无触发记录</p>
-              )}
-              {recentLogs.map(log => (
-                <div key={log.id} className="glass-card rounded-xl p-4 animate-fade-in">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-zinc-200">{log.eventName}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${log.sourceType === "quick_alert" ? "bg-indigo-500/10 text-indigo-400" : "bg-purple-500/10 text-purple-400"}`}>
-                        {log.sourceType === "quick_alert" ? "快速告警" : "自动规则"}
-                      </span>
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => <SkeletonCard key={i} rows={2} />)}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  {[
+                    { value: logs.length, label: "总触发次数", color: "text-zinc-400" },
+                    { value: logs.filter(l => l.status === "sent").length, label: "成功", color: "text-emerald-400" },
+                    { value: logs.filter(l => l.status === "failed").length, label: "失败", color: "text-red-400" },
+                  ].map((item) => (
+                    <div key={item.label} className="glass-card rounded-xl p-5 text-center">
+                      <div className={`text-3xl font-bold ${item.color} tracking-tight`}>{item.value}</div>
+                      <div className="text-xs text-zinc-500 mt-1">{item.label}</div>
                     </div>
-                    <span className={log.status === "sent" ? "badge-success" : "badge-error"}>
-                      {log.status === "sent" ? "已通知" : "失败"}
-                    </span>
-                  </div>
-                  <p className="text-xs text-zinc-500 font-mono">
-                    {log.metric}: {log.actualValue} (阈值 {log.threshold})
-                  </p>
-                  {log.error && <p className="text-xs text-red-400/80 mt-1">{log.error}</p>}
-                  <p className="text-xs text-zinc-600 mt-1">{new Date(log.triggeredAt).toLocaleString("zh-CN")}</p>
+                  ))}
                 </div>
-              ))}
-            </div>
+
+                <div className="space-y-3">
+                  {recentLogs.length === 0 && (
+                    <EmptyState
+                      icon={
+                        <svg className="w-10 h-10 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                      }
+                      title="暂无触发记录"
+                      description="当告警规则被触发时，记录将显示在这里"
+                      className="py-16"
+                    />
+                  )}
+                  {recentLogs.map(log => (
+                    <div key={log.id} className="glass-card rounded-xl p-4 animate-fade-in hover:border-zinc-700/50 transition-all">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-zinc-200">{log.eventName}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${log.sourceType === "quick_alert" ? "bg-indigo-500/10 text-indigo-400" : "bg-purple-500/10 text-purple-400"}`}>
+                            {log.sourceType === "quick_alert" ? "快速告警" : "自动规则"}
+                          </span>
+                        </div>
+                        <span className={log.status === "sent" ? "badge-success" : "badge-error"}>
+                          {log.status === "sent" ? "已通知" : "失败"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-500 font-mono">
+                        {log.metric}: {log.actualValue} (阈值 {log.threshold})
+                      </p>
+                      {log.error && <p className="text-xs text-red-400/80 mt-1">{log.error}</p>}
+                      <p className="text-xs text-zinc-600 mt-1">{new Date(log.triggeredAt).toLocaleString("zh-CN")}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
       </main>
@@ -620,6 +696,9 @@ function AlertsContent() {
           </div>
         </div>
       )}
+
+      {/* Toast */}
+      {toast && <Toast message={toast.message} type={toast.type} />}
     </div>
   );
 }
