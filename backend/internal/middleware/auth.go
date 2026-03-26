@@ -11,21 +11,29 @@ import (
 func Auth(authService *service.AuthService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// 从 Authorization 头获取 Token
+			var tokenString string
+
+			// 优先从 Authorization 头获取 Token
 			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
+			if authHeader != "" {
+				parts := strings.Split(authHeader, " ")
+				if len(parts) != 2 || parts[0] != "Bearer" {
+					http.Error(w, `{"error":"认证令牌格式无效"}`, http.StatusUnauthorized)
+					return
+				}
+				tokenString = parts[1]
+			}
+
+			// Fallback: 从 URL query 参数 _token 获取（用于 navigator.sendBeacon 场景，
+			// 因为 sendBeacon 不支持自定义 Header）
+			if tokenString == "" {
+				tokenString = r.URL.Query().Get("_token")
+			}
+
+			if tokenString == "" {
 				http.Error(w, `{"error":"未提供认证令牌"}`, http.StatusUnauthorized)
 				return
 			}
-
-			// 提取 Bearer Token
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || parts[0] != "Bearer" {
-				http.Error(w, `{"error":"认证令牌格式无效"}`, http.StatusUnauthorized)
-				return
-			}
-
-			tokenString := parts[1]
 
 			// 验证 Token
 			claims, err := authService.ValidateToken(tokenString)

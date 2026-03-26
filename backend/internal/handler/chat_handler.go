@@ -62,7 +62,8 @@ func (h *ChatHandler) HandleConversations(w http.ResponseWriter, r *http.Request
 		h.getConversation(w, r, tenantID, userID, conversationID)
 	case http.MethodPatch:
 		h.renameConversation(w, r, tenantID, userID, conversationID)
-	case http.MethodPut:
+	case http.MethodPut, http.MethodPost:
+		// POST 也接受保存（用于 navigator.sendBeacon 在页面卸载时发送）
 		h.saveConversation(w, r, tenantID, userID, conversationID)
 	case http.MethodDelete:
 		h.deleteConversation(w, r, tenantID, userID, conversationID)
