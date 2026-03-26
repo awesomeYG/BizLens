@@ -58,7 +58,8 @@ func (h *DataSourceHandler) ListDataSources(w http.ResponseWriter, r *http.Reque
 			"lastSyncAt":  ds.LastSyncAt,
 		}
 
-		// 解析 SchemaInfo，附加表结构信息
+		// 解析 SchemaInfo，附加表结构信息（不查询 recordCount，避免列表页阻塞）
+		// recordCount 仅在详情页单独获取，避免列表 API 访问远程数据库造成长时间等待
 		if ds.SchemaInfo != "" {
 			schema, err := service.DeserializeSchemaInfo(ds.SchemaInfo)
 			if err == nil {
@@ -71,7 +72,6 @@ func (h *DataSourceHandler) ListDataSources(w http.ResponseWriter, r *http.Reque
 					if !ok {
 						continue
 					}
-					recordCount, _ := h.dataSourceService.GetTableCount(&ds, tableName)
 					cols := make([]ColumnInfo, 0)
 					if colList, ok := structure[tableName].([]interface{}); ok {
 						for _, col := range colList {
@@ -90,7 +90,7 @@ func (h *DataSourceHandler) ListDataSources(w http.ResponseWriter, r *http.Reque
 					tableSchemas = append(tableSchemas, TableSchema{
 						Name:        tableName,
 						Columns:     cols,
-						RecordCount: int(recordCount),
+						RecordCount: 0, // recordCount 延迟到详情接口获取，避免列表页阻塞
 					})
 				}
 				item["tablesInfo"] = tableSchemas

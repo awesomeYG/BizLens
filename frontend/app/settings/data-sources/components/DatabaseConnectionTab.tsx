@@ -181,18 +181,32 @@ export default function DatabaseConnectionTab() {
   }, []);
 
   const fetchDataSources = useCallback(async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     try {
       const tenantId = getTenantId();
       const response = await fetch(`/api/tenants/${tenantId}/data-sources`, {
         headers: getAuthHeaders(),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+
       if (response.ok) {
         const data = await response.json();
         const list = Array.isArray(data) ? data : [];
         setDataSources(list.map((row: Record<string, unknown>) => normalizeDataSourceFromApi(row)));
+      } else {
+        const errorData = await response.json().catch(() => ({})) as { error?: string };
+        console.error("获取数据源列表失败:", response.status, errorData.error);
       }
     } catch (err) {
-      console.error("获取数据源列表失败:", err);
+      clearTimeout(timeoutId);
+      if (err instanceof Error && err.name === "AbortError") {
+        console.error("获取数据源列表超时");
+      } else {
+        console.error("获取数据源列表失败:", err);
+      }
     } finally {
       setLoading(false);
     }
