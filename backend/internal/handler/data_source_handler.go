@@ -12,10 +12,14 @@ import (
 
 type DataSourceHandler struct {
 	dataSourceService *service.DataSourceService
+	schemaAnalysisSvc *service.SchemaAnalysisService
 }
 
-func NewDataSourceHandler(dataSourceService *service.DataSourceService) *DataSourceHandler {
-	return &DataSourceHandler{dataSourceService: dataSourceService}
+func NewDataSourceHandler(dataSourceService *service.DataSourceService, schemaAnalysisSvc *service.SchemaAnalysisService) *DataSourceHandler {
+	return &DataSourceHandler{
+		dataSourceService: dataSourceService,
+		schemaAnalysisSvc: schemaAnalysisSvc,
+	}
 }
 
 // ListDataSources GET /api/tenants/{id}/data-sources
@@ -287,6 +291,11 @@ func (h *DataSourceHandler) CreateDataSource(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// 创建成功后，自动触发 AI Schema 分析（异步，不阻塞响应）
+	if ds.SchemaInfo != "" && h.schemaAnalysisSvc != nil {
+		go h.triggerSchemaAnalysis(tenantID, ds)
+	}
+
 	// 隐藏敏感信息
 	ds.Password = ""
 	ds.APIToken = ""
@@ -364,6 +373,11 @@ func (h *DataSourceHandler) UpdateDataSource(w http.ResponseWriter, r *http.Requ
 			existing.Status = model.DSStatusConnected
 			now := time.Now()
 			existing.LastSyncAt = &now
+
+			// schema 重同步后，重新触发 AI 分析
+			if existing.SchemaInfo != "" && h.schemaAnalysisSvc != nil {
+				go h.triggerSchemaAnalysis(tenantID, existing)
+			}
 		}
 	}
 
@@ -447,4 +461,167 @@ func (h *DataSourceHandler) GetDataSourceSchema(w http.ResponseWriter, r *http.R
 	}
 
 	writeJSON(w, http.StatusOK, schema)
+}
+
+// triggerSchemaAnalysis 异步触发 AI Schema 分析（后台运行）
+// 策略：有旧分析时增量更新，无旧分析时全量分析
+func (h *DataSourceHandler) triggerSchemaAnalysis(tenantID string, ds *model.DataSource) {
+	// 读取旧的 AI 分析结果
+	oldAnalysis, _ := service.DeserializeAIAnalysis(ds.AIAnalysis)
+
+	var analysis *model.SchemaAIAnalysis
+	var err error
+
+	if oldAnalysis != nil && oldAnalysis.AnalyzedAt != "" {
+		// 有旧分析，增量更新：对比 schema 变化，只对新增部分调用 AI
+		analysis, _, err = h.schemaAnalysisSvc.IncrementalAnalyzeSchema(tenantID, ds, oldAnalysis)
+	} else {
+		// 无旧分析，完整分析
+		analysis, err = h.schemaAnalysisSvc.AnalyzeSchema(tenantID, ds)
+	}
+
+	if err != nil {
+		// 静默失败，不影响主流程；分析结果可由用户手动重试
+		return
+	}
+
+	// 将分析结果序列化并保存到数据源
+	analysisJSON, err := service.SerializeAIAnalysis(analysis)
+	if err != nil {
+		return
+	}
+
+	// 更新数据源的 AIAnalysis 字段
+	ds.AIAnalysis = analysisJSON
+	h.dataSourceService.UpdateDataSource(ds)
+}
+
+// AnalyzedSchemaResult AI Schema 分析结果的 API 返回格式
+type AnalyzedSchemaResult struct {
+	HasAnalysis    bool                `json:"hasAnalysis"`
+	AnalyzedAt     string              `json:"analyzedAt,omitempty"`
+	ModelUsed      string              `json:"modelUsed,omitempty"`
+	FieldCount     int                 `json:"fieldCount"`
+	TableCount     int                 `json:"tableCount"`
+	MetricCount    int                 `json:"metricCount"`
+	DimensionCount int                 `json:"dimensionCount"`
+	Diff           *service.SchemaDiff `json:"diff,omitempty"`
+}
+
+// GetSchemaAnalysis GET /api/tenants/{id}/data-sources/{dsId}/schema/analysis
+// 获取当前 AI 分析状态和 schema 差异预览（不触发分析）
+func (h *DataSourceHandler) GetSchemaAnalysis(w http.ResponseWriter, r *http.Request) {
+	tenantID := parseTenantID(r)
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	dsID := parts[len(parts)-1]
+
+	ds, err := h.dataSourceService.GetDataSource(dsID, tenantID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "数据源不存在")
+		return
+	}
+
+	result := AnalyzedSchemaResult{
+		HasAnalysis: ds.AIAnalysis != "",
+	}
+
+	// 解析已有分析结果
+	if ds.AIAnalysis != "" {
+		analysis, err := service.DeserializeAIAnalysis(ds.AIAnalysis)
+		if err == nil && analysis != nil {
+			result.AnalyzedAt = analysis.AnalyzedAt
+			result.ModelUsed = analysis.ModelUsed
+			result.FieldCount = len(analysis.Fields)
+			result.TableCount = len(analysis.Tables)
+			result.MetricCount = len(analysis.Recommendations)
+			result.DimensionCount = len(analysis.Dimensions)
+		}
+	}
+
+	// 对比当前 schema 和已有分析，给出差异预览
+	if ds.SchemaInfo != "" && ds.AIAnalysis != "" {
+		oldAnalysis, _ := service.DeserializeAIAnalysis(ds.AIAnalysis)
+		diff := h.schemaAnalysisSvc.DiffSchema(oldAnalysis, ds)
+		// 只在有实际变化时返回 diff
+		if len(diff.NewTables) > 0 || len(diff.DelTables) > 0 || len(diff.NewFields) > 0 || len(diff.ModFields) > 0 {
+			result.Diff = diff
+		}
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+// AnalyzeSchema POST /api/tenants/{id}/data-sources/{dsId}/schema/analyze
+// 手动触发 AI Schema 分析，支持全量重分析或增量更新
+type AnalyzeSchemaRequest struct {
+	Mode string `json:"mode"` // "full" 强制全量分析，"incremental" 增量更新（默认）
+}
+
+func (h *DataSourceHandler) AnalyzeSchema(w http.ResponseWriter, r *http.Request) {
+	tenantID := parseTenantID(r)
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	dsID := parts[len(parts)-1]
+
+	ds, err := h.dataSourceService.GetDataSource(dsID, tenantID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "数据源不存在")
+		return
+	}
+
+	if ds.SchemaInfo == "" {
+		writeError(w, http.StatusBadRequest, "请先同步数据库 schema")
+		return
+	}
+
+	var req AnalyzeSchemaRequest
+	if r.ContentLength > 0 {
+		json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	var analysis *model.SchemaAIAnalysis
+	var diff *service.SchemaDiff
+
+	// 判断分析模式
+	if req.Mode == "full" {
+		// 强制全量重分析
+		analysis, err = h.schemaAnalysisSvc.AnalyzeSchema(tenantID, ds)
+	} else {
+		// 增量更新（默认）
+		oldAnalysis, _ := service.DeserializeAIAnalysis(ds.AIAnalysis)
+		analysis, diff, err = h.schemaAnalysisSvc.IncrementalAnalyzeSchema(tenantID, ds, oldAnalysis)
+	}
+
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"error":   "AI 分析失败：" + err.Error(),
+			"message": "请检查 AI 配置（API Key、模型等）是否正确",
+		})
+		return
+	}
+
+	// 保存分析结果
+	analysisJSON, err := service.SerializeAIAnalysis(analysis)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "保存分析结果失败")
+		return
+	}
+
+	ds.AIAnalysis = analysisJSON
+	if err := h.dataSourceService.UpdateDataSource(ds); err != nil {
+		writeError(w, http.StatusInternalServerError, "更新数据源失败")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":        true,
+		"mode":           req.Mode,
+		"analyzedAt":     analysis.AnalyzedAt,
+		"modelUsed":      analysis.ModelUsed,
+		"fieldCount":     len(analysis.Fields),
+		"tableCount":     len(analysis.Tables),
+		"metricCount":    len(analysis.Recommendations),
+		"dimensionCount": len(analysis.Dimensions),
+		"diff":           diff,
+	})
 }

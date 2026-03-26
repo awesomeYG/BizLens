@@ -234,8 +234,64 @@ type DataSource struct {
 	UpdatedAt   time.Time        `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt   `gorm:"index" json:"-"`
 	SchemaInfo  string           `gorm:"type:text" json:"schemaInfo,omitempty"` // JSON 字符串，存储 schema 信息
+	AIAnalysis  string           `gorm:"type:text" json:"aiAnalysis,omitempty"` // AI 分析结果（字段语义标签、推荐指标、推荐维度等）
 
 	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
+}
+
+// FieldSemanticAI AI 对单个字段的语义分析结果
+type FieldSemanticAI struct {
+	Field        string   `json:"field"`                  // 字段名
+	Table        string   `json:"table"`                  // 表名
+	SemanticType string   `json:"semanticType"`           // 语义类型: metric/dimension/time/geo/category/technical/identifier/unknown
+	SubType      string   `json:"subType,omitempty"`      // 子类型: amount/count/ratio/time/...
+	BusinessName string   `json:"businessName,omitempty"` // AI 推荐的中文业务名称
+	Aggregation  string   `json:"aggregation,omitempty"`  // 推荐聚合方式: SUM/COUNT/AVG/MAX/MIN/COUNT(DISTINCT)
+	Confidence   float64  `json:"confidence"`             // 置信度 0-1
+	Reason       string   `json:"reason,omitempty"`       // 判断理由
+	Tags         []string `json:"tags,omitempty"`         // 标签: key_metric/time_series/discrete/continuous/...
+}
+
+// TableSemanticAI AI 对单个表的语义分析结果
+type TableSemanticAI struct {
+	Table        string   `json:"table"`               // 表名
+	BusinessType string   `json:"businessType"`        // 业务类型: fact/dimension/mapping/transaction/log/unknown
+	Summary      string   `json:"summary,omitempty"`   // 表的业务概述
+	IsPrimary    bool     `json:"isPrimary,omitempty"` // 是否主表（包含核心业务事件）
+	Confidence   float64  `json:"confidence"`
+	Reason       string   `json:"reason,omitempty"`
+	Tags         []string `json:"tags,omitempty"`
+}
+
+// SchemaAIAnalysis 完整的 schema AI 分析结果（存储在 DataSource.AIAnalysis 中）
+type SchemaAIAnalysis struct {
+	AnalyzedAt      string                    `json:"analyzedAt"`                // 分析时间
+	ModelUsed       string                    `json:"modelUsed"`                 // 使用的 AI 模型
+	Fields          []FieldSemanticAI         `json:"fields"`                    // 字段级分析
+	Tables          []TableSemanticAI         `json:"tables"`                    // 表级分析
+	Recommendations []MetricRecommendation    `json:"recommendations,omitempty"` // 推荐发现的指标
+	Dimensions      []DimensionRecommendation `json:"dimensions,omitempty"`      // 推荐发现的维度
+}
+
+// MetricRecommendation AI 推荐的指标
+type MetricRecommendation struct {
+	Table       string  `json:"table"`
+	Field       string  `json:"field"`
+	DisplayName string  `json:"displayName"` // 中文展示名
+	DataType    string  `json:"dataType"`    // number/currency/ratio
+	Aggregation string  `json:"aggregation"` // SUM/COUNT/AVG
+	Confidence  float64 `json:"confidence"`
+	Reason      string  `json:"reason,omitempty"`
+}
+
+// DimensionRecommendation AI 推荐的维度
+type DimensionRecommendation struct {
+	Table       string  `json:"table"`
+	Field       string  `json:"field"`
+	DisplayName string  `json:"displayName"`
+	DimType     string  `json:"dimType"` // time/geo/category/identifier
+	Confidence  float64 `json:"confidence"`
+	Reason      string  `json:"reason,omitempty"`
 }
 
 // NotificationRuleType 通知规则类型

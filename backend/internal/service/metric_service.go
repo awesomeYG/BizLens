@@ -79,6 +79,7 @@ func (s *MetricService) ListMetrics(tenantID string, category string, status str
 }
 
 // AutoDiscoverMetrics AI 自动发现指标
+// 优先使用已存储的 AI 分析结果，仅在没有 AI 分析时 fallback 到规则匹配
 func (s *MetricService) AutoDiscoverMetrics(tenantID string, dataSourceID string) ([]model.Metric, error) {
 	// 获取数据源
 	var dataSource model.DataSource
@@ -94,6 +95,46 @@ func (s *MetricService) AutoDiscoverMetrics(tenantID string, dataSourceID string
 		return nil, fmt.Errorf("data source schema info is empty; please sync schema first")
 	}
 
+	metrics := []model.Metric{}
+	seen := make(map[string]bool) // 去重：key = "tableName:fieldName:aggregation"
+
+	// ========== 优先：使用已存储的 AI 分析结果 ==========
+	if dataSource.AIAnalysis != "" {
+		analysis, err := DeserializeAIAnalysis(dataSource.AIAnalysis)
+		if err == nil && analysis != nil && len(analysis.Recommendations) > 0 {
+			for _, rec := range analysis.Recommendations {
+				agg := model.MetricAggregation(strings.ToUpper(rec.Aggregation))
+				key := fmt.Sprintf("%s:%s:%s", rec.Table, rec.Field, agg)
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+
+				dataType := model.MetricDataType("number")
+				if rec.DataType == "currency" {
+					dataType = model.MetricTypeCurrency
+				} else if rec.DataType == "ratio" {
+					dataType = model.MetricTypeNumber
+				}
+
+				metric := s.createAutoMetric(
+					tenantID, dataSourceID, rec.Table, rec.Field,
+					rec.DisplayName, dataType, agg, rec.Confidence,
+				)
+				metric.Description = fmt.Sprintf("AI 分析推荐（置信度 %.0f%%）：%s", rec.Confidence*100, rec.Reason)
+				metrics = append(metrics, metric)
+			}
+			// AI 分析结果已生成指标，直接返回
+			for _, metric := range metrics {
+				if err := s.CreateMetric(&metric); err != nil {
+					return nil, fmt.Errorf("failed to save auto-discovered metric %s: %v", metric.Name, err)
+				}
+			}
+			return metrics, nil
+		}
+	}
+
+	// ========== Fallback：使用规则匹配 ==========
 	// 解析表结构信息（使用 SchemaInfo）
 	var schemaInfo map[string]interface{}
 	if err := json.Unmarshal([]byte(dataSource.SchemaInfo), &schemaInfo); err != nil {
@@ -105,8 +146,6 @@ func (s *MetricService) AutoDiscoverMetrics(tenantID string, dataSourceID string
 	if !ok {
 		return nil, fmt.Errorf("schema info missing structure field")
 	}
-
-	metrics := []model.Metric{}
 
 	// 分析表结构，自动发现指标
 	for tableName, columns := range structure {
@@ -125,23 +164,63 @@ func (s *MetricService) AutoDiscoverMetrics(tenantID string, dataSourceID string
 			colName, _ := colInfo["field"].(string)
 			colType, _ := colInfo["type"].(string)
 
-			// 识别金额字段
-			if isAmountField(colName, colType) {
-				metric := s.createAutoMetric(tenantID, dataSourceID, tableName, colName, "GMV", model.MetricTypeCurrency, model.AggSum, 0.9)
-				metrics = append(metrics, metric)
+			// 跳过纯技术字段
+			if isTechnicalField(colName, colType) {
+				continue
 			}
 
-			// 识别数量字段
-			if isQuantityField(colName, colType) {
-				metric := s.createAutoMetric(tenantID, dataSourceID, tableName, colName, "数量", model.MetricTypeNumber, model.AggSum, 0.8)
-				metrics = append(metrics, metric)
+			// 识别金额字段
+			if isAmountField(colName, colType) {
+				agg := model.AggSum
+				key := fmt.Sprintf("%s:%s:%s", tableName, colName, agg)
+				if !seen[key] {
+					seen[key] = true
+					displayName := inferAmountDisplayName(colName)
+					metric := s.createAutoMetric(tenantID, dataSourceID, tableName, colName, displayName, model.MetricTypeCurrency, agg, 0.9)
+					metric.Description = fmt.Sprintf("规则匹配发现：%s 的 %s（建议：接入数据源后 AI 将自动分析更准确的语义）", tableName, displayName)
+					metrics = append(metrics, metric)
+				}
+			}
+
+			// 识别数量字段（只对非金额字段创建，避免重复）
+			if isQuantityField(colName) && !isAmountField(colName, colType) {
+				agg := model.AggSum
+				key := fmt.Sprintf("%s:%s:%s", tableName, colName, agg)
+				if !seen[key] {
+					seen[key] = true
+					displayName := inferQuantityDisplayName(colName)
+					metric := s.createAutoMetric(tenantID, dataSourceID, tableName, colName, displayName, model.MetricTypeNumber, agg, 0.8)
+					metric.Description = fmt.Sprintf("规则匹配发现：%s 的 %s（建议：接入数据源后 AI 将自动分析更准确的语义）", tableName, displayName)
+					metrics = append(metrics, metric)
+				}
+			}
+
+			// 识别唯一计数指标（如用户数、产品数）
+			if isCountableField(colName, colType) {
+				agg := model.AggCount
+				key := fmt.Sprintf("%s:%s:%s", tableName, colName, agg)
+				if !seen[key] {
+					seen[key] = true
+					displayName := inferCountDisplayName(tableName, colName)
+					metric := s.createAutoMetric(tenantID, dataSourceID, tableName, colName, displayName, model.MetricTypeNumber, agg, 0.75)
+					metrics = append(metrics, metric)
+				}
 			}
 		}
 
-		// 识别计数指标（基于表名）
-		if isTransactionTable(tableName) {
-			metric := s.createAutoMetric(tenantID, dataSourceID, tableName, "id", "订单量", model.MetricTypeNumber, model.AggCount, 0.85)
-			metrics = append(metrics, metric)
+		// 识别计数指标（基于表名，只有被明确识别为业务表时才创建）
+		if isStrictTransactionTable(tableName) {
+			idCol := findPrimaryKeyColumn(columnList)
+			if idCol != "" {
+				agg := model.AggCount
+				key := fmt.Sprintf("%s:%s:%s", tableName, idCol, agg)
+				if !seen[key] {
+					seen[key] = true
+					displayName := inferTableCountDisplayName(tableName)
+					metric := s.createAutoMetric(tenantID, dataSourceID, tableName, idCol, displayName, model.MetricTypeNumber, agg, 0.85)
+					metrics = append(metrics, metric)
+				}
+			}
 		}
 	}
 
@@ -210,9 +289,10 @@ func (s *MetricService) UpdateMetricLineage(metricID string) error {
 	return nil
 }
 
-// 辅助函数：判断是否为金额字段
+// 辅助函数：判断是否为金额字段（仅基于字段名识别，不无差别匹配所有 numeric 类型）
 func isAmountField(colName, colType string) bool {
-	amountPatterns := []string{"amount", "price", "cost", "fee", "money", "revenue", "gmv", "sales"}
+	// 明确的金额相关关键词
+	amountPatterns := []string{"amount", "price", "cost", "fee", "money", "revenue", "gmv", "sales", "total", "subtotal", "discount", "tax", "profit", "margin"}
 	lowerName := strings.ToLower(colName)
 
 	for _, pattern := range amountPatterns {
@@ -221,21 +301,28 @@ func isAmountField(colName, colType string) bool {
 		}
 	}
 
-	// 检查数值类型
-	numericTypes := []string{"decimal", "numeric", "money", "float", "double"}
-	for _, t := range numericTypes {
-		if strings.Contains(strings.ToLower(colType), t) {
-			return true
-		}
-	}
-
 	return false
 }
 
-// 辅助函数：判断是否为数量字段
-func isQuantityField(colName, colType string) bool {
-	quantityPatterns := []string{"quantity", "qty", "count", "num", "amount"}
+// 辅助函数：判断是否为数量字段（仅基于字段名，排除与金额重叠的字段）
+func isQuantityField(colName string) bool {
+	// 仅保留明确的数量关键词，去掉了与金额重复的 "amount"
+	quantityPatterns := []string{"quantity", "qty", "num", "cnt", "pieces", "units"}
 	lowerName := strings.ToLower(colName)
+
+	// 排除纯数字列名（如 id、row_no、page_num 等无业务意义的编号）
+	pureNumberPatterns := []string{"_id", "_no", "_num$", "_code", "_seq", "_index", "_sort", "_order", "_uid", "_uuid", "_token", "_flag"}
+	for _, pattern := range pureNumberPatterns {
+		if pattern[len(pattern)-1] == '$' {
+			// 正则风格：匹配字段末尾
+			prefix := pattern[:len(pattern)-1]
+			if strings.HasSuffix(lowerName, prefix) && !strings.Contains(lowerName[:len(lowerName)-len(prefix)], "_") {
+				return false
+			}
+		} else if strings.HasSuffix(lowerName, pattern) {
+			return false
+		}
+	}
 
 	for _, pattern := range quantityPatterns {
 		if strings.Contains(lowerName, pattern) {
@@ -246,18 +333,281 @@ func isQuantityField(colName, colType string) bool {
 	return false
 }
 
-// 辅助函数：判断是否为交易表
-func isTransactionTable(tableName string) bool {
-	transactionPatterns := []string{"order", "transaction", "payment", "sale", "purchase"}
-	lowerName := strings.ToLower(tableName)
+// 辅助函数：判断是否为可计数字段（用于 COUNT 聚合）
+func isCountableField(colName, colType string) bool {
+	// 只有明确的用户/客户/会员/产品等核心实体表的主键/唯一字段才适合 COUNT
+	countablePatterns := []string{"user", "customer", "member", "product", "item", "sku", "category", "brand", "region", "city"}
+	lowerName := strings.ToLower(colName)
 
-	for _, pattern := range transactionPatterns {
-		if strings.Contains(lowerName, pattern) || strings.HasSuffix(lowerName, "s") {
+	for _, pattern := range countablePatterns {
+		if strings.Contains(lowerName, pattern) && strings.Contains(lowerName, "id") {
 			return true
 		}
 	}
 
 	return false
+}
+
+// 辅助函数：判断是否为交易表（宽松匹配，用于预判）
+func isTransactionTable(tableName string) bool {
+	transactionPatterns := []string{"order", "transaction", "payment", "sale", "purchase", "invoice", "refund", "return"}
+	lowerName := strings.ToLower(tableName)
+
+	for _, pattern := range transactionPatterns {
+		if strings.Contains(lowerName, pattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// 辅助函数：严格判断是否为业务主表（用于决定是否创建 COUNT 指标）
+// 只有表名包含明确的业务核心实体关键词才认为是主表
+func isStrictTransactionTable(tableName string) bool {
+	strictPatterns := []string{"order", "transaction", "payment", "invoice", "refund", "return", "subscription"}
+	lowerName := strings.ToLower(tableName)
+
+	for _, pattern := range strictPatterns {
+		if strings.Contains(lowerName, pattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// 辅助函数：判断是否为纯技术字段（应被排除，不作为指标来源）
+func isTechnicalField(colName, colType string) bool {
+	lowerName := strings.ToLower(colName)
+
+	// 纯技术字段名模式
+	technicalPatterns := []string{
+		"_id", "_at", "_by", "_time", "_status", "_flag", "_type",
+		"created_at", "updated_at", "deleted_at", "created_by", "updated_by",
+		"is_deleted", "is_active", "is_enabled", "is_valid", "is_visible",
+		"version", "sort_order", "sort", "display_order", "priority", "weight",
+		"latitude", "longitude", // 经纬度是维度，不是指标
+		"ip_address", "mac_address", "device_id", "session_id", "token",
+		"password", "salt", "secret", "api_key", "access_token",
+		"md5", "sha1", "sha256", // 哈希字段无业务意义
+		"remark", "memo", "note", "description", "avatar", "icon", "image", "url", "link",
+		"latitude", "longitude", "lng", "lat",
+		"extension", "metadata", "config", "settings", "properties",
+		"parent_id", "root_id", "path", "level", "depth", "tree_path",
+		"is_default", "is_system", "is_anonymous", "is_test",
+	}
+
+	for _, pattern := range technicalPatterns {
+		if strings.EqualFold(lowerName, pattern) || strings.HasSuffix(lowerName, pattern) {
+			return true
+		}
+	}
+
+	// 跳过所有时间戳类型的 "技术型" 字段（但保留 date 结尾的有意义日期如 birth_date）
+	timeSuffixes := []string{"_created_at", "_updated_at", "_deleted_at", "_at$"}
+	for _, suffix := range timeSuffixes {
+		if strings.HasSuffix(lowerName, suffix[:len(suffix)-1]) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// 辅助函数：根据金额字段名推断中文展示名
+func inferAmountDisplayName(colName string) string {
+	lowerName := strings.ToLower(colName)
+
+	nameMap := map[string]string{
+		"amount":             "支付金额",
+		"price":              "单价",
+		"cost":               "成本",
+		"fee":                "手续费",
+		"money":              "金额",
+		"revenue":            "收入",
+		"gmv":                "GMV",
+		"sales":              "销售额",
+		"total":              "总计",
+		"subtotal":           "小计",
+		"discount":           "折扣金额",
+		"tax":                "税额",
+		"profit":             "利润",
+		"margin":             "毛利",
+		"order_amount":       "订单金额",
+		"order_price":        "订单价格",
+		"payment_amount":     "支付金额",
+		"final_amount":       "实付金额",
+		"original_amount":    "原价",
+		"refund_amount":      "退款金额",
+		"shipping_amount":    "运费",
+		"shipping_fee":       "运费",
+		"coupon_amount":      "优惠金额",
+		"discount_amount":    "优惠金额",
+		"product_price":      "商品价格",
+		"sale_price":         "售价",
+		"sale_amount":        "销售额",
+		"gross_amount":       "总额",
+		"net_amount":         "净金额",
+		"transaction_amount": "交易金额",
+	}
+
+	// 精确匹配优先
+	if name, ok := nameMap[lowerName]; ok {
+		return name
+	}
+
+	// 前缀匹配（如 order_amount -> 订单金额）
+	prefixes := []string{"order_", "payment_", "refund_", "shipping_", "product_", "sale_", "coupon_", "discount_"}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(lowerName, prefix) {
+			suffix := strings.TrimPrefix(lowerName, prefix)
+			suffixName := inferAmountDisplayName(suffix)
+			if suffixName != "" {
+				return suffixName
+			}
+			// 回退到字段名
+			return colName
+		}
+	}
+
+	// 默认返回原始字段名
+	return colName
+}
+
+// 辅助函数：根据数量字段名推断中文展示名
+func inferQuantityDisplayName(colName string) string {
+	lowerName := strings.ToLower(colName)
+
+	nameMap := map[string]string{
+		"quantity":    "数量",
+		"qty":         "数量",
+		"num":         "数量",
+		"cnt":         "数量",
+		"pieces":      "件数",
+		"units":       "单位数",
+		"order_num":   "订单数量",
+		"product_num": "商品数量",
+		"item_num":    "商品项数",
+		"sku_num":     "SKU数",
+	}
+
+	if name, ok := nameMap[lowerName]; ok {
+		return name
+	}
+
+	prefixes := []string{"order_", "product_", "item_"}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(lowerName, prefix) {
+			suffix := strings.TrimPrefix(lowerName, prefix)
+			suffixName := inferQuantityDisplayName(suffix)
+			if suffixName != "" {
+				return suffixName
+			}
+			return colName
+		}
+	}
+
+	return colName
+}
+
+// 辅助函数：根据计数字段推断展示名
+func inferCountDisplayName(tableName, colName string) string {
+	lowerTable := strings.ToLower(tableName)
+	lowerCol := strings.ToLower(colName)
+
+	if strings.Contains(lowerCol, "user") || strings.Contains(lowerTable, "user") {
+		return "用户数"
+	}
+	if strings.Contains(lowerCol, "customer") || strings.Contains(lowerTable, "customer") {
+		return "客户数"
+	}
+	if strings.Contains(lowerCol, "member") || strings.Contains(lowerTable, "member") {
+		return "会员数"
+	}
+	if strings.Contains(lowerCol, "product") || strings.Contains(lowerTable, "product") {
+		return "商品数"
+	}
+	if strings.Contains(lowerCol, "sku") || strings.Contains(lowerTable, "sku") {
+		return "SKU数"
+	}
+	if strings.Contains(lowerCol, "category") || strings.Contains(lowerTable, "category") {
+		return "分类数"
+	}
+
+	return colName + "计数"
+}
+
+// 辅助函数：根据表名推断 COUNT 指标的展示名
+func inferTableCountDisplayName(tableName string) string {
+	lowerName := strings.ToLower(tableName)
+
+	nameMap := map[string]string{
+		"order":         "订单数",
+		"orders":        "订单数",
+		"transaction":   "交易数",
+		"transactions":  "交易数",
+		"payment":       "支付数",
+		"payments":      "支付数",
+		"sale":          "销售数",
+		"sales":         "销售数",
+		"invoice":       "开票数",
+		"invoices":      "开票数",
+		"refund":        "退款数",
+		"refunds":       "退款数",
+		"return":        "退货数",
+		"returns":       "退货数",
+		"subscription":  "订阅数",
+		"subscriptions": "订阅数",
+	}
+
+	// 精确匹配
+	for pattern, name := range nameMap {
+		if strings.Contains(lowerName, pattern) {
+			return name
+		}
+	}
+
+	// 截取表名前缀
+	// orders -> order, products -> product
+	singular := lowerName
+	if strings.HasSuffix(singular, "s") && len(singular) > 1 {
+		singular = singular[:len(singular)-1]
+	}
+	if name, ok := nameMap[singular]; ok {
+		return name
+	}
+
+	return tableName + "总数"
+}
+
+// 辅助函数：在列列表中找主键字段
+func findPrimaryKeyColumn(columns []interface{}) string {
+	for _, col := range columns {
+		colInfo, ok := col.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		colName, ok := colInfo["field"].(string)
+		if !ok {
+			continue
+		}
+
+		// 优先找明确的主键标记
+		isPK, _ := colInfo["primaryKey"].(bool)
+		if isPK {
+			return colName
+		}
+
+		// 其次找名为 id 或 xxx_id 的字段
+		lowerName := strings.ToLower(colName)
+		if lowerName == "id" || lowerName == "uuid" || lowerName == "guid" {
+			return colName
+		}
+	}
+
+	return ""
 }
 
 // generateID 生成 ID（简单实现，生产环境应该用 UUID）

@@ -1,0 +1,234 @@
+package service
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+
+	"ai-bi-server/internal/model"
+)
+
+// LLMService 统一 LLM 调用服务
+type LLMService struct {
+	aiConfigService *AIConfigService
+	httpClient      *http.Client
+}
+
+// NewLLMService 创建 LLM 服务
+func NewLLMService(aiConfigService *AIConfigService) *LLMService {
+	return &LLMService{
+		aiConfigService: aiConfigService,
+		httpClient: &http.Client{
+			Timeout: 60 * time.Second,
+		},
+	}
+}
+
+// LLMRequest LLM API 请求
+type LLMRequest struct {
+	Model       string       `json:"model"`
+	Messages    []LLMMessage `json:"messages"`
+	Temperature float64      `json:"temperature,omitempty"`
+	MaxTokens   int          `json:"max_tokens,omitempty"`
+	Stream      bool         `json:"stream,omitempty"`
+}
+
+// LLMMessage LLM 消息
+type LLMMessage struct {
+	Role    string `json:"role"` // system/user/assistant
+	Content string `json:"content"`
+}
+
+// LLMResponse LLM API 响应
+type LLMResponse struct {
+	ID      string   `json:"id"`
+	Choices []Choice `json:"choices"`
+	Usage   Usage    `json:"usage,omitempty"`
+}
+
+// Choice LLM 响应选项
+type Choice struct {
+	Message      Message `json:"message"`
+	FinishReason string  `json:"finish_reason"`
+}
+
+// Message 消息内容
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// Usage token 使用量
+type Usage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
+// CallLLM 调用 LLM（通用接口）
+func (s *LLMService) CallLLM(tenantID string, systemPrompt, userPrompt string) (string, error) {
+	cfg, err := s.aiConfigService.GetOrInitConfig(tenantID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get AI config: %w", err)
+	}
+
+	return s.CallLLMWithModel(cfg, systemPrompt, userPrompt)
+}
+
+// CallLLMWithModel 使用指定配置调用 LLM
+func (s *LLMService) CallLLMWithModel(cfg *model.AIServiceConfig, systemPrompt, userPrompt string) (string, error) {
+	baseURL := cfg.BaseURL
+	if baseURL == "" {
+		baseURL = s.defaultBaseURL(cfg.ModelType)
+	}
+	baseURL = strings.TrimSuffix(baseURL, "/")
+
+	modelName := cfg.Model
+	if modelName == "" {
+		modelName = s.defaultModel(cfg.ModelType)
+	}
+
+	messages := []LLMMessage{}
+	if systemPrompt != "" {
+		messages = append(messages, LLMMessage{Role: "system", Content: systemPrompt})
+	}
+	messages = append(messages, LLMMessage{Role: "user", Content: userPrompt})
+
+	reqBody := LLMRequest{
+		Model:       modelName,
+		Messages:    messages,
+		Temperature: 0.1, // 低温度保证结果稳定
+		MaxTokens:   4096,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	url := baseURL + "/chat/completions"
+	req, err := http.NewRequestWithContext(context.Background(), "POST", url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to call LLM API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return "", fmt.Errorf("LLM API error: status=%d body=%s", resp.Status, string(respBody))
+	}
+
+	var llmResp LLMResponse
+	if err := json.NewDecoder(resp.Body).Decode(&llmResp); err != nil {
+		return "", fmt.Errorf("failed to decode LLM response: %w", err)
+	}
+
+	if len(llmResp.Choices) == 0 {
+		return "", fmt.Errorf("LLM returned no choices")
+	}
+
+	return llmResp.Choices[0].Message.Content, nil
+}
+
+// CallLLMJSON 调用 LLM 并期望返回 JSON（带 JSON 模式提示）
+func (s *LLMService) CallLLMJSON(tenantID string, systemPrompt, userPrompt string) (string, error) {
+	cfg, err := s.aiConfigService.GetOrInitConfig(tenantID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get AI config: %w", err)
+	}
+
+	baseURL := cfg.BaseURL
+	if baseURL == "" {
+		baseURL = s.defaultBaseURL(cfg.ModelType)
+	}
+	baseURL = strings.TrimSuffix(baseURL, "/")
+
+	modelName := cfg.Model
+	if modelName == "" {
+		modelName = s.defaultModel(cfg.ModelType)
+	}
+
+	messages := []LLMMessage{}
+	if systemPrompt != "" {
+		messages = append(messages, LLMMessage{Role: "system", Content: systemPrompt})
+	}
+	messages = append(messages, LLMMessage{Role: "user", Content: userPrompt})
+
+	// 使用 response_format 提示 JSON 输出
+	reqBody := map[string]interface{}{
+		"model":       modelName,
+		"messages":    messages,
+		"temperature": 0.1,
+		"max_tokens":  8192,
+	}
+
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, err := http.NewRequestWithContext(context.Background(), "POST", baseURL+"/chat/completions", bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to call LLM API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return "", fmt.Errorf("LLM API error: status=%d body=%s", resp.Status, string(respBody))
+	}
+
+	var llmResp LLMResponse
+	if err := json.NewDecoder(resp.Body).Decode(&llmResp); err != nil {
+		return "", fmt.Errorf("failed to decode LLM response: %w", err)
+	}
+
+	if len(llmResp.Choices) == 0 {
+		return "", fmt.Errorf("LLM returned no choices")
+	}
+
+	return llmResp.Choices[0].Message.Content, nil
+}
+
+// defaultBaseURL 根据模型类型返回默认 base URL
+func (s *LLMService) defaultBaseURL(modelType string) string {
+	switch modelType {
+	case "minimax":
+		return "https://api.minimax.chat/v1"
+	case "openai":
+		return "https://api.openai.com/v1"
+	case "azure":
+		return "" // Azure 需要用户配置
+	default:
+		return "https://api.openai.com/v1"
+	}
+}
+
+// defaultModel 根据模型类型返回默认模型
+func (s *LLMService) defaultModel(modelType string) string {
+	switch modelType {
+	case "minimax":
+		return "MiniMax-Text-01"
+	case "openai":
+		return "gpt-4o-mini"
+	default:
+		return "gpt-4o-mini"
+	}
+}

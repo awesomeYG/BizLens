@@ -117,7 +117,10 @@ func main() {
 	alertService := service.NewAlertService(db, imService)
 	alertHandler := handler.NewAlertHandler(alertService)
 	dataSourceService := service.NewDataSourceService(db)
-	dataSourceHandler := handler.NewDataSourceHandler(dataSourceService)
+	aiConfigService := service.NewAIConfigService(db)
+	llmService := service.NewLLMService(aiConfigService)
+	schemaAnalysisService := service.NewSchemaAnalysisService(llmService, aiConfigService)
+	dataSourceHandler := handler.NewDataSourceHandler(dataSourceService, schemaAnalysisService)
 	schemaHandler := handler.NewSchemaHandler(dataSourceService)
 	notificationRuleService := service.NewNotificationRuleService(db, imService)
 	notificationRuleHandler := handler.NewNotificationRuleHandler(notificationRuleService)
@@ -125,8 +128,6 @@ func main() {
 	unifiedAlertHandler := handler.NewUnifiedAlertHandler(alertService, notificationRuleService)
 	analysisService := service.NewAnalysisService(db)
 	analysisHandler := handler.NewAnalysisHandler(analysisService)
-	aiConfigService := service.NewAIConfigService(db)
-
 	// AutoQuery 服务（用于 dashboard 生成前的自动数据查询，启用 5 分钟查询缓存）
 	autoQueryService := service.NewAutoQueryService(dataSourceService, true, 5)
 	autoQueryHandler := handler.NewAutoQueryHandler(autoQueryService)
@@ -417,6 +418,16 @@ func main() {
 			// GET /api/tenants/{id}/data-sources/{dsId}/schema/context
 			case len(parts) == 5 && parts[3] == "schema" && parts[4] == "context" && r.Method == http.MethodGet:
 				schemaHandler.GetSchemaContext(w, r)
+				return
+
+			// GET /api/tenants/{id}/data-sources/{dsId}/schema/analysis
+			case len(parts) == 5 && parts[3] == "schema" && parts[4] == "analysis" && r.Method == http.MethodGet:
+				dataSourceHandler.GetSchemaAnalysis(w, r)
+				return
+
+			// POST /api/tenants/{id}/data-sources/{dsId}/schema/analyze
+			case len(parts) == 5 && parts[3] == "schema" && parts[4] == "analyze" && r.Method == http.MethodPost:
+				dataSourceHandler.AnalyzeSchema(w, r)
 				return
 
 			// POST /api/tenants/{id}/data-sources/{dsId}/query/repair
