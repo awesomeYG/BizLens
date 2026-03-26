@@ -1,6 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
+// ── 服务端内存缓存 ──────────────────────────────────────────────
+// 缓存粒度：tenantId + 上下文指纹（数据源/数据集数量 + 公司画像 hash + 历史对话数量）
+// 同一租户在数据未变化时命中缓存，避免重复调 LLM
+interface CacheEntry {
+  questions: string[];
+  source: string;
+  createdAt: number;
+}
+
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 分钟
+const MAX_CACHE_SIZE = 200; // 最多缓存 200 个 key，防止内存泄漏
+const suggestionsCache = new Map<string, CacheEntry>();
+
+/** 简易字符串 hash（用于生成缓存 key 指纹） */
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash |= 0;
+  }
+  return hash.toString(36);
+}
+
+/** 构造缓存 key：tenantId + 上下文特征指纹 */
+function buildCacheKey(
+  tenantId: string,
+  dataSourceCount: number,
+  datasetCount: number,
+  companyProfile: any,
+  conversationCount: number
+): string {
+  const profileHash = companyProfile ? simpleHash(JSON.stringify(companyProfile)) : "none";
+  return `${tenantId}:ds${dataSourceCount}:up${datasetCount}:p${profileHash}:c${conversationCount}`;
+}
+
+/** 淘汰过期条目 & 控制总量 */
+function evictCache(): void {
+  const now = Date.now();
+  for (const [key, entry] of suggestionsCache) {
+    if (now - entry.createdAt > CACHE_TTL_MS) {
+      suggestionsCache.delete(key);
+    }
+  }
+  // 超过上限时删除最旧的条目
+  if (suggestionsCache.size > MAX_CACHE_SIZE) {
+    const keysToDelete = Array.from(suggestionsCache.keys()).slice(0, suggestionsCache.size - MAX_CACHE_SIZE);
+    for (const key of keysToDelete) {
+      suggestionsCache.delete(key);
+    }
+  }
+}
+
 interface ColumnInfo {
   field: string;
   type: string;
@@ -300,12 +353,28 @@ export async function POST(req: NextRequest) {
 
     const resolvedTenantId = tenantId || "demo-tenant";
 
+    // ── 缓存命中检查（快速路径） ──
+    // 先用一个粗粒度 key 尝试命中，避免发起 3 个后端请求 + LLM 调用
+    // conversations 数量变化不大时可复用（只看 count 而非内容）
+    const conversationCount = Array.isArray(conversations) ? conversations.length : 0;
+
     // 并行获取 AI 配置、数据源上下文和上传数据集上下文（各自 10 秒超时）
     const [serverConfig, dataSourceContext, uploadedDatasetsContext] = await Promise.all([
       getTenantAIConfigFromBackend(resolvedTenantId, authHeader),
       getTenantDataSourcesContextFromBackend(resolvedTenantId, authHeader),
       getUploadedDatasetsContextFromBackend(resolvedTenantId, authHeader),
     ]);
+
+    // 构造缓存 key 并检查缓存
+    const dsCount = dataSourceContext?.total || 0;
+    const upCount = uploadedDatasetsContext?.total || 0;
+    const cacheKey = buildCacheKey(resolvedTenantId, dsCount, upCount, companyProfile, conversationCount);
+
+    evictCache();
+    const cached = suggestionsCache.get(cacheKey);
+    if (cached && Date.now() - cached.createdAt < CACHE_TTL_MS) {
+      return NextResponse.json({ questions: cached.questions, source: "cache" });
+    }
 
     const apiKey =
       clientAiConfig?.apiKey ||
@@ -427,6 +496,9 @@ export async function POST(req: NextRequest) {
     } catch {
       questions = DEFAULT_QUESTIONS;
     }
+
+    // 写入缓存
+    suggestionsCache.set(cacheKey, { questions, source: "ai", createdAt: Date.now() });
 
     return NextResponse.json({ questions, source: "ai" });
   } catch (err: any) {

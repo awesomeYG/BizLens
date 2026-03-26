@@ -317,8 +317,6 @@ function MessageBubble({
 }
 
 function WelcomeScreen({ questions, onSelect, loading }: { questions: string[]; onSelect: (q: string) => void; loading?: boolean }) {
-  // 骨架屏占位项
-  const skeletonItems = ["加载中...", "加载中...", "加载中...", "加载中..."];
   // 兜底默认问题（AI 未返回时展示）
   const defaultQuestions = [
     "上月销售额与环比增长情况",
@@ -326,7 +324,9 @@ function WelcomeScreen({ questions, onSelect, loading }: { questions: string[]; 
     "哪个产品/渠道表现最好",
     "下个月的销售预测",
   ];
-  const displayQuestions = loading ? skeletonItems : (questions.length > 0 ? questions : defaultQuestions);
+  // 渐进式策略：有问题就展示，loading 时也不显示骨架屏
+  // 优先用 AI 推荐 > 用 sessionStorage 缓存的推荐 > 用默认问题
+  const displayQuestions = questions.length > 0 ? questions : defaultQuestions;
 
   return (
     <div className="flex flex-col items-center justify-center py-16 animate-scale-in">
@@ -345,37 +345,24 @@ function WelcomeScreen({ questions, onSelect, loading }: { questions: string[]; 
       </p>
 
       <div className="grid sm:grid-cols-2 gap-3 max-w-2xl w-full px-4">
-        {loading
-          ? skeletonItems.map((item, i) => (
-              <div
-                key={item}
-                className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800/40 text-left text-sm animate-pulse"
-                style={{ animationDelay: `${i * 80}ms` }}
-              >
-                <div className="flex items-start gap-2.5">
-                  <div className="mt-0.5 w-5 h-5 shrink-0 rounded-md bg-zinc-800" />
-                  <div className="h-4 bg-zinc-800 rounded w-3/4" />
-                </div>
-              </div>
-            ))
-          : displayQuestions.map((q, i) => (
-              <button
-                key={`suggestion-${i}`}
-                onClick={() => onSelect(q)}
-                className="group relative p-4 rounded-xl bg-zinc-900/40 border border-zinc-800/40 text-left text-sm text-zinc-400 hover:text-zinc-100 hover:border-indigo-500/30 hover:bg-zinc-800/40 transition-all duration-300 hover-lift overflow-hidden"
-                style={{ animationDelay: `${i * 80}ms` }}
-              >
-                <div className="absolute inset-0 card-inner-glow opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <span className="relative flex items-start gap-2.5">
-                  <span className="mt-0.5 w-5 h-5 shrink-0 rounded-md bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500/20 group-hover:text-indigo-300 transition-colors">
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
-                    </svg>
-                  </span>
-                  <span className="leading-relaxed">{q}</span>
-                </span>
-              </button>
-            ))}
+        {displayQuestions.map((q, i) => (
+          <button
+            key={`suggestion-${i}`}
+            onClick={() => onSelect(q)}
+            className={`group relative p-4 rounded-xl bg-zinc-900/40 border border-zinc-800/40 text-left text-sm text-zinc-400 hover:text-zinc-100 hover:border-indigo-500/30 hover:bg-zinc-800/40 transition-all duration-300 hover-lift overflow-hidden${loading ? " opacity-70" : ""}`}
+            style={{ animationDelay: `${i * 80}ms` }}
+          >
+            <div className="absolute inset-0 card-inner-glow opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <span className="relative flex items-start gap-2.5">
+              <span className="mt-0.5 w-5 h-5 shrink-0 rounded-md bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500/20 group-hover:text-indigo-300 transition-colors">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                </svg>
+              </span>
+              <span className="leading-relaxed">{q}</span>
+            </span>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -398,9 +385,23 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
   const [pendingDeleteConversationId, setPendingDeleteConversationId] = useState<string | null>(null);
   const [dataSummary, setDataSummary] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; summary?: string }[]>([]);
-  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>(() => {
+    // 优先从 sessionStorage 恢复缓存的推荐问题（避免页面刷新后重新等待 LLM）
+    if (typeof window !== "undefined") {
+      try {
+        const cached = sessionStorage.getItem("bizlens_suggested_questions");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch { /* ignore */ }
+    }
+    return [];
+  });
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const suggestionsAbortControllerRef = useRef<AbortController | null>(null);
+  /** 标记是否已经成功获取过 AI 推荐问题（防止重复请求） */
+  const suggestionsLoadedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -437,16 +438,18 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     };
   }, []);
 
-  // 加载个性化推荐问题（挂载时立即获取；conversations 加载完成后再次获取以利用历史提问上下文）
+  // 加载个性化推荐问题
+  // 策略：等 conversations 加载完成后（historyLoading=false）再发起一次请求
+  // 如果已成功获取过 AI 推荐，不再重复请求
   useEffect(() => {
+    // 等待历史对话加载完成后再请求（避免无效的双重触发）
+    if (historyLoading) return;
+    // 已成功获取过 AI 推荐，跳过
+    if (suggestionsLoadedRef.current) return;
+
     const currentUser = getCurrentUser();
     const userTenantId = currentUser?.tenantId || currentUser?.id || "demo-tenant";
     const token = getAccessToken();
-
-    // 已有推荐问题时无需重复获取
-    if (suggestedQuestions.length > 0 && conversations.length > 0) {
-      return;
-    }
 
     // 取消之前的请求，防止竞态条件
     suggestionsAbortControllerRef.current?.abort();
@@ -474,6 +477,11 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       .then((data: { questions?: string[]; source?: string }) => {
         if (data.questions && data.questions.length > 0) {
           setSuggestedQuestions(data.questions);
+          suggestionsLoadedRef.current = true;
+          // 写入 sessionStorage 以便页面刷新后快速恢复
+          try {
+            sessionStorage.setItem("bizlens_suggested_questions", JSON.stringify(data.questions));
+          } catch { /* quota exceeded 等异常忽略 */ }
         }
       })
       .catch((err) => {
@@ -491,7 +499,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     return () => {
       abortController.abort();
     };
-  }, [conversations, suggestedQuestions.length]);
+  }, [historyLoading, conversations]);
 
   const applyConversation = useCallback((conversation: ChatConversation) => {
     const persistedMessages = conversation.messages.length ? conversation.messages : [];
