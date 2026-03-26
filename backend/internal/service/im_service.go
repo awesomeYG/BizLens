@@ -125,21 +125,20 @@ func (s *IMService) TestConnection(tenantID, id string) (*im.SendResult, error) 
 }
 
 // SendNotification 发送通知
-func (s *IMService) SendNotification(tenantID string, platformIDs []string, templateType, title, content string, markdown bool) ([]model.NotificationRecord, error) {
+func (s *IMService) SendNotification(tenantID string, platformIDs []string, title, content string, markdown bool) ([]model.NotificationRecord, error) {
 	var records []model.NotificationRecord
 
 	for _, pid := range platformIDs {
 		cfg, err := s.GetConfig(tenantID, pid)
 		if err != nil {
 			records = append(records, model.NotificationRecord{
-				TenantID:     tenantID,
-				PlatformID:   pid,
-				TemplateType: templateType,
-				Title:        title,
-				Content:      content,
-				Markdown:     markdown,
-				Status:       model.NotifyFailed,
-				Error:        "配置不存在",
+				TenantID:   tenantID,
+				PlatformID: pid,
+				Title:      title,
+				Content:    content,
+				Markdown:   markdown,
+				Status:     model.NotifyFailed,
+				Error:      "配置不存在",
 			})
 			continue
 		}
@@ -149,7 +148,6 @@ func (s *IMService) SendNotification(tenantID string, platformIDs []string, temp
 				TenantID:     tenantID,
 				PlatformID:   pid,
 				PlatformType: cfg.Type,
-				TemplateType: templateType,
 				Title:        title,
 				Content:      content,
 				Markdown:     markdown,
@@ -176,7 +174,6 @@ func (s *IMService) SendNotification(tenantID string, platformIDs []string, temp
 			TenantID:     tenantID,
 			PlatformID:   pid,
 			PlatformType: cfg.Type,
-			TemplateType: templateType,
 			Title:        title,
 			Content:      content,
 			Markdown:     markdown,

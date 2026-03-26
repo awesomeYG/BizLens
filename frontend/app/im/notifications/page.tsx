@@ -18,7 +18,7 @@ export default function NotificationsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [tab, setTab] = useState<"send" | "history">("send");
-  const [form, setForm] = useState<NotificationSendRequest>({ platformIds: [], templateType: "custom", title: "", content: "", markdown: false });
+  const [form, setForm] = useState<NotificationSendRequest>({ platformIds: [], title: "", content: "", markdown: false });
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const authFetchHeaders = (json = false): Record<string, string> => {
@@ -96,13 +96,6 @@ export default function NotificationsPage() {
   const enabledConfigs = configs.filter((c) => c.enabled);
   const sentCount = history.filter(h => h.status === "sent").length;
   const failCount = history.filter(h => h.status === "failed").length;
-
-  const TEMPLATE_OPTIONS = [
-    { value: "custom", label: "自定义消息", icon: "✏️" },
-    { value: "data_alert", label: "数据告警", icon: "🚨" },
-    { value: "report_ready", label: "报告就绪", icon: "📊" },
-    { value: "dashboard_update", label: "大屏更新", icon: "📺" },
-  ];
 
   return (
     <div className="min-h-screen bg-zinc-950 bg-grid">
@@ -219,32 +212,6 @@ export default function NotificationsPage() {
                 )}
               </div>
 
-              {/* Template Selection */}
-              <div className="glass-card rounded-2xl p-5">
-                <h2 className="text-sm font-semibold text-zinc-200 mb-4 flex items-center gap-2">
-                  <svg className="w-4 h-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  通知类型
-                </h2>
-                <div className="grid grid-cols-2 gap-2">
-                  {TEMPLATE_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setForm({ ...form, templateType: opt.value as NotificationSendRequest["templateType"] })}
-                      className={`p-3 rounded-xl border text-sm transition-all text-left ${
-                        form.templateType === opt.value
-                          ? "border-indigo-500/50 bg-indigo-500/10 text-indigo-300"
-                          : "border-zinc-800/50 bg-zinc-900/30 hover:border-zinc-700 text-zinc-400"
-                      }`}
-                    >
-                      <div className="text-lg mb-1">{opt.icon}</div>
-                      <div className="font-medium">{opt.label}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
 
             {/* Right: Message Form */}

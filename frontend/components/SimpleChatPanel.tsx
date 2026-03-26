@@ -1360,7 +1360,6 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
           headers,
           body: JSON.stringify({
             platformIds: [String(dingCfg.id)],
-            templateType: "chat_direct",
             title: "",
             content: directMsg,
             markdown: false,

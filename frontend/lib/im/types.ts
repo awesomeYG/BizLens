@@ -47,15 +47,6 @@ export interface IMConfigField {
 }
 
 /**
- * 通知模板类型
- */
-export type NotificationTemplateType =
-  | "data_alert"
-  | "report_ready"
-  | "dashboard_update"
-  | "custom";
-
-/**
  * 通知记录（与后端 model 对齐）
  */
 export interface NotificationRecord {
@@ -63,7 +54,6 @@ export interface NotificationRecord {
   tenantId: string;
   platformId: string;
   platformType: IMPlatformType;
-  templateType: NotificationTemplateType;
   title: string;
   content: string;
   markdown: boolean;
@@ -89,7 +79,6 @@ export interface IMConfigCreateRequest {
  */
 export interface NotificationSendRequest {
   platformIds: string[];
-  templateType: NotificationTemplateType;
   title: string;
   content: string;
   markdown?: boolean;

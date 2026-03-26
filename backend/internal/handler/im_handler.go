@@ -244,11 +244,10 @@ func (h *IMHandler) TestIMConfig(w http.ResponseWriter, r *http.Request) {
 
 // SendNotificationRequest 发送通知请求体
 type SendNotificationRequest struct {
-	PlatformIDs  []string `json:"platformIds"`
-	TemplateType string   `json:"templateType"`
-	Title        string   `json:"title"`
-	Content      string   `json:"content"`
-	Markdown     bool     `json:"markdown"`
+	PlatformIDs []string `json:"platformIds"`
+	Title       string   `json:"title"`
+	Content     string   `json:"content"`
+	Markdown    bool     `json:"markdown"`
 }
 
 // SendNotification POST /api/tenants/{id}/notifications/send
@@ -273,7 +272,6 @@ func (h *IMHandler) SendNotification(w http.ResponseWriter, r *http.Request) {
 	records, err := h.imService.SendNotification(
 		tenantID,
 		req.PlatformIDs,
-		req.TemplateType,
 		req.Title,
 		req.Content,
 		req.Markdown,
@@ -358,7 +356,6 @@ func (h *IMHandler) SendIMMessage(w http.ResponseWriter, r *http.Request) {
 	records, err := h.imService.SendNotification(
 		req.TenantID,
 		[]string{targetCfg.ID},
-		"tool_call",
 		"",
 		req.Content,
 		req.Markdown,

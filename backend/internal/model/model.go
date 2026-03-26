@@ -89,7 +89,6 @@ type NotificationRecord struct {
 	TenantID     string             `gorm:"type:varchar(50);not null;index" json:"tenantId"`
 	PlatformID   string             `gorm:"type:varchar(50);not null;index" json:"platformId"`
 	PlatformType IMPlatformType     `gorm:"size:50;not null" json:"platformType"`
-	TemplateType string             `gorm:"size:50;not null" json:"templateType"`
 	Title        string             `gorm:"size:500" json:"title"`
 	Content      string             `gorm:"type:text;not null" json:"content"`
 	Markdown     bool               `gorm:"default:false" json:"markdown"`
