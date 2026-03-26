@@ -496,13 +496,13 @@ func main() {
 		// /api/tenants/{tenantId}/metrics[/{metricId}[/{action}]]
 		if len(parts) >= 2 && parts[1] == "metrics" {
 			switch {
-			// POST /api/tenants/{id}/metrics/auto-discover
-			case len(parts) == 4 && parts[2] != "" && parts[3] == "auto-discover" && r.Method == http.MethodPost:
+			// POST /api/tenants/{tenantId}/metrics/auto-discover
+			case len(parts) == 3 && parts[2] == "auto-discover" && r.Method == http.MethodPost:
 				metricHandler.AutoDiscoverMetrics(w, r)
 				return
 
-			// POST /api/tenants/{id}/metrics/confirm
-			case len(parts) == 4 && parts[2] != "" && parts[3] == "confirm" && r.Method == http.MethodPost:
+			// POST /api/tenants/{tenantId}/metrics/confirm
+			case len(parts) == 3 && parts[2] == "confirm" && r.Method == http.MethodPost:
 				metricHandler.ConfirmMetrics(w, r)
 				return
 
@@ -537,8 +537,8 @@ func main() {
 		// /api/tenants/{tenantId}/dimensions/auto-discover
 		if len(parts) >= 2 && parts[1] == "dimensions" {
 			switch {
-			// POST /api/tenants/{id}/dimensions/auto-discover
-			case len(parts) == 4 && parts[2] != "" && parts[3] == "auto-discover" && r.Method == http.MethodPost:
+			// POST /api/tenants/{tenantId}/dimensions/auto-discover
+			case len(parts) == 3 && parts[2] == "auto-discover" && r.Method == http.MethodPost:
 				metricHandler.AutoDiscoverDimensions(w, r)
 				return
 			}
@@ -547,8 +547,8 @@ func main() {
 		// /api/tenants/{tenantId}/relationships/auto-discover
 		if len(parts) >= 2 && parts[1] == "relationships" {
 			switch {
-			// POST /api/tenants/{id}/relationships/auto-discover
-			case len(parts) == 4 && parts[2] != "" && parts[3] == "auto-discover" && r.Method == http.MethodPost:
+			// POST /api/tenants/{tenantId}/relationships/auto-discover
+			case len(parts) == 3 && parts[2] == "auto-discover" && r.Method == http.MethodPost:
 				metricHandler.AutoDiscoverRelationships(w, r)
 				return
 			}
@@ -624,7 +624,12 @@ func main() {
 
 		http.NotFound(w, r)
 	})
-	mux.Handle("/api/tenants/", middleware.Auth(authService)(tenantRouter))
+	// 开发环境允许未登录访问（走 URL tenantId）；生产环境强制 JWT
+	if cfg.Env == "production" {
+		mux.Handle("/api/tenants/", middleware.Auth(authService)(tenantRouter))
+	} else {
+		mux.Handle("/api/tenants/", middleware.OptionalAuth(authService)(tenantRouter))
+	}
 
 	// 数据集路由：/api/datasets[/upload/file]（需要 JWT 认证）
 	datasetRouter := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -722,7 +727,8 @@ func main() {
 	// 启动服务
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Printf("服务启动在 %s", addr)
-	if err := http.ListenAndServe(addr, recoveryMiddleware(mux)); err != nil {
+	// CORS 必须在最外层：确保浏览器 OPTIONS 预检不被 Auth 拦截
+	if err := http.ListenAndServe(addr, recoveryMiddleware(middleware.CORS(mux))); err != nil {
 		log.Fatalf("服务启动失败：%v", err)
 	}
 }

@@ -64,6 +64,8 @@ func (h *DataSourceHandler) ListDataSources(w http.ResponseWriter, r *http.Reque
 			"host":        ds.Host,
 			"port":        ds.Port,
 			"database":    ds.Database,
+			"username":    ds.Username,
+			"ssl":         ds.SSL,
 			"status":      ds.Status,
 			"lastSyncAt":  ds.LastSyncAt,
 		}

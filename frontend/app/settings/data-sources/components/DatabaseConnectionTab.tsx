@@ -355,7 +355,10 @@ export default function DatabaseConnectionTab() {
 
   const openEditModal = (source: DataSourceConfig) => {
     const c = source.connection;
+    const tenantId = getTenantId();
+
     setEditingId(source.id);
+    // 先用列表数据快速回填，避免弹窗空白；随后再拉详情接口补全字段（尤其是 username / ssl）
     setForm({
       name: source.name,
       type: source.type,
@@ -369,6 +372,33 @@ export default function DatabaseConnectionTab() {
     });
     setMessage(null);
     setModalOpen(true);
+
+    fetch(`/api/tenants/${tenantId}/data-sources/${source.id}`, { headers: getAuthHeaders() })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const raw = (await res.json()) as Record<string, unknown>;
+        return normalizeDataSourceFromApi(raw);
+      })
+      .then((fresh) => {
+        if (!fresh || fresh.id !== source.id) return;
+        const fc = fresh.connection;
+        setForm((current) => ({
+          ...current,
+          name: fresh.name,
+          type: fresh.type,
+          description: fresh.description || "",
+          host: fc?.host || "",
+          port: String(fc?.port ?? DEFAULT_PORT_BY_SOURCE_TYPE[fresh.type] ?? ""),
+          database: fc?.database || "",
+          username: fc?.username || "",
+          // 密码始终不回填：留空表示不修改
+          password: "",
+          ssl: fc?.ssl || false,
+        }));
+      })
+      .catch(() => {
+        // 详情拉取失败不阻塞编辑；保留列表回填值
+      });
   };
 
   const closeModal = () => {
@@ -608,6 +638,31 @@ export default function DatabaseConnectionTab() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              {/* 
+                浏览器/密码管理器会对包含 username/password 的表单强行自动填充。
+                这里用“诱饵字段 + new-password + 非典型 name”来尽量避免被误填。
+              */}
+              <div className="hidden">
+                <input
+                  type="text"
+                  name="username"
+                  autoComplete="username"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  value=""
+                  readOnly
+                />
+                <input
+                  type="password"
+                  name="password"
+                  autoComplete="current-password"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  value=""
+                  readOnly
+                />
+              </div>
+
               {message && modalOpen ? (
                 <p
                   className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
@@ -626,6 +681,8 @@ export default function DatabaseConnectionTab() {
                   <input
                     value={form.name}
                     onChange={(e) => setForm((current) => ({ ...current, name: e.target.value }))}
+                    name="dataSourceName"
+                    autoComplete="off"
                     className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-zinc-100 outline-none transition focus:border-cyan-500"
                     placeholder="例如：订单主库"
                   />
@@ -730,6 +787,8 @@ export default function DatabaseConnectionTab() {
                     <input
                       value={form.host}
                       onChange={(e) => setForm((current) => ({ ...current, host: e.target.value }))}
+                      name="dbHost"
+                      autoComplete="off"
                       className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-zinc-100 outline-none transition focus:border-cyan-500"
                       placeholder={HOST_PLACEHOLDER_BY_SOURCE_TYPE[form.type] || "db.example.internal"}
                     />
@@ -739,6 +798,8 @@ export default function DatabaseConnectionTab() {
                     <input
                       value={form.port}
                       onChange={(e) => setForm((current) => ({ ...current, port: e.target.value }))}
+                      name="dbPort"
+                      autoComplete="off"
                       className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-zinc-100 outline-none transition focus:border-cyan-500"
                       placeholder="3306"
                     />
@@ -748,6 +809,8 @@ export default function DatabaseConnectionTab() {
                     <input
                       value={form.database}
                       onChange={(e) => setForm((current) => ({ ...current, database: e.target.value }))}
+                      name="dbDatabase"
+                      autoComplete="off"
                       className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-zinc-100 outline-none transition focus:border-cyan-500"
                       placeholder={DATABASE_PLACEHOLDER_BY_SOURCE_TYPE[form.type] || "orders_prod"}
                     />
@@ -757,6 +820,10 @@ export default function DatabaseConnectionTab() {
                     <input
                       value={form.username}
                       onChange={(e) => setForm((current) => ({ ...current, username: e.target.value }))}
+                      name="dbUsername"
+                      autoComplete="off"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
                       className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-zinc-100 outline-none transition focus:border-cyan-500"
                       placeholder="bi_reader"
                     />
@@ -767,6 +834,10 @@ export default function DatabaseConnectionTab() {
                       type="password"
                       value={form.password}
                       onChange={(e) => setForm((current) => ({ ...current, password: e.target.value }))}
+                      name="dbPassword"
+                      autoComplete="new-password"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
                       className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-zinc-100 outline-none transition focus:border-cyan-500"
                       placeholder={editingId ? "留空表示不修改密码" : "输入访问密码"}
                     />

@@ -84,6 +84,10 @@ func (s *MetricService) AutoDiscoverMetrics(tenantID string, dataSourceID string
 		return nil, fmt.Errorf("data source not found: %v", err)
 	}
 
+	if strings.TrimSpace(dataSource.SchemaInfo) == "" {
+		return nil, fmt.Errorf("data source schema info is empty; please sync schema first")
+	}
+
 	// 解析表结构信息（使用 SchemaInfo）
 	var schemaInfo map[string]interface{}
 	if err := json.Unmarshal([]byte(dataSource.SchemaInfo), &schemaInfo); err != nil {

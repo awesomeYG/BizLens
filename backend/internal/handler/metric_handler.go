@@ -41,7 +41,17 @@ func (h *MetricHandler) AutoDiscoverMetrics(w http.ResponseWriter, r *http.Reque
 
 	metrics, err := h.metricService.AutoDiscoverMetrics(tenantID, dataSourceID)
 	if err != nil {
-		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusInternalServerError)
+		msg := err.Error()
+		status := http.StatusInternalServerError
+		// 常见可恢复错误：Schema 未同步/为空/解析失败/缺少结构字段
+		if strings.Contains(msg, "schema info is empty") ||
+			strings.Contains(msg, "failed to parse schema info") ||
+			strings.Contains(msg, "schema info missing structure field") {
+			status = http.StatusBadRequest
+			// 对用户更友好的提示
+			msg = "数据源暂无可用表结构信息，请在数据源设置中重新保存/同步表结构后再试"
+		}
+		http.Error(w, `{"error": "`+msg+`"}`, status)
 		return
 	}
 
