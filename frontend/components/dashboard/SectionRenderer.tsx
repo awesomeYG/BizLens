@@ -5,6 +5,9 @@
  *
  * 根据 DashboardSection.type 自动选择对应的图表/组件渲染。
  * 所有数据从 section.data 中获取，零硬编码。
+ * 支持 16 种区块类型：
+ * - basic: kpi, line, bar, pie, area, table, funnel, gauge, ranking, trend
+ * - advanced: radar, scatter, heatmap, map, insight, alert, custom
  */
 
 import ReactECharts from "echarts-for-react";
@@ -78,7 +81,7 @@ function KpiCards({ items }: { items: KpiItem[] }) {
   );
 }
 
-function RankingList({ items, title }: { items: RankingItem[]; title?: string }) {
+function RankingList({ items }: { items: RankingItem[] }) {
   const maxVal = Math.max(...items.map((i) => i.maxValue || i.value));
   return (
     <div className="space-y-3">
@@ -108,6 +111,74 @@ function RankingList({ items, title }: { items: RankingItem[]; title?: string })
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// Insight 区块 -- 展示 AI 洞察内容
+function InsightBlock({ data }: { data: SectionData }) {
+  const kpiItems = data.kpiItems || [];
+  return (
+    <div className="space-y-3">
+      {kpiItems.length > 0 ? (
+        <div className="grid grid-cols-3 gap-3">
+          {kpiItems.map((item) => (
+            <div key={item.label} className="rounded-lg bg-white/[0.03] border border-white/[0.06] p-3 text-center">
+              <div className="text-2xl font-bold" style={{ color: item.color || "#38bdf8" }}>{item.value}</div>
+              <div className="text-xs text-zinc-400 mt-1">{item.label}</div>
+              {item.trendValue && (
+                <div className={`text-xs mt-0.5 ${item.trend === "up" ? "text-emerald-400" : item.trend === "down" ? "text-rose-400" : "text-zinc-500"}`}>
+                  {item.trendValue}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-full text-zinc-500 text-sm">
+          AI 洞察内容将自动生成
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Alert 区块 -- 展示告警状态
+function AlertBlock({ data }: { data: SectionData }) {
+  const kpiItems = data.kpiItems || [];
+  return (
+    <div className="space-y-2">
+      {kpiItems.length > 0 ? (
+        kpiItems.map((item) => (
+          <div key={item.label} className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.02]">
+            <div className={`w-2 h-2 rounded-full ${item.color === "#f87171" ? "bg-rose-500 animate-pulse" : item.color === "#fbbf24" ? "bg-amber-500" : "bg-emerald-500"}`} />
+            <span className="text-sm text-zinc-300 flex-1">{item.label}</span>
+            <span className="text-sm font-medium" style={{ color: item.color }}>{item.value}</span>
+            {item.trendValue && (
+              <span className="text-xs text-zinc-500">{item.trendValue}</span>
+            )}
+          </div>
+        ))
+      ) : (
+        <div className="flex items-center justify-center h-full text-zinc-500 text-sm">
+          暂无活跃告警
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Custom 区块 -- 展示自定义配置或提示
+function CustomBlock({ data }: { data: SectionData }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full space-y-2">
+      <div className="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+        <svg className="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+        </svg>
+      </div>
+      <span className="text-sm text-zinc-400">自定义区块</span>
+      <span className="text-xs text-zinc-600">配置自定义 ECharts option</span>
     </div>
   );
 }
@@ -270,6 +341,115 @@ function buildGaugeOption(data: SectionData) {
   };
 }
 
+function buildRadarOption(data: SectionData) {
+  const indicator = (data.radarIndicator || data.categories || []).map((name: string) => ({
+    name,
+    max: 100,
+  }));
+  return {
+    tooltip: { ...darkTooltip },
+    legend: { ...darkLegend, data: data.radarSeries?.map((s) => s.name) || [] },
+    radar: {
+      indicator,
+      splitNumber: 4,
+      axisName: { color: "#94a3b8", fontSize: 11 },
+      splitLine: { lineStyle: { color: "#1e293b" } },
+      splitArea: { areaStyle: { color: ["#0f172a", "#0f172a"] } },
+      axisLine: { lineStyle: { color: "#334155" } },
+    },
+    series: [{
+      type: "radar",
+      data: (data.radarSeries || []).map((s, i) => ({
+        name: s.name,
+        value: s.values,
+        lineStyle: { color: COLORS[i % COLORS.length], width: 2 },
+        areaStyle: { color: `${COLORS[i % COLORS.length]}30` },
+        itemStyle: { color: COLORS[i % COLORS.length] },
+        symbol: "circle",
+        symbolSize: 4,
+      })),
+    }],
+  };
+}
+
+function buildScatterOption(data: SectionData) {
+  // scatterSeries 的 values 是 [x, y] 数组
+  const seriesData = (data.scatterSeries || []).map((s, i) => ({
+    name: s.name,
+    type: "scatter",
+    data: (s.values as any[]).map((v) => {
+      if (Array.isArray(v)) return v as number[];
+      return [v.x, v.y];
+    }),
+    itemStyle: { color: COLORS[i % COLORS.length] },
+    symbolSize: 8,
+  }));
+
+  return {
+    tooltip: { ...darkTooltip, trigger: "item", formatter: (params: any) => `${params.seriesName}: (${params.value[0]}, ${params.value[1]})` },
+    legend: { ...darkLegend, data: data.scatterSeries?.map((s) => s.name) || [] },
+    grid: { left: 12, right: 16, top: 40, bottom: 8, containLabel: true },
+    xAxis: { type: "value", ...darkAxis, name: "X" },
+    yAxis: { type: "value", ...darkAxis, name: "Y" },
+    series: seriesData,
+  };
+}
+
+function buildHeatmapOption(data: SectionData) {
+  // heatmapSeries 的 values 是 [x, y, value] 数组
+  type HeatmapValue = number[] | { x: number; y: number; value: number };
+  const seriesData = (data.heatmapSeries || data.scatterSeries || []).flatMap((s): number[][] =>
+    (s.values as HeatmapValue[]).map((v) => {
+      if (Array.isArray(v)) return v as number[];
+      return [v.x, v.y, v.value];
+    })
+  );
+
+  const xData = data.categories || ["类目"];
+  const yData = data.radarIndicator || ["维度"];
+
+  return {
+    tooltip: { ...darkTooltip, position: "top" as const },
+    grid: { left: 12, right: 16, top: 8, bottom: 12, containLabel: true },
+    xAxis: {
+      type: "category",
+      data: xData,
+      splitArea: { show: true, areaStyle: { color: ["#0f172a", "#0f172a"] } },
+      ...darkAxis,
+    },
+    yAxis: {
+      type: "category",
+      data: yData,
+      splitArea: { show: true, areaStyle: { color: ["#0f172a", "#0f172a"] } },
+      ...darkAxis,
+    },
+    visualMap: {
+      min: 0,
+      max: Math.max(...seriesData.map((v) => v[2])),
+      calculable: true,
+      orient: "horizontal",
+      left: "center",
+      bottom: 0,
+      inRange: { color: ["#1e293b", "#38bdf8", "#34d399"] },
+      textStyle: { color: "#94a3b8", fontSize: 10 },
+    },
+    series: [{
+      type: "heatmap",
+      data: seriesData,
+      label: { show: false },
+      emphasis: {
+        itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.5)" },
+      },
+    }],
+  };
+}
+
+function buildMapOption(data: SectionData) {
+  // 地图使用饼图降级展示（因为没有地理数据时饼图更直观）
+  // 真实地图需要注册 ECharts geo 数据（需要额外 geoJSON 资源）
+  return buildPieOption(data);
+}
+
 // ==================== 主组件 ====================
 
 interface SectionRendererProps {
@@ -350,7 +530,7 @@ export default function SectionRenderer({ section, compact }: SectionRendererPro
     case "ranking":
       return (
         <Wrapper>
-          <RankingList items={data.rankingItems || []} title={section.title} />
+          <RankingList items={data.rankingItems || []} />
         </Wrapper>
       );
 
@@ -378,6 +558,55 @@ export default function SectionRenderer({ section, compact }: SectionRendererPro
               </tbody>
             </table>
           </div>
+        </Wrapper>
+      );
+
+    case "radar":
+      return (
+        <Wrapper noPadChart>
+          <ReactECharts option={buildRadarOption(data)} style={{ height: chartHeight, width: "100%" }} opts={{ renderer: "canvas" }} />
+        </Wrapper>
+      );
+
+    case "scatter":
+      return (
+        <Wrapper noPadChart>
+          <ReactECharts option={buildScatterOption(data)} style={{ height: chartHeight, width: "100%" }} opts={{ renderer: "canvas" }} />
+        </Wrapper>
+      );
+
+    case "heatmap":
+      return (
+        <Wrapper noPadChart>
+          <ReactECharts option={buildHeatmapOption(data)} style={{ height: chartHeight, width: "100%" }} opts={{ renderer: "canvas" }} />
+        </Wrapper>
+      );
+
+    case "map":
+      return (
+        <Wrapper noPadChart>
+          <ReactECharts option={buildMapOption(data)} style={{ height: chartHeight, width: "100%" }} opts={{ renderer: "canvas" }} />
+        </Wrapper>
+      );
+
+    case "insight":
+      return (
+        <Wrapper>
+          <InsightBlock data={data} />
+        </Wrapper>
+      );
+
+    case "alert":
+      return (
+        <Wrapper>
+          <AlertBlock data={data} />
+        </Wrapper>
+      );
+
+    case "custom":
+      return (
+        <Wrapper>
+          <CustomBlock data={data} />
         </Wrapper>
       );
 

@@ -440,24 +440,7 @@ type Relationship struct {
 	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
 }
 
-// DashboardSectionType 大屏区块类型
-type DashboardSectionType string
-
-const (
-	SectionTypeKPI     DashboardSectionType = "kpi"     // KPI 指标卡
-	SectionTypeTrend   DashboardSectionType = "trend"   // 趋势图
-	SectionTypeRanking DashboardSectionType = "ranking" // 排行榜
-	SectionTypeMap     DashboardSectionType = "map"     // 地图
-	SectionTypePie     DashboardSectionType = "pie"     // 饼图
-	SectionTypeBar     DashboardSectionType = "bar"     // 柱状图
-	SectionTypeLine    DashboardSectionType = "line"    // 折线图
-	SectionTypeArea    DashboardSectionType = "area"    // 面积图
-	SectionTypeFunnel  DashboardSectionType = "funnel"  // 漏斗图
-	SectionTypeTable   DashboardSectionType = "table"   // 明细表
-	SectionTypeInsight DashboardSectionType = "insight" // AI 洞察
-	SectionTypeAlert   DashboardSectionType = "alert"   // 告警
-	SectionTypeCustom  DashboardSectionType = "custom"  // 自定义
-)
+// DashboardSectionType 已迁移至 section_type.go（统一枚举，报表和大屏共用）
 
 // DashboardSection 大屏区块配置
 type DashboardSection struct {
@@ -669,7 +652,7 @@ type Report struct {
 	Sections []ReportSection `gorm:"foreignKey:ReportID" json:"sections,omitempty"`
 }
 
-// ReportSection 报表区块
+// ReportSection 报表区块（复用 DashboardSectionType 统一枚举）
 type ReportSection struct {
 	ID       string               `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
 	TenantID string               `gorm:"type:varchar(50);not null;index" json:"tenantId"`

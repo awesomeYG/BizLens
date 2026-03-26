@@ -30,7 +30,8 @@ type Hub struct {
 
 // BroadcastMessage 广播消息
 type BroadcastMessage struct {
-	DashboardID string
+	DashboardID string           // 复用：dashboard_id 或 report_id
+	OwnerType   RefreshOwnerType // 大屏或报表（默认 dashboard）
 	TenantID    string
 	Data        interface{}
 }
@@ -100,11 +101,16 @@ func (h *Hub) Broadcast(msg *BroadcastMessage) {
 
 // encodeMessage 编码消息
 func (h *Hub) encodeMessage(msg *BroadcastMessage) []byte {
+	ownerType := string(msg.OwnerType)
+	if ownerType == "" {
+		ownerType = "dashboard" // 向后兼容
+	}
 	payload := map[string]interface{}{
-		"type":        "data_update",
-		"dashboardId": msg.DashboardID,
-		"data":        msg.Data,
-		"timestamp":   time.Now().Unix(),
+		"type":      "data_update",
+		"ownerType": ownerType,
+		"ownerId":   msg.DashboardID,
+		"data":      msg.Data,
+		"timestamp": time.Now().Unix(),
 	}
 	data, _ := json.Marshal(payload)
 	return data
