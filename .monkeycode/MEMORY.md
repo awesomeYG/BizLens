@@ -284,6 +284,21 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - AnomalyService 中的 `DetectAnomaly` 自动使用 BaselineService 获取基线，结合实际值做偏离检测
   - 所有服务初始化完成后在 main.go 中调用 `SetDataDependencies` 注入依赖
 
+### 统一告警与通知模块架构
+- Date: 2026-03-26
+- Context: Agent 在执行告警与通知模块合并重构时发现
+- Category: 代码结构
+- Instructions:
+  - 后端统一 Handler：`backend/internal/handler/unified_alert_handler.go`
+  - 合并了 AlertHandler 和 NotificationRuleHandler 的功能
+  - AlertTriggerLog 模型增加了 sourceType 字段（quick_alert / auto_rule）
+  - 统一路由：/api/tenants/{id}/alerts[?type=quick_alert|auto_rule]
+  - 支持 toggle、trigger、parse-nl 等统一操作
+  - 前端统一页面：/alerts，通过 Tab 区分"快速告警"和"自动规则"
+  - 前端类型定义在 frontend/lib/im/types.ts：UnifiedAlertItem、UnifiedAlertCreateRequest
+  - 旧的 /alerts/config 和 /im/rules 页面已改为重定向到 /alerts
+  - 设计文档：.monkeycode/specs/unified-alert-notification/requirements.md
+
 ### 观测中心（业务健康监控）架构
 - Date: 2026-03-26
 - Context: Agent 在执行数据大屏重构时发现

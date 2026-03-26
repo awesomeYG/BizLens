@@ -144,6 +144,7 @@ type AlertTriggerLog struct {
 	Message     string    `gorm:"type:text" json:"message"`
 	Status      string    `gorm:"size:50;default:'sent'" json:"status"`
 	Error       string    `gorm:"type:text" json:"error,omitempty"`
+	SourceType  string    `gorm:"size:50;default:'quick_alert'" json:"sourceType"` // quick_alert / auto_rule
 	TriggeredAt time.Time `json:"triggeredAt"`
 	CreatedAt   time.Time `json:"createdAt"`
 

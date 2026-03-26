@@ -121,6 +121,8 @@ func main() {
 	schemaHandler := handler.NewSchemaHandler(dataSourceService)
 	notificationRuleService := service.NewNotificationRuleService(db, imService)
 	notificationRuleHandler := handler.NewNotificationRuleHandler(notificationRuleService)
+	// 统一告警 Handler（合并快速告警和自动规则）
+	unifiedAlertHandler := handler.NewUnifiedAlertHandler(alertService, notificationRuleService)
 	analysisService := service.NewAnalysisService(db)
 	analysisHandler := handler.NewAnalysisHandler(analysisService)
 	aiConfigService := service.NewAIConfigService(db)
@@ -326,40 +328,63 @@ func main() {
 			}
 		}
 
-		// /api/tenants/{tenantId}/alerts[/{eventId}[/trigger]] | /alerts/logs
+		// /api/tenants/{tenantId}/alerts[/{eventId}[/trigger]] | /alerts/logs | /alerts/parse-nl
+		// 统一告警路由：支持 ?type=quick_alert|auto_rule 筛选
 		if len(parts) >= 2 && parts[1] == "alerts" {
-			switch {
 			// GET /api/tenants/{id}/alerts/logs
-			case len(parts) == 3 && parts[2] == "logs" && r.Method == http.MethodGet:
+			if len(parts) == 3 && parts[2] == "logs" && r.Method == http.MethodGet {
 				alertHandler.ListTriggerLogs(w, r)
 				return
+			}
+
+			// POST /api/tenants/{id}/alerts/parse-nl
+			if len(parts) == 3 && parts[2] == "parse-nl" && r.Method == http.MethodPost {
+				unifiedAlertHandler.ParseNLQuery(w, r)
+				return
+			}
+
+			// POST /api/tenants/{id}/alerts/{eventId}/toggle
+			if len(parts) == 4 && parts[3] == "toggle" && r.Method == http.MethodPost {
+				unifiedAlertHandler.ToggleUnifiedAlert(w, r)
+				return
+			}
 
 			// POST /api/tenants/{id}/alerts/{eventId}/trigger
-			case len(parts) == 4 && parts[3] == "trigger" && r.Method == http.MethodPost:
-				alertHandler.TriggerAlertEvent(w, r)
+			if len(parts) == 4 && parts[3] == "trigger" && r.Method == http.MethodPost {
+				unifiedAlertHandler.TriggerUnifiedAlert(w, r)
 				return
+			}
 
 			// GET/PUT/DELETE /api/tenants/{id}/alerts/{eventId}
-			case len(parts) == 3 && parts[2] != "logs":
+			if len(parts) == 3 && parts[2] != "logs" {
 				switch r.Method {
 				case http.MethodGet:
-					alertHandler.GetAlertEvent(w, r)
+					unifiedAlertHandler.GetUnifiedAlert(w, r)
 				case http.MethodPut:
-					alertHandler.UpdateAlertEvent(w, r)
+					unifiedAlertHandler.UpdateUnifiedAlert(w, r)
 				case http.MethodDelete:
-					alertHandler.DeleteAlertEvent(w, r)
+					unifiedAlertHandler.DeleteUnifiedAlert(w, r)
 				default:
 					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				}
 				return
+			}
 
 			// GET/POST /api/tenants/{id}/alerts
-			case len(parts) == 2:
+			if len(parts) == 2 {
+				// 检查是否使用统一 Handler（有 type 参数时）
+				if r.Method == http.MethodGet && r.URL.Query().Get("type") != "" {
+					unifiedAlertHandler.ListUnifiedAlerts(w, r)
+					return
+				}
+				if r.Method == http.MethodPost {
+					unifiedAlertHandler.CreateUnifiedAlert(w, r)
+					return
+				}
+				// 旧版 GET（无 type 参数）保持兼容
 				switch r.Method {
 				case http.MethodGet:
 					alertHandler.ListAlertEvents(w, r)
-				case http.MethodPost:
-					alertHandler.CreateAlertEvent(w, r)
 				default:
 					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				}
