@@ -412,6 +412,17 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
   const manualStopRef = useRef(false);
   /** 标记在 loading 期间有消息变更需要保存 */
   const pendingSaveDuringLoadingRef = useRef(false);
+  /** 跟踪最新 messages / activeConversationId，供卸载 cleanup 使用 */
+  const latestMessagesRef = useRef(messages);
+  const latestConversationIdRef = useRef(activeConversationId);
+
+  // 同步 ref 到最新值，确保卸载 cleanup 能拿到最新状态
+  useEffect(() => {
+    latestMessagesRef.current = messages;
+  }, [messages]);
+  useEffect(() => {
+    latestConversationIdRef.current = activeConversationId;
+  }, [activeConversationId]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -436,6 +447,71 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
       abortControllerRef.current?.abort();
     };
   }, []);
+
+  /**
+   * 组件卸载时（路由切换等），使用 sendBeacon 将未保存的消息同步持久化到后端。
+   * sendBeacon 是浏览器原生 API，专为页面卸载/导航场景设计，不会被路由切换中断。
+   */
+  useEffect(() => {
+    return () => {
+      const conversationId = latestConversationIdRef.current;
+      const currentMessages = latestMessagesRef.current;
+      if (!conversationId) return;
+
+      // 清除尚未执行的防抖定时器
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+
+      const persistedMessages = toPersistedMessages(currentMessages);
+      const signature = computeMessageSignature(persistedMessages);
+      // 签名无变化说明已保存过，无需重复保存
+      if (signature === lastSavedSignatureRef.current) return;
+
+      const token = getAccessToken();
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
+      const url = `${apiBase}/tenants/${tenantId}/chat-conversations/${conversationId}`;
+      const payload = JSON.stringify({
+        title: buildConversationTitle(persistedMessages),
+        messages: persistedMessages,
+      });
+
+      // 优先使用 sendBeacon：浏览器保证在页面卸载时完成发送
+      if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+        const headers: Record<string, string> = { type: "application/json" };
+        if (token) {
+          // sendBeacon 不支持自定义 header，改用带 Authorization 的 fetch keepalive 作为 fallback
+          try {
+            fetch(url, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: payload,
+              keepalive: true,
+            }).catch(() => { /* 静默：卸载后无法处理错误 */ });
+          } catch {
+            // 静默处理
+          }
+          return;
+        }
+        // 无 token 时直接用 sendBeacon（不需要 Authorization header）
+        const blob = new Blob([payload], headers);
+        navigator.sendBeacon(url, blob);
+      } else {
+        // 不支持 sendBeacon 的环境退回到同步 XMLHttpRequest
+        try {
+          const xhr = new XMLHttpRequest();
+          xhr.open("PUT", url, false); // 同步请求
+          xhr.setRequestHeader("Content-Type", "application/json");
+          if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+          xhr.send(payload);
+        } catch {
+          // 静默处理
+        }
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId]);
 
   // 加载个性化推荐问题
   // 策略：等 conversations 加载完成后（historyLoading=false）再发起一次请求
