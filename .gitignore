@@ -28,3 +28,6 @@ backend/uploads/demo/
 
 # Runtime PID files
 *.pid
+
+# Local scratch files (curl/debug)
+.tmp-*

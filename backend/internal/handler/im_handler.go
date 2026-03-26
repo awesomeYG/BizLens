@@ -68,12 +68,12 @@ func parseTenantIDStrict(r *http.Request) (string, int, string) {
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	// 204/304 按规范不应包含响应体
 	if status == http.StatusNoContent || status == http.StatusNotModified {
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
 }
 

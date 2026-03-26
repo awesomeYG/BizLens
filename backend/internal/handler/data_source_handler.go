@@ -5,6 +5,7 @@ import (
 	"ai-bi-server/internal/service"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -31,7 +32,16 @@ func (h *DataSourceHandler) ListDataSources(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// 隐藏敏感信息，并附加解析后的 schema 信息
+	includeTablesInfo := false
+	if v := r.URL.Query().Get("includeTablesInfo"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			includeTablesInfo = b
+		} else if v == "1" {
+			includeTablesInfo = true
+		}
+	}
+
+	// 隐藏敏感信息；tablesInfo 默认不返回，避免列表接口过慢导致前端超时/代理断连
 	type ColumnInfo struct {
 		Field    string `json:"field"`
 		Type     string `json:"type"`
@@ -58,9 +68,8 @@ func (h *DataSourceHandler) ListDataSources(w http.ResponseWriter, r *http.Reque
 			"lastSyncAt":  ds.LastSyncAt,
 		}
 
-		// 解析 SchemaInfo，附加表结构信息（不查询 recordCount，避免列表页阻塞）
-		// recordCount 仅在详情页单独获取，避免列表 API 访问远程数据库造成长时间等待
-		if ds.SchemaInfo != "" {
+		// tablesInfo 为可选字段：仅在 includeTablesInfo=true 时附加，避免返回体过大/解析耗时
+		if includeTablesInfo && ds.SchemaInfo != "" {
 			schema, err := service.DeserializeSchemaInfo(ds.SchemaInfo)
 			if err == nil {
 				tables, _ := schema["tables"].([]interface{})
