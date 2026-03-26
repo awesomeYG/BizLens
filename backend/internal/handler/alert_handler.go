@@ -144,7 +144,7 @@ func (h *AlertHandler) TriggerAlertEvent(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	log, err := h.alertService.TriggerEvent(tenantID, eventID, req.ActualValue)
+	log, err := h.alertService.TriggerEvent(tenantID, eventID, req.ActualValue, "quick_alert")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

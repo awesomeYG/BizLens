@@ -64,7 +64,12 @@ func (s *AlertService) DeleteEvent(tenantID, id string) error {
 }
 
 // TriggerEvent 手动触发告警（也可被定时任务调用）
-func (s *AlertService) TriggerEvent(tenantID, eventID string, actualValue float64) (*model.AlertTriggerLog, error) {
+// sourceType: 告警来源类型（quick_alert / auto_rule），默认为 quick_alert
+func (s *AlertService) TriggerEvent(tenantID, eventID string, actualValue float64, sourceType string) (*model.AlertTriggerLog, error) {
+	if sourceType == "" {
+		sourceType = "quick_alert"
+	}
+
 	event, err := s.GetEvent(tenantID, eventID)
 	if err != nil {
 		return nil, err
@@ -103,6 +108,7 @@ func (s *AlertService) TriggerEvent(tenantID, eventID string, actualValue float6
 		Threshold:   event.Threshold,
 		Message:     event.Message,
 		Status:      "sent",
+		SourceType:  sourceType,
 		TriggeredAt: now,
 	}
 
