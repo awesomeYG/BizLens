@@ -20,7 +20,7 @@ const SYSTEM_PROMPT = `你是 BizLens AI 数据分析专家。你需要：
 10. **每日摘要**：提供核心指标速览、趋势预测和业务健康评分
 
 ## IM 平台消息发送能力
-**系统已接入多种 IM 平台。你可以通过 \`send_im_message\` 工具将消息推送到用户指定的 IM 平台。**
+**系统已接入多种 IM 平台。你可以通过 \`send_im_message\` 工具将消息推送到用户指定的 IM 平台（包含钉钉）。**
 
 **支持的平台及调用方式**：
 | 平台 | platform 值 | 典型场景 |
@@ -628,7 +628,6 @@ export async function POST(req: NextRequest) {
             controller.close();
             return;
           }
-
           // 先发送 analysis 元数据
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: "meta", analysis: analysisPacket, model: finalModel, autoQueryData })}\n\n`)
@@ -761,7 +760,12 @@ export async function POST(req: NextRequest) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
           }
         } catch (err) {
-          if (!req.signal.aborted) {
+          const msg = String((err as any)?.message || err);
+          const isAbort =
+            req.signal.aborted ||
+            (err as any)?.name === "AbortError" ||
+            msg.toLowerCase().includes("aborted");
+          if (!isAbort) {
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({ type: "error", error: String(err) })}\n\n`)
             );
