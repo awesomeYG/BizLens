@@ -288,6 +288,102 @@ func (h *IMHandler) SendNotification(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// SendIMMessageRequest 内部发送 IM 消息请求体（供 AI Tool Calling 调用）
+type SendIMMessageRequest struct {
+	TenantID string `json:"tenantId"`
+	Platform string `json:"platform"` // 平台名：dingtalk/feishu/wecom/slack/telegram/discord，AI 根据用户需求选择
+	Content  string `json:"content"`
+	Markdown bool   `json:"markdown"`
+}
+
+// platformDisplayNames 平台显示名称映射
+var platformDisplayNames = map[string]string{
+	"dingtalk": "钉钉",
+	"feishu":   "飞书",
+	"wecom":    "企业微信",
+	"slack":    "Slack",
+	"telegram": "Telegram",
+	"discord":  "Discord",
+}
+
+// SendIMMessage POST /internal/send-im
+// AI 通过 Tool Calling 调用的内部接口，自动查找已启用的目标平台配置并发送消息
+func (h *IMHandler) SendIMMessage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "仅支持 POST")
+		return
+	}
+
+	var req SendIMMessageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "请求体解析失败")
+		return
+	}
+
+	if req.TenantID == "" || req.Content == "" {
+		writeError(w, http.StatusBadRequest, "tenantId 和 content 必填")
+		return
+	}
+
+	platform := strings.TrimSpace(strings.ToLower(req.Platform))
+	if platform == "" {
+		writeError(w, http.StatusBadRequest, "platform 必填（如 dingtalk/feishu/wecom/slack/telegram/discord）")
+		return
+	}
+
+	// 查找已启用的目标平台配置
+	configs, err := h.imService.ListConfigs(req.TenantID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var targetCfg *model.IMConfig
+	for i := range configs {
+		if configs[i].Enabled && strings.EqualFold(string(configs[i].Type), platform) {
+			targetCfg = &configs[i]
+			break
+		}
+	}
+
+	if targetCfg == nil {
+		displayName := platformDisplayNames[platform]
+		if displayName == "" {
+			displayName = platform
+		}
+		writeError(w, http.StatusNotFound, "未找到已启用的"+displayName+"配置")
+		return
+	}
+
+	records, err := h.imService.SendNotification(
+		req.TenantID,
+		[]string{targetCfg.ID},
+		"tool_call",
+		"",
+		req.Content,
+		req.Markdown,
+	)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	record := records[0]
+	if record.Status == model.NotifySent {
+		displayName := platformDisplayNames[platform]
+		if displayName == "" {
+			displayName = platform
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success":  true,
+			"message":  "消息已发送到" + displayName,
+			"platform": displayName,
+		})
+	} else {
+		writeError(w, http.StatusInternalServerError, record.Error)
+	}
+}
+
 // ListNotifications GET /api/tenants/{id}/notifications
 func (h *IMHandler) ListNotifications(w http.ResponseWriter, r *http.Request) {
 	tenantID, code, msg := parseTenantIDStrict(r)

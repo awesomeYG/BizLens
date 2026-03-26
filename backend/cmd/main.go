@@ -219,6 +219,11 @@ func main() {
 		wsHandler.HandleWebSocket(w, r)
 	})
 
+	// AI Tool Calling 内部接口：发送 IM 消息（无鉴权，通过后端内部调用）
+	mux.HandleFunc("/internal/send-im", func(w http.ResponseWriter, r *http.Request) {
+		imHandler.SendIMMessage(w, r)
+	})
+
 	// 认证路由：/api/auth/[register|login|logout|refresh|me|change-password]
 	mux.HandleFunc("/api/auth/", func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/api/auth/")

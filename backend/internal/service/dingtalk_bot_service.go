@@ -229,7 +229,7 @@ func stripActionBlocks(content string) string {
 	// 先去除 <think>...</think> 思考标签
 	result := strings.TrimSpace(regexp.MustCompile(`<think>[\s\S]*?</think>`).ReplaceAllString(content, ""))
 
-	blockTypes := []string{"dashboard_config", "alert_config", "notification_rule", "datasource_config", "report_config", "direct_message", "rca_request"}
+	blockTypes := []string{"dashboard_config", "alert_config", "notification_rule", "datasource_config", "report_config", "rca_request"}
 	for _, bt := range blockTypes {
 		for {
 			start := strings.Index(result, "```"+bt)

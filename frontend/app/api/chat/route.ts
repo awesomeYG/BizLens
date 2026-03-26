@@ -19,36 +19,39 @@ const SYSTEM_PROMPT = `你是 BizLens AI 数据分析专家。你需要：
 9. **根因分析**：当指标异常时自动下钻分析原因（维度分解、同比环比、关联分析）
 10. **每日摘要**：提供核心指标速览、趋势预测和业务健康评分
 
-## 钉钉已集成（重要）
-**系统已配置钉钉机器人，用户可以直接说"给钉钉发消息"、"发到钉钉"、"把你说的发过去"等指令发送消息。**
-当用户要求将当前对话中的内容发送到钉钉时，**必须**按以下格式输出 `direct_message` JSON 代码块，系统会自动发送：
-**严禁**在回复中声称"已发送"或"正在发送"，只能输出代码块让系统自动处理。
+## IM 平台消息发送能力
+**系统已接入多种 IM 平台。你可以通过 \`send_im_message\` 工具将消息推送到用户指定的 IM 平台。**
 
-\`\`\`direct_message
-{
-  "platform": "dingtalk",
-  "content": "要发送的消息内容（简洁明了，去除 Markdown 格式）",
-  "markdown": false
-}
-\`\`\`
+**支持的平台及调用方式**：
+| 平台 | platform 值 | 典型场景 |
+|------|-------------|---------|
+| 钉钉 | dingtalk | 企业内部，中国用户常用 |
+| 飞书 | feishu | 企业内部，字节跳动生态 |
+| 企业微信 | wecom | 企业内部，微信生态 |
+| Slack | slack | 国际化团队 |
+| Telegram | telegram | 个人/群组通知 |
+| Discord | discord | 社区/游戏相关 |
+
+**使用场景**：
+- 用户明确要求"发到钉钉"、"发飞书"、"推送到企业微信"等
+- 用户说"发到 IM"、"发个消息"、"推送给团队"，此时根据对话上下文判断合适平台
+- 你判断对话内容值得同步到某个平台时（如重要数据摘要、告警触发、报表生成成功等）
+
+**使用方式**：直接调用 \`send_im_message\` 工具，指定 platform 和 content。系统会自动查找该租户下已配置并启用的对应平台发送，无需用户确认。
 
 **示例**：
 用户："把刚才说的发到钉钉"
-AI 回复应输出：
-好的，以下是今日销售情况摘要...
-（自然语言回复内容）
-\`\`\`direct_message
-{
-  "platform": "dingtalk",
-  "content": "【今日销售概览】\n总销售额：12.8万元\n订单量：156单\n转化率：3.2%\nTOP商品：无线蓝牙耳机（23件）",
-  "markdown": false
-}
-\`\`\`
+你调用工具：
+- platform: "dingtalk"
+- content: "【今日销售概览】\n总销售额：12.8万元\n订单量：156单\n转化率：3.2%"
+- markdown: false
 
-**注意事项**：
-- content 字段要简洁，去除 Markdown 格式（如 **加粗**、## 标题 等）
-- content 中可使用换行符 \\n 分隔内容
-- 用户说"发到钉钉"但未明确内容时，将你之前的回复内容提取并发送
+**平台选择建议**：
+- 用户明确指定了平台 → 用指定的
+- 用户笼统说"发个消息"但对话中提到微信/钉钉 → 选对应平台
+- 用户没有指定且上下文不明确 → 优先选 dingtalk（国内最常用）
+
+工具执行后，你会收到结果，然后自然地告知用户"已发送到对应的 IM 平台"。
 
 ## 对话风格
 - 用简洁专业的中文回答
@@ -580,21 +583,43 @@ export async function POST(req: NextRequest) {
       baseURL: finalBaseURL,
     });
 
-    // 调用 AI API（流式输出）
-    const stream = await openai.chat.completions.create({
-      model: finalModel,
-      messages: [
-        { role: "system", content: systemContent },
-        ...formattedMessages,
-      ],
-      max_tokens: modelConfig.maxTokens,
-      temperature: modelConfig.temperature,
-      stream: true,
-    }, {
-      signal: req.signal,
-    });
+    // 定义 send_im_message 工具（通用 IM 发送）
+    const tools: OpenAI.Chat.ChatCompletionTool[] = [
+      {
+        type: "function",
+        function: {
+          name: "send_im_message",
+          description: "发送即时消息到 IM 平台（钉钉、飞书、企业微信等）。当你想把对话中的内容主动推送给用户时调用此工具。系统会根据你指定的平台自动查找已配置并发送，无需用户确认。",
+          parameters: {
+            type: "object",
+            properties: {
+              platform: {
+                type: "string",
+                description: "目标 IM 平台，取值：dingtalk（钉钉）、feishu（飞书）、wecom（企业微信）、slack、telegram、discord。根据用户需求或对话上下文选择最合适的平台。",
+                enum: ["dingtalk", "feishu", "wecom", "slack", "telegram", "discord"],
+              },
+              content: {
+                type: "string",
+                description: "要发送的消息内容，应简洁明了，去除 Markdown 格式标记",
+              },
+              markdown: {
+                type: "boolean",
+                description: "是否使用 Markdown 格式，默认为 false",
+              },
+            },
+            required: ["platform", "content"],
+          },
+        },
+      },
+    ];
 
-    // 构造 SSE 响应流
+    // 构建初始消息列表（包含 system + user + assistant 的历史）
+    const allMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      { role: "system", content: systemContent },
+      ...formattedMessages,
+    ];
+
+    // 调用 AI API（带工具支持）
     const encoder = new TextEncoder();
     const readable = new ReadableStream({
       async start(controller) {
@@ -603,21 +628,135 @@ export async function POST(req: NextRequest) {
             controller.close();
             return;
           }
+
           // 先发送 analysis 元数据
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: "meta", analysis: analysisPacket, model: finalModel, autoQueryData })}\n\n`)
           );
+
+          // 第一阶段：流式输出 AI 回复，同时收集 tool_calls
+          const stream = await openai.chat.completions.create({
+            model: finalModel,
+            messages: allMessages,
+            max_tokens: modelConfig.maxTokens,
+            temperature: modelConfig.temperature,
+            tools,
+            stream: true,
+          }, {
+            signal: req.signal,
+          });
+
+          let toolCallId = "";
+          let toolCallArgs = "";
+          let hasToolCall = false;
+          let assistantContent = "";
+
           for await (const chunk of stream) {
-            if (req.signal.aborted) {
-              break;
-            }
-            const delta = chunk.choices[0]?.delta?.content;
-            if (delta) {
+            if (req.signal.aborted) break;
+
+            const delta = chunk.choices[0]?.delta;
+
+            // 收集文本内容
+            if (delta?.content) {
+              assistantContent += delta.content;
               controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ type: "delta", content: delta })}\n\n`)
+                encoder.encode(`data: ${JSON.stringify({ type: "delta", content: delta.content })}\n\n`)
               );
             }
+
+            // 收集 tool_call 片段
+            if (delta?.tool_calls && delta.tool_calls.length > 0) {
+              hasToolCall = true;
+              const tc = delta.tool_calls[0];
+              if (tc.id) toolCallId = tc.id;
+              if (tc.function?.arguments) {
+                toolCallArgs += tc.function.arguments;
+              }
+            }
           }
+
+          // 第二阶段：如果有 tool_call，执行工具并继续
+          if (hasToolCall && toolCallId && toolCallArgs && !req.signal.aborted) {
+            // 发送 tool_call 开始信号
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: "tool_call", toolName: "send_im_message", toolCallId })}\n\n`)
+            );
+
+            // 解析参数
+            let toolArgs: { platform?: string; content?: string; markdown?: boolean } = {};
+            try {
+              toolArgs = JSON.parse(toolCallArgs);
+            } catch {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: "error", error: "工具参数解析失败" })}\n\n`)
+              );
+              controller.close();
+              return;
+            }
+
+            // 调用后端接口发送 IM 消息
+            const backendBase = process.env.BACKEND_INTERNAL_URL || "http://localhost:3001";
+            let toolResult = { success: false, message: "发送失败" };
+            try {
+              const sendRes = await fetch(`${backendBase}/internal/send-im`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  tenantId: tenantId,
+                  platform: toolArgs.platform || "",
+                  content: toolArgs.content || "",
+                  markdown: toolArgs.markdown || false,
+                }),
+                signal: AbortSignal.timeout(30000),
+              });
+              if (sendRes.ok) {
+                const data = await sendRes.json();
+                toolResult = { success: true, message: data.message || "消息已发送" };
+              } else {
+                const errData = await sendRes.json().catch(() => null);
+                toolResult = { success: false, message: errData?.error || `HTTP ${sendRes.status}` };
+              }
+            } catch (err) {
+              toolResult = { success: false, message: String(err) };
+            }
+
+            // 发送 tool_call 结果
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: "tool_result", toolCallId, result: toolResult })}\n\n`)
+            );
+
+            // 第三阶段：把 tool 结果反馈给 AI，让它生成自然语言确认
+            const followUpMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+              ...allMessages,
+              { role: "assistant", content: assistantContent },
+              {
+                role: "tool" as const,
+                tool_call_id: toolCallId,
+                content: JSON.stringify(toolResult),
+              },
+            ];
+
+            const followUp = await openai.chat.completions.create({
+              model: finalModel,
+              messages: followUpMessages,
+              max_tokens: 500,
+              temperature: 0.3,
+              stream: true,
+            }, {
+              signal: req.signal,
+            });
+
+            for await (const chunk of followUp) {
+              if (req.signal.aborted) break;
+              const delta = chunk.choices[0]?.delta?.content;
+              if (delta) {
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ type: "delta", content: delta })}\n\n`)
+                );
+              }
+            }
+          }
+
           if (!req.signal.aborted) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
           }
