@@ -101,7 +101,7 @@ func (s *DashboardRefreshService) executeAndBroadcast(sub *DashboardSubscription
 		DataSources: sub.DataSources,
 	}
 
-	result, err := s.autoQueryService.AutoQuery(req)
+	result, err := s.autoQueryService.AutoQuery(sub.TenantID, req)
 	if err != nil {
 		log.Printf("AutoQuery failed for dashboard %s: %v", sub.DashboardID, err)
 		return

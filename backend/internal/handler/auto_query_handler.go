@@ -31,7 +31,7 @@ func (h *AutoQueryHandler) AutoQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.autoQueryService.AutoQuery(req)
+	result, err := h.autoQueryService.AutoQuery(tenantID, req)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"success": false,

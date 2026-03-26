@@ -85,7 +85,7 @@ func NewAutoQueryService(dataSourceService *DataSourceService) *AutoQueryService
 }
 
 // AutoQuery 根据数据源上下文自动生成并执行聚合查询
-func (s *AutoQueryService) AutoQuery(req AutoQueryRequest) (*AutoQueryResult, error) {
+func (s *AutoQueryService) AutoQuery(tenantID string, req AutoQueryRequest) (*AutoQueryResult, error) {
 	result := &AutoQueryResult{
 		TotalCount:    make(map[string]interface{}),
 		Distributions: make([]QueryDistribution, 0),
@@ -95,7 +95,7 @@ func (s *AutoQueryService) AutoQuery(req AutoQueryRequest) (*AutoQueryResult, er
 
 	for _, ds := range req.DataSources {
 		// 获取数据源模型
-		dataSource, err := s.dataSourceService.GetDataSource(ds.ID, "")
+		dataSource, err := s.dataSourceService.GetDataSource(ds.ID, tenantID)
 		if err != nil || dataSource == nil {
 			continue
 		}

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"reflect"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -69,9 +70,44 @@ func main() {
 		if f == nil {
 			return
 		}
-		_, isZero := f.ValueOf(tx.Statement.Context, tx.Statement.ReflectValue)
-		if isZero {
-			tx.Statement.SetColumn("ID", uuid.NewString())
+		rv := tx.Statement.ReflectValue
+		if !rv.IsValid() {
+			return
+		}
+
+		// 支持单条 Create(&struct) 与批量 Create(&[]struct)
+		switch rv.Kind() {
+		case reflect.Slice, reflect.Array:
+			for i := 0; i < rv.Len(); i++ {
+				elem := rv.Index(i)
+				if elem.Kind() == reflect.Ptr {
+					if elem.IsNil() {
+						continue
+					}
+					elem = elem.Elem()
+				}
+				if elem.Kind() != reflect.Struct {
+					continue
+				}
+				_, isZero := f.ValueOf(tx.Statement.Context, elem)
+				if isZero {
+					_ = f.Set(tx.Statement.Context, elem, uuid.NewString())
+				}
+			}
+		default:
+			if rv.Kind() == reflect.Ptr {
+				if rv.IsNil() {
+					return
+				}
+				rv = rv.Elem()
+			}
+			if rv.Kind() != reflect.Struct {
+				return
+			}
+			_, isZero := f.ValueOf(tx.Statement.Context, rv)
+			if isZero {
+				_ = f.Set(tx.Statement.Context, rv, uuid.NewString())
+			}
 		}
 	})
 
