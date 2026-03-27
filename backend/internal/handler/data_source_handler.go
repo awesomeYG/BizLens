@@ -60,18 +60,19 @@ func (h *DataSourceHandler) ListDataSources(w http.ResponseWriter, r *http.Reque
 	responses := make([]map[string]interface{}, 0, len(dataSources))
 	for _, ds := range dataSources {
 		item := map[string]interface{}{
-			"id":          ds.ID,
-			"tenantId":    ds.TenantID,
-			"type":        ds.Type,
-			"name":        ds.Name,
-			"description": ds.Description,
-			"host":        ds.Host,
-			"port":        ds.Port,
-			"database":    ds.Database,
-			"username":    ds.Username,
-			"ssl":         ds.SSL,
-			"status":      ds.Status,
-			"lastSyncAt":  ds.LastSyncAt,
+			"id":             ds.ID,
+			"tenantId":       ds.TenantID,
+			"type":           ds.Type,
+			"name":           ds.Name,
+			"description":    ds.Description,
+			"host":           ds.Host,
+			"port":           ds.Port,
+			"database":       ds.Database,
+			"username":       ds.Username,
+			"ssl":            ds.SSL,
+			"status":         ds.Status,
+			"lastSyncAt":     ds.LastSyncAt,
+			"schemaAnalyzed": ds.AIAnalysis != "",
 		}
 
 		// tablesInfo 为可选字段：仅在 includeTablesInfo=true 时附加，避免返回体过大/解析耗时

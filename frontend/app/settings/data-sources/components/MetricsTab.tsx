@@ -55,6 +55,7 @@ function normalizeDataSourceFromApi(raw: Record<string, unknown>): DataSourceCon
     name: String(raw.name ?? ""),
     description: raw.description ? String(raw.description) : undefined,
     status: raw.status as DataSourceConfig["status"],
+    schemaAnalyzed: raw.schemaAnalyzed === true,
     connection: nested
       ? { host: String(nested.host ?? ""), port: Number(nested.port ?? 0), database: String(nested.database ?? ""), username: "", password: "", ssl: false }
       : undefined,
