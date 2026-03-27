@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 type Config struct {
@@ -41,7 +42,14 @@ func Load() *Config {
 
 func (c *Config) DSN() string {
 	if c.UseSQLite {
-		return "file:/workspace/server/ai_bi.db?cache=shared"
+		sqlitePath := getEnv("SQLITE_DB_PATH", "/tmp/ai_bi.db")
+		if dir := filepath.Dir(sqlitePath); dir != "." {
+			// Ensure custom SQLite path is usable in local/dev envs.
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				sqlitePath = "/tmp/ai_bi.db"
+			}
+		}
+		return fmt.Sprintf("file:%s?cache=shared", sqlitePath)
 	}
 	return fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",

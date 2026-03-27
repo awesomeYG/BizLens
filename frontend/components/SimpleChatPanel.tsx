@@ -296,25 +296,8 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
 
       {/* Main content */}
       <div className="flex flex-col min-h-0 flex-1">
-        {/* Header - 放在滚动区外，固定在顶部 */}
-        <div className="shrink-0 border-b border-zinc-800/30 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-base font-semibold text-zinc-100">AI 数据分析师</h1>
-              <p className="text-xs text-zinc-500">
-                {(currentUser?.name || "智能洞察与分析建议") +
-                  (uploadedFiles.length > 0 ? ` | ${uploadedFiles.length} 个数据文件` : "")}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs text-zinc-500">在线</span>
-            </div>
-          </div>
-        </div>
-
         {/* Messages */}
-        <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto pt-6">
+        <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto pt-4">
             <div className="max-w-3xl mx-auto px-4 py-6 pb-12">
               {showWelcome ? (
                 <WelcomeScreen

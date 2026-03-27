@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import SimpleChatPanel from "@/components/SimpleChatPanel";
+import AppHeader from "@/components/AppHeader";
 import { getCurrentUser } from "@/lib/user-store";
 
 export default function ChatPage() {
@@ -34,6 +35,11 @@ export default function ChatPage() {
 
       {/* 主内容 */}
       <div className="relative z-10 flex flex-col flex-1 min-h-0">
+        <AppHeader
+          title="BizLens"
+          subtitle="AI 数据分析师"
+          showOnlineStatus
+        />
         <SimpleChatPanel />
       </div>
     </div>
