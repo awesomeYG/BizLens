@@ -605,16 +605,15 @@ export default function DatabaseConnectionTab() {
             暂无数据库连接。点击「新增数据库连接」添加。
           </div>
         ) : (
-          <table className="w-full min-w-[1000px] text-left text-sm">
+          <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="border-b border-zinc-800 bg-zinc-950/80 text-xs uppercase tracking-wide text-zinc-500">
               <tr>
                 <th className="px-4 py-3 font-medium">名称</th>
                 <th className="px-4 py-3 font-medium">类型</th>
                 <th className="px-4 py-3 font-medium">地址</th>
                 <th className="px-4 py-3 font-medium">库 / 路径</th>
-                <th className="px-4 py-3 font-medium">状态</th>
                 <th className="px-4 py-3 font-medium">AI 分析</th>
-                <th className="px-4 py-3 text-right font-medium w-52">操作</th>
+                <th className="px-4 py-3 text-right font-medium w-48">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -630,11 +629,6 @@ export default function DatabaseConnectionTab() {
                     <td className="px-4 py-3 text-zinc-400">{host}</td>
                     <td className="max-w-[200px] truncate px-4 py-3 text-zinc-400" title={database}>
                       {database}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-200">
-                        {row.status || "connected"}
-                      </span>
                     </td>
                     <td className="px-4 py-3">
                       {row.schemaAnalyzed ? (

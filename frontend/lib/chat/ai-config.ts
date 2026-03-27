@@ -23,6 +23,7 @@ export function getModelConfig(modelType?: string): AIModelConfig {
 
   switch (resolvedModelType) {
     case "minimax":
+    case "minmax":
       return { model: process.env.MINIMAX_MODEL || "MiniMax-M2", maxTokens: 2000, temperature: 0.7 };
     case "claude":
       return { model: "claude-3-sonnet-20240229", maxTokens: 2000, temperature: 0.7 };
@@ -43,6 +44,7 @@ export function getModelConfig(modelType?: string): AIModelConfig {
 export function getDefaultBaseURL(modelType?: string): string | undefined {
   switch (modelType) {
     case "minimax":
+    case "minmax":
       return "https://api.minimax.io/v1";
     case "deepseek":
       return "https://api.deepseek.com/v1";
