@@ -36,6 +36,17 @@ func getUserIDFromContext(r *http.Request) string {
 	return r.Context().Value("userID").(string)
 }
 
+// GetSystemStatus 获取系统状态（无需认证）
+// GET /api/auth/status
+func (h *AuthHandler) GetSystemStatus(w http.ResponseWriter, r *http.Request) {
+	isActivated, systemName, version := h.authService.ValidateLicense()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"unactivated": !isActivated,
+		"systemName":  systemName,
+		"version":     version,
+	})
+}
+
 // Register 处理注册请求
 // POST /api/auth/register
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -109,6 +120,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		},
 		Tokens: tokens,
 	}
+
+	isActivated, systemName, version := h.authService.ValidateLicense()
+	response.Unactivated = !isActivated
+	response.SystemName = systemName
+	response.Version = version
 
 	writeJSON(w, http.StatusOK, response)
 }
@@ -262,4 +278,47 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "密码修改成功"})
+}
+
+// Activate 处理激活请求
+// POST /api/auth/activate
+func (h *AuthHandler) Activate(w http.ResponseWriter, r *http.Request) {
+	var req dto.ActivateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "请求体解析失败")
+		return
+	}
+
+	if req.LicenseKey == "" || req.Name == "" || req.Email == "" || req.Password == "" {
+		writeError(w, http.StatusBadRequest, "licenseKey, name, email, password 必填")
+		return
+	}
+
+	if len(req.Password) < 6 {
+		writeError(w, http.StatusBadRequest, "密码长度至少 6 位")
+		return
+	}
+
+	user, tokens, err := h.authService.Activate(&req)
+	if err != nil {
+		writeJSON(w, http.StatusOK, dto.ActivateResponse{
+			Activated: false,
+			Error:     err.Error(),
+			Code:      "ACTIVATION_FAILED",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, dto.ActivateResponse{
+		Activated: true,
+		User: &dto.UserResponse{
+			ID:        user.ID,
+			TenantID:  user.TenantID,
+			Name:      user.Name,
+			Email:     user.Email,
+			Role:      user.Role,
+			CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		},
+		Tokens: tokens,
+	})
 }

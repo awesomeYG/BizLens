@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -57,9 +58,6 @@ func NewAuthService(db *gorm.DB, cfg *config.Config) (*AuthService, error) {
 const (
 	defaultTenantID   = "default"
 	defaultTenantName = "BizLens"
-	adminEmail        = "koala@qq.com"
-	adminName         = "管理员"
-	adminPassword     = "admin123"
 )
 
 // EnsureDefaultTenant 确保默认组织存在
@@ -84,55 +82,14 @@ func (s *AuthService) EnsureDefaultTenant() error {
 	})
 }
 
-// EnsureAdminAccount 确保超管账号存在
-func (s *AuthService) EnsureAdminAccount() error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		var user model.User
-		if err := tx.Where("email = ?", adminEmail).First(&user).Error; err == nil {
-			return nil // 账号已存在
-		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("查询超管账号失败：%w", err)
-		}
-
-		// 确保默认组织存在
-		if err := s.EnsureDefaultTenant(); err != nil {
-			return err
-		}
-
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(adminPassword), bcrypt.DefaultCost)
-		if err != nil {
-			return fmt.Errorf("超管账号密码加密失败：%w", err)
-		}
-
-		user = model.User{
-			ID:           uuid.New().String(),
-			TenantID:     defaultTenantID,
-			Name:         adminName,
-			Email:        adminEmail,
-			PasswordHash: string(hashedPassword),
-			Role:         "owner",
-		}
-
-		if err := tx.Create(&user).Error; err != nil {
-			return fmt.Errorf("创建超管账号失败：%w", err)
-		}
-
-		return nil
-	})
-}
-
-// EnsureDemoAccount 确保开发环境存在可用的演示账号（兼容旧调用）
-func (s *AuthService) EnsureDemoAccount() error {
-	// 先确保默认组织存在
-	if err := s.EnsureDefaultTenant(); err != nil {
-		return err
-	}
-	// 再确保超管账号存在
-	return s.EnsureAdminAccount()
-}
-
 // Register 用户注册（所有用户属于默认组织）
+// 系统未激活时禁止注册
 func (s *AuthService) Register(req *dto.RegisterRequest) (*model.User, *dto.Tokens, error) {
+	// 检查激活状态
+	if !s.IsActivated() {
+		return nil, nil, errors.New("系统尚未激活，请先激活")
+	}
+
 	// 检查邮箱是否已存在
 	var existingUser model.User
 	if err := s.db.Where("email = ?", req.Email).Limit(1).First(&existingUser).Error; err == nil {
@@ -427,4 +384,274 @@ func (s *AuthService) ValidateToken(tokenString string) (*Claims, error) {
 	}
 
 	return claims, nil
+}
+
+// ============================================================
+// 授权码激活相关方法
+// ============================================================
+
+// IsActivated 检查系统是否已激活（至少有一个 owner 或 admin 用户）
+func (s *AuthService) IsActivated() bool {
+	var count int64
+	s.db.Model(&model.User{}).
+		Where("role IN ('owner', 'admin') AND deleted_at IS NULL").
+		Count(&count)
+	return count > 0
+}
+
+// Activate 系统激活（授权码激活）
+func (s *AuthService) Activate(req *dto.ActivateRequest) (*model.User, *dto.Tokens, error) {
+	// 1. 校验授权码格式
+	if !isValidLicenseKeyFormat(req.LicenseKey) {
+		return nil, nil, errors.New("授权码格式无效")
+	}
+
+	// 2. 比对环境变量 LICENSE_KEY
+	if req.LicenseKey != s.cfg.LicenseKey {
+		return nil, nil, errors.New("授权码无效")
+	}
+
+	// 3. 检查是否已激活
+	if s.IsActivated() {
+		return nil, nil, errors.New("系统已被激活，无需重复操作")
+	}
+
+	// 4. 检查用户数上限
+	if s.cfg.LicenseSeats > 0 {
+		var count int64
+		s.db.Model(&model.User{}).Where("deleted_at IS NULL").Count(&count)
+		if count >= int64(s.cfg.LicenseSeats) {
+			return nil, nil, errors.New("已达到授权用户数上限")
+		}
+	}
+
+	// 5. 检查邮箱是否已被注册
+	var existing model.User
+	if err := s.db.Where("email = ?", req.Email).First(&existing).Error; err == nil {
+		return nil, nil, errors.New("该邮箱已被注册")
+	}
+
+	// 6. 创建默认租户
+	if err := s.EnsureDefaultTenant(); err != nil {
+		return nil, nil, err
+	}
+
+	// 7. 创建 owner 用户
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, nil, fmt.Errorf("密码加密失败：%w", err)
+	}
+
+	user := &model.User{
+		ID:           uuid.New().String(),
+		TenantID:     defaultTenantID,
+		Name:         req.Name,
+		Email:        req.Email,
+		PasswordHash: string(hashedPassword),
+		Role:         "owner",
+	}
+
+	var tokens *dto.Tokens
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(user).Error; err != nil {
+			return err
+		}
+		var err2 error
+		tokens, err2 = s.generateTokens(tx, user.ID)
+		return err2
+	})
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return user, tokens, nil
+}
+
+// ValidateLicense 获取激活状态（供登录接口使用）
+func (s *AuthService) ValidateLicense() (bool, string, string) {
+	return s.IsActivated(), "BizLens", "1.0.0"
+}
+
+// ============================================================
+// 用户管理相关方法（管理员使用）
+// ============================================================
+
+// ListUsers 列出用户（支持租户筛选、关键字搜索、分页）
+func (s *AuthService) ListUsers(tenantID, keyword string, page, pageSize int) ([]model.User, int64, error) {
+	query := s.db.Model(&model.User{}).Where("deleted_at IS NULL")
+
+	if tenantID != "" {
+		query = query.Where("tenant_id = ?", tenantID)
+	}
+	if keyword != "" {
+		query = query.Where("name LIKE ? OR email LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+	}
+
+	var total int64
+	query.Count(&total)
+
+	var users []model.User
+	offset := (page - 1) * pageSize
+	if err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
+}
+
+// CreateUser 管理员创建用户
+func (s *AuthService) CreateUser(req *dto.CreateUserRequest) (*model.User, error) {
+	// 检查邮箱是否已被注册
+	var existing model.User
+	if err := s.db.Where("email = ?", req.Email).First(&existing).Error; err == nil {
+		return nil, errors.New("该邮箱已被注册")
+	}
+
+	// owner 不能通过此 API 创建
+	if req.Role == "owner" {
+		return nil, errors.New("无法创建 owner 角色")
+	}
+
+	// 检查用户数上限
+	if s.cfg.LicenseSeats > 0 {
+		var count int64
+		s.db.Model(&model.User{}).Where("deleted_at IS NULL").Count(&count)
+		if count >= int64(s.cfg.LicenseSeats) {
+			return nil, errors.New("已达到授权用户数上限")
+		}
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("密码加密失败：%w", err)
+	}
+
+	user := &model.User{
+		ID:           uuid.New().String(),
+		TenantID:     defaultTenantID,
+		Name:         req.Name,
+		Email:        req.Email,
+		PasswordHash: string(hashedPassword),
+		Role:         req.Role,
+	}
+
+	if err := s.db.Create(user).Error; err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+// AdminUpdateUser 管理员更新用户（支持角色）
+func (s *AuthService) AdminUpdateUser(userID, name, role string) error {
+	updates := map[string]interface{}{}
+	if name != "" {
+		updates["name"] = name
+	}
+	if role != "" && role != "owner" { // owner 角色不可被修改
+		updates["role"] = role
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	return s.db.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
+}
+
+// DeleteUser 删除用户
+func (s *AuthService) DeleteUser(userID string) error {
+	return s.db.Where("id = ?", userID).Delete(&model.User{}).Error
+}
+
+// ResetUserPassword 重置密码，返回新密码明文
+func (s *AuthService) ResetUserPassword(userID string) (string, error) {
+	newPassword := generateRandomPassword(12)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return "", fmt.Errorf("密码加密失败：%w", err)
+	}
+	err = s.db.Model(&model.User{}).Where("id = ?", userID).
+		Update("password_hash", string(hashedPassword)).Error
+	if err != nil {
+		return "", err
+	}
+	return newPassword, nil
+}
+
+// ToggleUserStatus 启用/禁用用户
+func (s *AuthService) ToggleUserStatus(userID string) (*model.User, bool, error) {
+	var user model.User
+	if err := s.db.Where("id = ?", userID).First(&user).Error; err != nil {
+		return nil, false, errors.New("用户不存在")
+	}
+
+	// 判断当前状态：如果有 LockedUntil 且未过期，则认为是禁用状态
+	isCurrentlyDisabled := user.LockedUntil != nil && time.Now().Before(*user.LockedUntil)
+
+	var updates map[string]interface{}
+	if isCurrentlyDisabled {
+		// 启用：清除锁定
+		updates = map[string]interface{}{
+			"locked_until":   nil,
+			"login_attempts": 0,
+		}
+	} else {
+		// 禁用：设置一个遥远的锁定时间（比如 100 年后）
+		farFuture := time.Now().AddDate(100, 0, 0)
+		updates = map[string]interface{}{
+			"locked_until": farFuture,
+		}
+	}
+
+	if err := s.db.Model(&user).Updates(updates).Error; err != nil {
+		return nil, false, err
+	}
+
+	// 重新加载
+	s.db.Where("id = ?", userID).First(&user)
+	return &user, !isCurrentlyDisabled, nil
+}
+
+// CountUsers 统计用户总数
+func (s *AuthService) CountUsers() (int64, error) {
+	var count int64
+	err := s.db.Model(&model.User{}).Where("deleted_at IS NULL").Count(&count).Error
+	return count, err
+}
+
+// DB 获取数据库连接（供其他服务使用）
+func (s *AuthService) DB() *gorm.DB {
+	return s.db
+}
+
+// generateRandomPassword 生成随机密码
+func generateRandomPassword(length int) string {
+	const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
+	b := make([]byte, length)
+	rand.Read(b)
+	for i := range b {
+		b[i] = chars[int(b[i])%len(chars)]
+	}
+	return string(b)
+}
+
+// isValidLicenseKeyFormat 校验授权码格式（XXXX-XXXX-XXXX-XXXX）
+func isValidLicenseKeyFormat(key string) bool {
+	if len(key) != 19 { // 16 chars + 3 hyphens
+		return false
+	}
+	parts := strings.Split(key, "-")
+	if len(parts) != 4 {
+		return false
+	}
+	for _, part := range parts {
+		if len(part) != 4 {
+			return false
+		}
+		for _, c := range part {
+			if !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+				return false
+			}
+		}
+	}
+	return true
 }

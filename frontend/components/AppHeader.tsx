@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 
@@ -82,8 +82,23 @@ export default function AppHeader({
     router.push("/auth/login");
   };
 
+  // 检查用户角色，admin/owner 显示后台管理入口
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("bizlens_user");
+      if (raw) {
+        const u = JSON.parse(raw);
+        if (u.role === "admin" || u.role === "owner") {
+          setIsAdmin(true);
+        }
+      }
+    } catch {}
+  }, []);
+
   /* 默认导航项 */
   const defaultNavItems: NavItem[] = [
+    ...(isAdmin ? [{ href: "/admin", label: "后台管理", iconPath: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" }] : []),
     { href: "/chat", label: "AI 对话" },
     { href: "/insights", label: "洞察" },
     { href: "/dashboards", label: "观测中心" },

@@ -5,6 +5,7 @@ import type {
   User,
   Tokens,
   RefreshTokenRequest,
+  ActivateResponse,
 } from "../types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
@@ -228,11 +229,44 @@ export async function updateUser(data: {
 /**
  * 修改密码
  */
+
+/**
+ * 获取系统状态（无需认证）
+ */
+export async function getSystemStatus(): Promise<{
+  unactivated: boolean;
+  systemName: string;
+  version: string;
+}> {
+  const response = await fetch(`${API_BASE_URL}/auth/status`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error("获取系统状态失败");
+  }
+  return response.json();
+}
 export async function changePassword(data: {
   oldPassword: string;
   newPassword: string;
 }): Promise<void> {
   return request("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * 系统激活
+ */
+export async function activate(data: {
+  licenseKey: string;
+  name: string;
+  email: string;
+  password: string;
+}): Promise<ActivateResponse> {
+  return request<ActivateResponse>("/auth/activate", {
     method: "POST",
     body: JSON.stringify(data),
   });
