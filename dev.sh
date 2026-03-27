@@ -247,10 +247,18 @@ start_backend() {
         go mod download
     fi
     
-    # 设置环境变量
+    # 设置环境变量（从 .env.local 读取）
     export USE_SQLITE="${USE_SQLITE:-true}"
     export SERVER_PORT="${SERVER_PORT:-3001}"
-    
+    export LICENSE_KEY="${LICENSE_KEY:-TEST-BIZL-0000-0001}"
+
+    # 从 .env.local 加载环境变量（如果存在）
+    if [ -f "$PROJECT_ROOT/.env.local" ]; then
+        set -a
+        source "$PROJECT_ROOT/.env.local"
+        set +a
+    fi
+
     if [ "$USE_SQLITE" = "true" ]; then
         log_info "数据库模式：SQLite"
     else
@@ -416,6 +424,9 @@ start_all() {
     fi
     echo ""
     echo -e "${YELLOW}按 Ctrl+C 停止所有服务${NC}"
+    echo ""
+    echo -e "${BLUE}[DEV]${NC} 测试授权码: ${GREEN}${LICENSE_KEY:-TEST-BIZL-0000-0001}${NC}"
+    echo -e "${BLUE}[DEV]${NC} 首次使用请访问 http://localhost:3000/auth/login 进行激活"
     echo ""
     
     # 捕获退出信号
