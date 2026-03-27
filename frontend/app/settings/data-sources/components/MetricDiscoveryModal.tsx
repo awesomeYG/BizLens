@@ -82,7 +82,7 @@ interface MetricDiscoveryModalProps {
   onDiscoverComplete: () => void;
 }
 
-type Step = "select" | "analyzing" | "preview" | "saving";
+type Step = "select" | "schemaAnalyzing" | "analyzing" | "preview" | "saving";
 
 export default function MetricDiscoveryModal({
   open,
@@ -144,13 +144,39 @@ export default function MetricDiscoveryModal({
   // 开始智能推荐
   const handleStartDiscovery = async () => {
     if (!selectedDsId) return;
-    setStep("analyzing");
     setError(null);
     setRecommendations([]);
     setSelectedIds(new Set());
 
+    const tenantId = getTenantId();
+
+    // 如果数据源尚未完成 AI Schema 分析，先自动触发分析
+    if (discoverContext && !discoverContext.schemaAnalyzed) {
+      setStep("schemaAnalyzing");
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 180000);
+        const analyzeResp = await fetch(
+          `/api/tenants/${tenantId}/data-sources/${selectedDsId}/schema/analyze`,
+          { method: "POST", headers: getAuthHeaders(), body: JSON.stringify({ mode: "full" }), signal: controller.signal }
+        );
+        clearTimeout(timeoutId);
+        if (!analyzeResp.ok) {
+          const err = await analyzeResp.json().catch(() => ({ error: "AI 分析失败" }));
+          throw new Error((err as { error: string }).error);
+        }
+        // 分析完成后刷新上下文
+        await checkDiscoverContext();
+      } catch (e) {
+        setError(`AI Schema 分析失败: ${(e as Error).message}。请检查 AI 配置是否正确后重试。`);
+        setStep("select");
+        return;
+      }
+    }
+
+    // 执行指标推荐
+    setStep("analyzing");
     try {
-      const tenantId = getTenantId();
       const resp = await fetch(
         `/api/tenants/${tenantId}/metrics/smart-recommend?dataSourceId=${selectedDsId}`,
         { method: "POST", headers: getAuthHeaders() }
@@ -326,11 +352,11 @@ export default function MetricDiscoveryModal({
                   {!discoverContext.schemaAnalyzed && (
                     <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
                       <div className="flex items-start gap-2">
-                        <span className="mt-0.5 shrink-0 text-amber-400">⚠️</span>
+                        <span className="mt-0.5 shrink-0 text-amber-400">💡</span>
                         <div>
                           <div className="font-medium">数据源尚未完成 AI Schema 分析</div>
                           <div className="mt-1 text-xs text-amber-200/80">
-                            指标发现功能依赖 AI 对表结构的语义理解。请先在左侧菜单点击「数据源设置」，选择当前数据源，点击「AI 分析」完成分析后，再回来使用指标发现功能。
+                            点击「开始发现」将自动触发 AI 分析，理解表和字段的业务语义后，再进行指标推荐。整个过程一气呵成，无需额外操作。
                           </div>
                         </div>
                       </div>
@@ -368,7 +394,30 @@ export default function MetricDiscoveryModal({
             </div>
           )}
 
-          {/* 步骤 2：AI 分析中 */}
+          {/* 步骤 2：AI Schema 分析中 */}
+          {step === "schemaAnalyzing" && (
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="relative mb-6">
+                <div className="h-16 w-16 animate-spin rounded-full border-4 border-zinc-700 border-t-cyan-500" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-lg">🧠</span>
+                </div>
+              </div>
+              <h3 className="mb-2 text-lg font-medium text-zinc-100">AI 正在分析数据源结构...</h3>
+              <p className="text-sm text-zinc-500">
+                正在理解表和字段的业务语义，完成后将自动开始指标发现
+              </p>
+              <div className="mt-4 flex items-center gap-2 text-xs text-zinc-500">
+                <span>理解表结构</span>
+                <span className="mx-2 text-zinc-700">→</span>
+                <span>推断字段语义</span>
+                <span className="mx-2 text-zinc-700">→</span>
+                <span>识别关键指标</span>
+              </div>
+            </div>
+          )}
+
+          {/* 步骤 3：AI 推荐分析中 */}
           {step === "analyzing" && (
             <div className="flex flex-col items-center justify-center py-16">
               <div className="relative mb-6">
@@ -392,7 +441,7 @@ export default function MetricDiscoveryModal({
             </div>
           )}
 
-          {/* 步骤 3：预览推荐结果 */}
+          {/* 步骤 4：预览推荐结果 */}
           {step === "preview" && (
             <div className="space-y-5">
               {/* 顶部统计 */}
@@ -508,7 +557,7 @@ export default function MetricDiscoveryModal({
             </div>
           )}
 
-          {/* 步骤 4：保存中 */}
+          {/* 步骤 5：保存中 */}
           {step === "saving" && (
             <div className="flex flex-col items-center justify-center py-16">
               <div className="mb-4 h-10 w-10 animate-spin rounded-full border-3 border-zinc-700 border-t-emerald-500" />
@@ -537,11 +586,10 @@ export default function MetricDiscoveryModal({
                 <button
                   type="button"
                   onClick={handleStartDiscovery}
-                  disabled={!selectedDsId || loading || (!!discoverContext && !discoverContext.schemaAnalyzed)}
+                  disabled={!selectedDsId || loading}
                   className="rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-                  title={!!discoverContext && !discoverContext.schemaAnalyzed ? "请先在数据源设置中完成 AI Schema 分析" : ""}
                 >
-                  {loading ? "检查中..." : (!!discoverContext && !discoverContext.schemaAnalyzed) ? "需先完成 AI 分析" : "开始发现"}
+                  {loading ? "检查中..." : "开始发现"}
                 </button>
               </>
             )}
