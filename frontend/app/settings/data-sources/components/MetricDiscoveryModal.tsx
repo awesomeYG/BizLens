@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { DataSourceConfig } from "@/lib/types";
 import { getAccessToken } from "@/lib/auth/api";
 import { getCurrentUser } from "@/lib/user-store";
@@ -28,15 +28,13 @@ export interface DiscoverContext {
   analyzedAt?: string;
   tableCount: number;
   availableTables: string[];
-  sampleReady: boolean;
+  hasAIAnalysis?: boolean;
 }
 
 /** 智能推荐响应 */
 export interface SmartRecommendResponse {
   recommendations: KeyMetricRecommendation[];
   totalCount: number;
-  analysisModel: string;
-  discoveredAt: string;
   byCategory?: Record<string, KeyMetricRecommendation[]>;
 }
 
@@ -111,8 +109,9 @@ export default function MetricDiscoveryModal({
     return headers;
   }, []);
 
-  // 检查发现上下文
-  const checkDiscoverContext = useCallback(async () => {
+  // 检查发现上下文（使用 ref 避免 useEffect 依赖项循环）
+  const checkDiscoverContextRef = useRef<(() => Promise<void>) | undefined>(undefined);
+  checkDiscoverContextRef.current = async () => {
     if (!selectedDsId) return;
     setLoading(true);
     setError(null);
@@ -133,13 +132,13 @@ export default function MetricDiscoveryModal({
     } finally {
       setLoading(false);
     }
-  }, [selectedDsId, getTenantId, getAuthHeaders]);
+  };
 
   useEffect(() => {
     if (selectedDsId) {
-      checkDiscoverContext();
+      checkDiscoverContextRef.current?.();
     }
-  }, [selectedDsId, checkDiscoverContext]);
+  }, [selectedDsId]);
 
   // 开始智能推荐
   const handleStartDiscovery = async () => {
@@ -166,7 +165,7 @@ export default function MetricDiscoveryModal({
           throw new Error((err as { error: string }).error);
         }
         // 分析完成后刷新上下文
-        await checkDiscoverContext();
+        await checkDiscoverContextRef.current?.();
       } catch (e) {
         setError(`AI Schema 分析失败: ${(e as Error).message}。请检查 AI 配置是否正确后重试。`);
         setStep("select");
@@ -189,7 +188,7 @@ export default function MetricDiscoveryModal({
 
       const data: SmartRecommendResponse = await resp.json();
       setRecommendations(data.recommendations || []);
-      setAnalysisModel(data.analysisModel || "");
+      setAnalysisModel((data as any).analysisModel || discoverContext?.analysisModel || "");
 
       // 默认全选
       setSelectedIds(new Set((data.recommendations || []).map((_, i) => `rec_${i}`)));
