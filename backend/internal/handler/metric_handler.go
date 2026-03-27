@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -16,17 +17,20 @@ type MetricHandler struct {
 	metricService       *service.MetricService
 	dimensionService    *service.DimensionService
 	relationshipService *service.RelationshipService
+	discoveryService    *service.MetricDiscoveryService
 }
 
 func NewMetricHandler(
 	metricService *service.MetricService,
 	dimensionService *service.DimensionService,
 	relationshipService *service.RelationshipService,
+	discoveryService *service.MetricDiscoveryService,
 ) *MetricHandler {
 	return &MetricHandler{
 		metricService:       metricService,
 		dimensionService:    dimensionService,
 		relationshipService: relationshipService,
+		discoveryService:    discoveryService,
 	}
 }
 
@@ -352,6 +356,110 @@ func (h *MetricHandler) SemanticSummary(w http.ResponseWriter, r *http.Request) 
 			"total": len(relationships),
 		},
 		"categories": categoryCount,
+	})
+}
+
+// GetDiscoverContext 获取指标发现上下文状态
+// GET /api/tenants/{id}/metrics/discover-context?dataSourceId=xxx
+func (h *MetricHandler) GetDiscoverContext(w http.ResponseWriter, r *http.Request) {
+	tenantID := parseTenantID(r)
+	dataSourceID := r.URL.Query().Get("dataSourceId")
+	if dataSourceID == "" {
+		http.Error(w, `{"error": "dataSourceId is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, err := h.discoveryService.GetDiscoverContext(tenantID, dataSourceID)
+	if err != nil {
+		msg := err.Error()
+		status := http.StatusInternalServerError
+		if strings.Contains(msg, "not found") {
+			status = http.StatusNotFound
+			msg = "数据源不存在"
+		}
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, msg), status)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ctx)
+}
+
+// SmartRecommendMetrics AI 智能推荐关键指标（基于样本数据分析）
+// POST /api/tenants/{id}/metrics/smart-recommend?dataSourceId=xxx
+func (h *MetricHandler) SmartRecommendMetrics(w http.ResponseWriter, r *http.Request) {
+	tenantID := parseTenantID(r)
+	dataSourceID := r.URL.Query().Get("dataSourceId")
+	if dataSourceID == "" {
+		http.Error(w, `{"error": "dataSourceId is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	result, err := h.discoveryService.SmartRecommend(tenantID, dataSourceID)
+	if err != nil {
+		msg := err.Error()
+		status := http.StatusInternalServerError
+		if strings.Contains(msg, "not found") {
+			status = http.StatusNotFound
+			msg = "数据源不存在"
+		} else if strings.Contains(msg, "未同步") || strings.Contains(msg, "schema") {
+			status = http.StatusBadRequest
+		}
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, msg), status)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// SaveRecommendations 保存推荐的指标为草稿
+// POST /api/tenants/{id}/metrics/save-recommendations
+type SaveRecommendationsRequest struct {
+	DataSourceID    string                            `json:"dataSourceId"`
+	Recommendations []service.KeyMetricRecommendation `json:"recommendations"`
+}
+
+func (h *MetricHandler) SaveRecommendations(w http.ResponseWriter, r *http.Request) {
+	tenantID := parseTenantID(r)
+
+	var request SaveRecommendationsRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, `{"error": "invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if request.DataSourceID == "" {
+		http.Error(w, `{"error": "dataSourceId is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if len(request.Recommendations) == 0 {
+		http.Error(w, `{"error": "no recommendations to save"}`, http.StatusBadRequest)
+		return
+	}
+
+	metrics, err := h.discoveryService.ToDraftMetrics(tenantID, request.DataSourceID, request.Recommendations)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	// 批量保存
+	saved := []model.Metric{}
+	for _, m := range metrics {
+		if err := h.metricService.CreateMetric(&m); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "failed to save metric %s: %s"}`, m.Name, err.Error()), http.StatusInternalServerError)
+			return
+		}
+		saved = append(saved, m)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"metrics": saved,
+		"count":   len(saved),
 	})
 }
 

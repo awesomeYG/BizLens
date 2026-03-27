@@ -146,8 +146,10 @@ func main() {
 	metricService := service.NewMetricService(db)
 	dimensionService := service.NewDimensionService(db)
 	relationshipService := service.NewRelationshipService(db)
+	// 智能指标发现服务（基于 schema + 样本数据的 AI 推断）
+	metricDiscoveryService := service.NewMetricDiscoveryService(dataSourceService, llmService, aiConfigService)
 	// semanticQueryService := service.NewSemanticQueryService(db, metricService, dimensionService, relationshipService)
-	metricHandler := handler.NewMetricHandler(metricService, dimensionService, relationshipService)
+	metricHandler := handler.NewMetricHandler(metricService, dimensionService, relationshipService, metricDiscoveryService)
 
 	// 大屏模板服务
 	dashboardTemplateService := service.NewDashboardTemplateService(db)
@@ -533,6 +535,21 @@ func main() {
 		// /api/tenants/{tenantId}/metrics[/{metricId}[/{action}]]
 		if len(parts) >= 2 && parts[1] == "metrics" {
 			switch {
+			// GET /api/tenants/{tenantId}/metrics/discover-context
+			case len(parts) == 3 && parts[2] == "discover-context" && r.Method == http.MethodGet:
+				metricHandler.GetDiscoverContext(w, r)
+				return
+
+			// POST /api/tenants/{tenantId}/metrics/smart-recommend
+			case len(parts) == 3 && parts[2] == "smart-recommend" && r.Method == http.MethodPost:
+				metricHandler.SmartRecommendMetrics(w, r)
+				return
+
+			// POST /api/tenants/{tenantId}/metrics/save-recommendations
+			case len(parts) == 3 && parts[2] == "save-recommendations" && r.Method == http.MethodPost:
+				metricHandler.SaveRecommendations(w, r)
+				return
+
 			// POST /api/tenants/{tenantId}/metrics/auto-discover
 			case len(parts) == 3 && parts[2] == "auto-discover" && r.Method == http.MethodPost:
 				metricHandler.AutoDiscoverMetrics(w, r)

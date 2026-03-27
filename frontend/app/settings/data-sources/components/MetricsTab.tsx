@@ -5,6 +5,7 @@ import type { Metric, MetricStatus } from "@/lib/semantic-types";
 import type { DataSourceConfig, DataSourceType } from "@/lib/types";
 import { getAccessToken } from "@/lib/auth/api";
 import { getCurrentUser } from "@/lib/user-store";
+import MetricDiscoveryModal from "./MetricDiscoveryModal";
 
 type FilterStatus = "all" | MetricStatus;
 
@@ -71,6 +72,7 @@ export default function MetricsTab() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [discoverDsId, setDiscoverDsId] = useState<string>("");
   const [discoverResult, setDiscoverResult] = useState<{ count: number } | null>(null);
+  const [showSmartModal, setShowSmartModal] = useState(false);
 
   const getTenantId = useCallback(() => {
     const user = getCurrentUser();
@@ -290,21 +292,34 @@ export default function MetricsTab() {
               ))}
             </select>
           </div>
-          <button
-            type="button"
-            onClick={handleDiscover}
-            disabled={discovering || !discoverDsId}
-            className="shrink-0 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-5 py-3 text-sm font-medium text-cyan-200 transition hover:border-cyan-400 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {discovering ? (
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={handleDiscover}
+              disabled={discovering || !discoverDsId}
+              className="rounded-xl border border-zinc-600/50 bg-zinc-800/50 px-5 py-3 text-sm font-medium text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {discovering ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-500 border-t-transparent" />
+                  发现中…
+                </span>
+              ) : (
+                "快速发现"
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSmartModal(true)}
+              disabled={!discoverDsId}
+              className="rounded-xl border border-cyan-500/40 bg-gradient-to-r from-cyan-500/10 to-violet-500/10 px-5 py-3 text-sm font-medium text-cyan-200 transition hover:border-cyan-400 hover:from-cyan-500/20 hover:to-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
               <span className="flex items-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
-                发现中…
+                <span>🧠</span>
+                AI 智能发现
               </span>
-            ) : (
-              "AI 发现指标"
-            )}
-          </button>
+            </button>
+          </div>
         </div>
         {discoverResult && (
           <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-200">
@@ -489,6 +504,17 @@ export default function MetricsTab() {
           指标是观测中心监控业务健康的基础，请确保至少激活 1 个指标。
         </div>
       )}
+
+      {/* AI 智能发现弹窗 */}
+      <MetricDiscoveryModal
+        open={showSmartModal}
+        onClose={() => setShowSmartModal(false)}
+        dataSources={dataSources}
+        onDiscoverComplete={() => {
+          fetchMetrics();
+          setDiscoverResult({ count: 0 });
+        }}
+      />
     </div>
   );
 }
