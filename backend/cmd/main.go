@@ -205,10 +205,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("创建认证服务失败：%v", err)
 	}
-	if err := authService.EnsureDemoAccount(); err != nil {
-		log.Fatalf("初始化演示账号失败：%v", err)
+	if err := authService.EnsureDefaultTenant(); err != nil {
+		log.Fatalf("初始化默认组织失败：%v", err)
 	}
-	log.Println("演示账号初始化完成：test@example.com")
+	log.Println("默认组织初始化完成")
+	if err := authService.EnsureAdminAccount(); err != nil {
+		log.Fatalf("初始化超管账号失败：%v", err)
+	}
+	log.Println("超管账号初始化完成：admin / koala@qa")
 	authHandler := handler.NewAuthHandler(authService)
 
 	// 路由

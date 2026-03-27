@@ -384,7 +384,6 @@ export interface LoginRequest {
 }
 
 export interface RegisterRequest {
-  tenantId: string;
   email: string;
   password: string;
   name: string;

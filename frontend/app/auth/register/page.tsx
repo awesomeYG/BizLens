@@ -10,7 +10,6 @@ import type { AuthResponse } from "@/lib/types";
 export default function RegisterPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
-    tenantId: "",
     name: "",
     email: "",
     password: "",
@@ -42,11 +41,6 @@ export default function RegisterPage() {
       return;
     }
 
-    if (!formData.tenantId) {
-      setError("请输入租户 ID");
-      return;
-    }
-
     // 邮箱格式验证
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
@@ -59,7 +53,6 @@ export default function RegisterPage() {
     try {
       // 使用统一的 API 函数
       const data: AuthResponse = await register({
-        tenantId: formData.tenantId,
         name: formData.name,
         email: formData.email,
         password: formData.password,
@@ -71,6 +64,7 @@ export default function RegisterPage() {
       // 保存用户信息
       const user = {
         id: data.user.id,
+        tenantId: data.user.tenantId,
         name: data.user.name,
         email: data.user.email,
         createdAt: new Date(data.user.createdAt).getTime(),
@@ -79,8 +73,8 @@ export default function RegisterPage() {
       
       saveCurrentUser(user);
       
-      // 跳转到首页
-      router.push("/dashboards");
+      // 跳转到 AI 对话
+      router.push("/chat");
     } catch (err) {
       setError(err instanceof Error ? err.message : "注册失败");
     } finally {
@@ -201,31 +195,6 @@ export default function RegisterPage() {
           <form className="space-y-5" onSubmit={handleSubmit}>
             {/* 输入框组 */}
             <div className="space-y-4">
-              {/* 租户 ID */}
-              <div>
-                <label htmlFor="tenantId" className="block text-sm font-medium text-gray-700 mb-2">
-                  租户 ID
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                  </div>
-                  <input
-                    id="tenantId"
-                    name="tenantId"
-                    type="text"
-                    required
-                    className="block w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all duration-200 bg-white/80 backdrop-blur-sm"
-                    placeholder="acme-corp"
-                    value={formData.tenantId}
-                    onChange={handleChange}
-                  />
-                </div>
-                <p className="mt-1.5 text-xs text-gray-500">租户 ID 用于标识您的组织，注册后不可修改</p>
-              </div>
-
               {/* 姓名 */}
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">

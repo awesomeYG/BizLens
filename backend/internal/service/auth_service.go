@@ -54,72 +54,94 @@ func NewAuthService(db *gorm.DB, cfg *config.Config) (*AuthService, error) {
 	}, nil
 }
 
-// EnsureDemoAccount 确保开发环境存在可用的演示账号
-func (s *AuthService) EnsureDemoAccount() error {
-	if s.cfg.Env == "production" {
-		return nil
-	}
+const (
+	defaultTenantID   = "default"
+	defaultTenantName = "BizLens"
+	adminEmail        = "admin"
+	adminName         = "管理员"
+	adminPassword     = "koala@qa"
+)
 
-	const (
-		demoTenantID   = "demo"
-		demoTenantName = "Demo Tenant"
-		demoUserName   = "测试用户"
-		demoEmail      = "test@example.com"
-		demoPassword   = "password123"
-	)
-
+// EnsureDefaultTenant 确保默认组织存在
+func (s *AuthService) EnsureDefaultTenant() error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		var tenant model.Tenant
-		if err := tx.Where("id = ?", demoTenantID).First(&tenant).Error; err != nil {
+		if err := tx.Where("id = ?", defaultTenantID).First(&tenant).Error; err != nil {
 			if !errors.Is(err, gorm.ErrRecordNotFound) {
-				return fmt.Errorf("查询演示租户失败：%w", err)
+				return fmt.Errorf("查询默认组织失败：%w", err)
 			}
 
 			tenant = model.Tenant{
-				ID:   demoTenantID,
-				Name: demoTenantName,
+				ID:   defaultTenantID,
+				Name: defaultTenantName,
 				Plan: "free",
 			}
 			if err := tx.Create(&tenant).Error; err != nil {
-				return fmt.Errorf("创建演示租户失败：%w", err)
+				return fmt.Errorf("创建默认组织失败：%w", err)
 			}
 		}
+		return nil
+	})
+}
 
+// EnsureAdminAccount 确保超管账号存在
+func (s *AuthService) EnsureAdminAccount() error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
 		var user model.User
-		if err := tx.Where("email = ?", demoEmail).First(&user).Error; err == nil {
-			return nil
+		if err := tx.Where("email = ?", adminEmail).First(&user).Error; err == nil {
+			return nil // 账号已存在
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("查询演示账号失败：%w", err)
+			return fmt.Errorf("查询超管账号失败：%w", err)
 		}
 
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(demoPassword), bcrypt.DefaultCost)
+		// 确保默认组织存在
+		if err := s.EnsureDefaultTenant(); err != nil {
+			return err
+		}
+
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(adminPassword), bcrypt.DefaultCost)
 		if err != nil {
-			return fmt.Errorf("演示账号密码加密失败：%w", err)
+			return fmt.Errorf("超管账号密码加密失败：%w", err)
 		}
 
 		user = model.User{
 			ID:           uuid.New().String(),
-			TenantID:     demoTenantID,
-			Name:         demoUserName,
-			Email:        demoEmail,
+			TenantID:     defaultTenantID,
+			Name:         adminName,
+			Email:        adminEmail,
 			PasswordHash: string(hashedPassword),
 			Role:         "owner",
 		}
 
 		if err := tx.Create(&user).Error; err != nil {
-			return fmt.Errorf("创建演示账号失败：%w", err)
+			return fmt.Errorf("创建超管账号失败：%w", err)
 		}
 
 		return nil
 	})
 }
 
-// Register 用户注册
+// EnsureDemoAccount 确保开发环境存在可用的演示账号（兼容旧调用）
+func (s *AuthService) EnsureDemoAccount() error {
+	// 先确保默认组织存在
+	if err := s.EnsureDefaultTenant(); err != nil {
+		return err
+	}
+	// 再确保超管账号存在
+	return s.EnsureAdminAccount()
+}
+
+// Register 用户注册（所有用户属于默认组织）
 func (s *AuthService) Register(req *dto.RegisterRequest) (*model.User, *dto.Tokens, error) {
-	// 检查邮箱是否已存在（使用正确的 SQL 语法）
+	// 检查邮箱是否已存在
 	var existingUser model.User
 	if err := s.db.Where("email = ?", req.Email).Limit(1).First(&existingUser).Error; err == nil {
 		return nil, nil, errors.New("邮箱已被注册")
+	}
+
+	// 确保默认组织存在
+	if err := s.EnsureDefaultTenant(); err != nil {
+		return nil, nil, err
 	}
 
 	// 密码加密
@@ -128,28 +150,23 @@ func (s *AuthService) Register(req *dto.RegisterRequest) (*model.User, *dto.Toke
 		return nil, nil, fmt.Errorf("密码加密失败：%w", err)
 	}
 
-	// 创建用户（手动生成 ID 以兼容 SQLite）
+	// 创建用户（所有用户属于默认组织）
 	user := &model.User{
 		ID:           uuid.New().String(),
-		TenantID:     req.TenantID,
+		TenantID:     defaultTenantID,
 		Name:         req.Name,
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword),
-		Role:         "member", // 默认角色
+		Role:         "member",
 	}
 
 	// 事务创建用户和生成 Token
 	var tokens *dto.Tokens
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		// 手动设置 ID（SQLite 需要）
-		if user.ID == "" {
-			user.ID = uuid.New().String()
-		}
 		if err := tx.Create(user).Error; err != nil {
 			return err
 		}
 
-		// 生成 Token
 		var err error
 		tokens, err = s.generateTokens(tx, user.ID)
 		return err

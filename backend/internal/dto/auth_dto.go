@@ -2,9 +2,8 @@ package dto
 
 import "time"
 
-// RegisterRequest 注册请求
+// RegisterRequest 注册请求（无 tenantId，所有用户属于默认组织）
 type RegisterRequest struct {
-	TenantID string `json:"tenantId" validate:"required"`
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=6"`
 	Name     string `json:"name" validate:"required"`

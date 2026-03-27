@@ -46,8 +46,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 基本验证
-	if req.TenantID == "" || req.Email == "" || req.Password == "" || req.Name == "" {
-		writeError(w, http.StatusBadRequest, "tenantId, email, password, name 必填")
+	if req.Email == "" || req.Password == "" || req.Name == "" {
+		writeError(w, http.StatusBadRequest, "email, password, name 必填")
 		return
 	}
 
