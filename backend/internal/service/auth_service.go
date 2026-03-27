@@ -57,9 +57,9 @@ func NewAuthService(db *gorm.DB, cfg *config.Config) (*AuthService, error) {
 const (
 	defaultTenantID   = "default"
 	defaultTenantName = "BizLens"
-	adminEmail        = "admin"
+	adminEmail        = "koala@qq.com"
 	adminName         = "管理员"
-	adminPassword     = "koala@qa"
+	adminPassword     = "admin123"
 )
 
 // EnsureDefaultTenant 确保默认组织存在

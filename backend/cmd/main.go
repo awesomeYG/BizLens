@@ -212,7 +212,7 @@ func main() {
 	if err := authService.EnsureAdminAccount(); err != nil {
 		log.Fatalf("初始化超管账号失败：%v", err)
 	}
-	log.Println("超管账号初始化完成：admin / koala@qa")
+	log.Println("超管账号初始化完成：koala@qq.com / admin123")
 	authHandler := handler.NewAuthHandler(authService)
 
 	// 路由

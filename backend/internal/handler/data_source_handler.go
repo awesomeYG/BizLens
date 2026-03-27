@@ -181,7 +181,7 @@ func (h *DataSourceHandler) checkAdminPermission(r *http.Request) bool {
 	if email == nil {
 		return false
 	}
-	return email.(string) == "admin"
+	return email.(string) == "koala@qq.com"
 }
 
 // CreateDataSource POST /api/tenants/{id}/data-sources
