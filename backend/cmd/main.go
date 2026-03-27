@@ -560,6 +560,11 @@ func main() {
 				metricHandler.ConfirmMetrics(w, r)
 				return
 
+			// POST /api/tenants/{tenantId}/metrics/batch-delete
+			case len(parts) == 3 && parts[2] == "batch-delete" && r.Method == http.MethodPost:
+				metricHandler.DeleteMetrics(w, r)
+				return
+
 			// GET/POST /api/tenants/{id}/metrics
 			case len(parts) == 2:
 				switch r.Method {

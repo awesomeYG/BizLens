@@ -52,6 +52,14 @@ func (s *MetricService) DeleteMetric(id string) error {
 	return s.db.Delete(&model.Metric{}, id).Error
 }
 
+// DeleteMetrics 批量删除指标
+func (s *MetricService) DeleteMetrics(ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return s.db.Delete(&model.Metric{}, ids).Error
+}
+
 // GetMetric 获取单个指标
 func (s *MetricService) GetMetric(id string) (*model.Metric, error) {
 	var metric model.Metric

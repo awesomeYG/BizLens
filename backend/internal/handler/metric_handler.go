@@ -192,6 +192,34 @@ func (h *MetricHandler) DeleteMetric(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// DeleteMetrics 批量删除指标
+// POST /api/tenants/{id}/metrics/batch-delete
+func (h *MetricHandler) DeleteMetrics(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		MetricIDs []string `json:"metricIds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, `{"error": "invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if len(request.MetricIDs) == 0 {
+		http.Error(w, `{"error": "metricIds is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.metricService.DeleteMetrics(request.MetricIDs); err != nil {
+		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"count":   len(request.MetricIDs),
+	})
+}
+
 // GetMetric 获取单个指标
 // GET /api/tenants/{id}/metrics/{metricId}
 func (h *MetricHandler) GetMetric(w http.ResponseWriter, r *http.Request) {

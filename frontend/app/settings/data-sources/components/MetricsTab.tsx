@@ -69,6 +69,7 @@ export default function MetricsTab() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [discovering, setDiscovering] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [discoverDsId, setDiscoverDsId] = useState<string>("");
   const [discoverResult, setDiscoverResult] = useState<{ count: number } | null>(null);
@@ -86,7 +87,7 @@ export default function MetricsTab() {
     return headers;
   }, []);
 
-  const fetchDataSources = useCallback(async () => {
+  const fetchDataSources = useCallback(async (silent = false) => {
     try {
       const tenantId = getTenantId();
       const response = await fetch(`/api/tenants/${tenantId}/data-sources`, {
@@ -95,13 +96,20 @@ export default function MetricsTab() {
       if (response.ok) {
         const data = await response.json();
         const list = Array.isArray(data) ? data : [];
-        setDataSources(list.map((row: Record<string, unknown>) => normalizeDataSourceFromApi(row)));
-        if (list.length > 0 && !discoverDsId) {
-          setDiscoverDsId(String(list[0].id));
+        const normalized = list.map((row: Record<string, unknown>) => normalizeDataSourceFromApi(row));
+        setDataSources(normalized);
+        // 如果当前选中的数据源不在列表中，重置选择
+        if (normalized.length > 0) {
+          const currentExists = normalized.some((ds: DataSourceConfig) => ds.id === discoverDsId);
+          if (!discoverDsId || !currentExists) {
+            setDiscoverDsId(String(list[0].id));
+          }
+        } else {
+          setDiscoverDsId("");
         }
       }
     } catch (err) {
-      console.error("获取数据源列表失败:", err);
+      if (!silent) console.error("获取数据源列表失败:", err);
     }
   }, [getTenantId, getAuthHeaders, discoverDsId]);
 
@@ -127,7 +135,10 @@ export default function MetricsTab() {
   }, [getTenantId, getAuthHeaders, filterStatus]);
 
   useEffect(() => {
-    fetchDataSources();
+    fetchDataSources(true);
+    const handleDsUpdated = () => fetchDataSources(true);
+    window.addEventListener("data-sources-updated", handleDsUpdated);
+    return () => window.removeEventListener("data-sources-updated", handleDsUpdated);
   }, [fetchDataSources]);
 
   useEffect(() => {
@@ -237,6 +248,33 @@ export default function MetricsTab() {
       await fetchMetrics();
     } catch {
       setMessage({ type: "error", text: "删除失败，请稍后重试" });
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`确定删除选中的 ${selectedIds.size} 个指标？此操作不可撤销。`)) return;
+    setDeleting(true);
+    setMessage(null);
+    try {
+      const tenantId = getTenantId();
+      const response = await fetch(`/api/tenants/${tenantId}/metrics/batch-delete`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ metricIds: Array.from(selectedIds) }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        setMessage({ type: "error", text: (err as { error?: string }).error || "批量删除失败" });
+        return;
+      }
+      setMessage({ type: "success", text: `已删除 ${selectedIds.size} 个指标` });
+      setSelectedIds(new Set());
+      await fetchMetrics();
+    } catch {
+      setMessage({ type: "error", text: "批量删除失败，请稍后重试" });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -371,6 +409,16 @@ export default function MetricsTab() {
             className="shrink-0 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {confirming ? "激活中…" : `激活选中指标 (${selectedIds.size})`}
+          </button>
+        )}
+        {selectedIds.size > 0 && (
+          <button
+            type="button"
+            onClick={handleBatchDelete}
+            disabled={deleting}
+            className="shrink-0 rounded-xl border border-rose-500/40 bg-rose-500/10 px-5 py-2.5 text-sm font-medium text-rose-200 transition hover:border-rose-400 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {deleting ? "删除中…" : `批量删除 (${selectedIds.size})`}
           </button>
         )}
       </div>

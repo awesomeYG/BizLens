@@ -467,6 +467,7 @@ export default function DatabaseConnectionTab() {
         const raw = (await response.json()) as Record<string, unknown>;
         const updated = normalizeDataSourceFromApi(raw);
         setDataSources((prev) => prev.map((d) => (d.id === editingId ? updated : d)));
+        window.dispatchEvent(new CustomEvent("data-sources-updated"));
         setMessage({ type: "success", text: `已更新数据源「${form.name.trim()}」。` });
         closeModal();
       } else {
@@ -485,6 +486,7 @@ export default function DatabaseConnectionTab() {
         const raw = (await response.json()) as Record<string, unknown>;
         const created = normalizeDataSourceFromApi(raw);
         setDataSources((prev) => [...prev, created]);
+        window.dispatchEvent(new CustomEvent("data-sources-updated"));
         setMessage({ type: "success", text: `已添加数据源「${form.name.trim()}」。` });
         closeModal();
       }
@@ -512,6 +514,7 @@ export default function DatabaseConnectionTab() {
         return;
       }
       setDataSources((prev) => prev.filter((d) => d.id !== id));
+      window.dispatchEvent(new CustomEvent("data-sources-updated"));
       setMessage({ type: "success", text: `已删除「${name}」。` });
     } catch {
       setMessage({ type: "error", text: "删除失败，请稍后重试" });
