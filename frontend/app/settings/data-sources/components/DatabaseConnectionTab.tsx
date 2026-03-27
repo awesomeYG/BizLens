@@ -650,41 +650,43 @@ export default function DatabaseConnectionTab() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(row)}
-                        className="mr-2 rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-white/5"
-                      >
-                        编辑
-                      </button>
-                      {row.schemaAnalyzed ? (
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-1.5 justify-end">
                         <button
                           type="button"
-                          disabled={analyzingId === row.id}
-                          onClick={() => handleAnalyze(row.id, row.name)}
-                          className="mr-2 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-200 transition hover:bg-amber-500/20 disabled:opacity-50"
+                          onClick={() => openEditModal(row)}
+                          className="whitespace-nowrap rounded-lg border border-zinc-600 px-2.5 py-1.5 text-xs font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-white/5"
                         >
-                          {analyzingId === row.id ? "分析中…" : "重新分析"}
+                          编辑
                         </button>
-                      ) : (
+                        {row.schemaAnalyzed ? (
+                          <button
+                            type="button"
+                            disabled={analyzingId === row.id}
+                            onClick={() => handleAnalyze(row.id, row.name)}
+                            className="whitespace-nowrap rounded-lg border border-amber-500/35 bg-amber-500/10 px-2.5 py-1.5 text-xs font-medium text-amber-200 transition hover:bg-amber-500/20 disabled:opacity-50"
+                          >
+                            {analyzingId === row.id ? "分析中…" : "重新分析"}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={analyzingId === row.id}
+                            onClick={() => handleAnalyze(row.id, row.name)}
+                            className="whitespace-nowrap rounded-lg border border-cyan-500/35 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/20 disabled:opacity-50"
+                          >
+                            {analyzingId === row.id ? "分析中…" : "AI 分析"}
+                          </button>
+                        )}
                         <button
                           type="button"
-                          disabled={analyzingId === row.id}
-                          onClick={() => handleAnalyze(row.id, row.name)}
-                          className="mr-2 rounded-lg border border-cyan-500/35 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/20 disabled:opacity-50"
+                          disabled={deletingId === row.id}
+                          onClick={() => handleDelete(row.id, row.name)}
+                          className="whitespace-nowrap rounded-lg border border-rose-500/35 bg-rose-500/10 px-2.5 py-1.5 text-xs font-medium text-rose-200 transition hover:bg-rose-500/20 disabled:opacity-50"
                         >
-                          {analyzingId === row.id ? "分析中…" : "AI 分析"}
+                          {deletingId === row.id ? "删除中…" : "删除"}
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        disabled={deletingId === row.id}
-                        onClick={() => handleDelete(row.id, row.name)}
-                        className="rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-200 transition hover:bg-rose-500/20 disabled:opacity-50"
-                      >
-                        {deletingId === row.id ? "删除中…" : "删除"}
-                      </button>
+                      </div>
                     </td>
                   </tr>
                 );
