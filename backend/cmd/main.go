@@ -209,10 +209,6 @@ func main() {
 		log.Fatalf("初始化默认组织失败：%v", err)
 	}
 	log.Println("默认组织初始化完成")
-	if err := authService.EnsureAdminAccount(); err != nil {
-		log.Fatalf("初始化超管账号失败：%v", err)
-	}
-	log.Println("超管账号初始化完成：koala@qq.com / admin123")
 	authHandler := handler.NewAuthHandler(authService)
 
 	// 路由
@@ -240,6 +236,16 @@ func main() {
 		path := strings.TrimPrefix(r.URL.Path, "/api/auth/")
 
 		switch {
+		// POST /api/auth/activate（新激活接口）
+		case path == "activate" && r.Method == http.MethodPost:
+			authHandler.Activate(w, r)
+			return
+
+		// GET /api/auth/status（系统状态，无需认证）
+		case path == "status" && r.Method == http.MethodGet:
+			authHandler.GetSystemStatus(w, r)
+			return
+
 		// POST /api/auth/register
 		case path == "register" && r.Method == http.MethodPost:
 			authHandler.Register(w, r)
@@ -776,6 +782,67 @@ func main() {
 		http.NotFound(w, r)
 	})
 	mux.Handle("/api/datasets/", middleware.Auth(authService)(datasetRouter))
+
+	// Admin 路由组：/api/admin/*（需要 JWT + admin/owner 角色）
+	adminHandler := handler.NewAdminHandler(authService, dataSourceService, datasetService)
+	adminAuth := func(next http.HandlerFunc) http.HandlerFunc {
+		authM := middleware.Auth(authService)
+		roleM := middleware.RequireRole("admin", "owner")
+		wrapped := authM(http.HandlerFunc(next))
+		return func(w http.ResponseWriter, r *http.Request) {
+			roleM(wrapped).ServeHTTP(w, r)
+		}
+	}
+	adminRouter := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/admin")
+
+		switch {
+		// 公共（需要认证）
+		case strings.HasPrefix(path, "/stats"):
+			adminAuth(adminHandler.GetStats)(w, r)
+			return
+		// 用户管理
+		case path == "/users" && r.Method == http.MethodGet:
+			adminAuth(adminHandler.ListUsers)(w, r)
+			return
+		case path == "/users" && r.Method == http.MethodPost:
+			adminAuth(adminHandler.CreateUser)(w, r)
+			return
+		case strings.HasPrefix(path, "/users/") && r.Method == http.MethodPut:
+			adminAuth(adminHandler.UpdateUser)(w, r)
+			return
+		case strings.HasPrefix(path, "/users/") && r.Method == http.MethodDelete:
+			adminAuth(adminHandler.DeleteUser)(w, r)
+			return
+		case strings.HasPrefix(path, "/users/") && strings.HasSuffix(path, "/reset-password") && r.Method == http.MethodPost:
+			adminAuth(adminHandler.ResetUserPassword)(w, r)
+			return
+		case strings.HasPrefix(path, "/users/") && strings.HasSuffix(path, "/toggle") && r.Method == http.MethodPost:
+			adminAuth(adminHandler.ToggleUserStatus)(w, r)
+			return
+		// 数据集
+		case path == "/datasets" && r.Method == http.MethodGet:
+			adminAuth(adminHandler.ListAllDatasets)(w, r)
+			return
+		case strings.HasPrefix(path, "/datasets/") && r.Method == http.MethodDelete:
+			adminAuth(adminHandler.DeleteDataset)(w, r)
+			return
+		// 数据源
+		case path == "/data-sources" && r.Method == http.MethodGet:
+			adminAuth(adminHandler.ListAllDataSources)(w, r)
+			return
+		case strings.HasPrefix(path, "/data-sources/") && strings.HasSuffix(path, "/test") && r.Method == http.MethodPost:
+			adminAuth(adminHandler.TestDataSource)(w, r)
+			return
+		case strings.HasPrefix(path, "/data-sources/") && r.Method == http.MethodDelete:
+			adminAuth(adminHandler.DeleteDataSource)(w, r)
+			return
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	mux.Handle("/api/admin", adminRouter)
+	mux.Handle("/api/admin/", adminRouter)
 
 	// 启动钉钉 Stream 客户端（异步）
 	go func() {

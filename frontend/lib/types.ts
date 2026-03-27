@@ -195,6 +195,7 @@ export interface UserSession {
   tenantId?: string;
   name: string;
   email: string;
+  role?: string;
   createdAt: number;
   isOnboarded: boolean;
   companyInfo?: CompanyInfo;
@@ -396,6 +397,9 @@ export interface RefreshTokenRequest {
 export interface AuthResponse {
   user: User;
   tokens: Tokens;
+  unactivated?: boolean;  // 系统是否未激活
+  systemName?: string;
+  version?: string;
 }
 
 export interface AuthError {
@@ -403,11 +407,27 @@ export interface AuthError {
   message: string;
 }
 
+export interface ActivateRequest {
+  licenseKey: string;
+  name: string;
+  email: string;
+  password: string;
+}
+
+export interface ActivateResponse {
+  activated: boolean;
+  user?: User;
+  tokens?: Tokens;
+  error?: string;
+  code?: string;
+}
+
 // 更新 UserSession 以支持 Token
 export interface UserSessionWithAuth extends UserSession {
   accessToken?: string;
   refreshToken?: string;
   tokenExpiresAt?: number;
+  role?: string;
 }
 
 // ==================== 报表相关类型 ====================

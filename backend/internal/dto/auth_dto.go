@@ -53,8 +53,11 @@ type UserResponse struct {
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	User   *UserResponse `json:"user"`
-	Tokens *Tokens       `json:"tokens"`
+	User        *UserResponse `json:"user,omitempty"`
+	Tokens      *Tokens       `json:"tokens,omitempty"`
+	Unactivated bool          `json:"unactivated"` // 系统是否未激活
+	SystemName  string        `json:"systemName"`  // 系统名称
+	Version     string        `json:"version"`     // 系统版本
 }
 
 // RegisterResponse 注册响应
@@ -69,6 +72,31 @@ type AuthError struct {
 	Message string `json:"message"`
 }
 
+// ActivateRequest 激活请求
+type ActivateRequest struct {
+	LicenseKey string `json:"licenseKey" validate:"required"`
+	Name       string `json:"name" validate:"required"`
+	Email      string `json:"email" validate:"required,email"`
+	Password   string `json:"password" validate:"required,min=6"`
+}
+
+// ActivateResponse 激活响应
+type ActivateResponse struct {
+	Activated bool          `json:"activated"`
+	User      *UserResponse `json:"user,omitempty"`
+	Tokens    *Tokens       `json:"tokens,omitempty"`
+	Error     string        `json:"error,omitempty"`
+	Code      string        `json:"code,omitempty"`
+}
+
+// CreateUserRequest 管理员创建用户请求
+type CreateUserRequest struct {
+	Name     string `json:"name" validate:"required"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=6"`
+	Role     string `json:"role" validate:"required"` // admin / member
+}
+
 // Common error codes
 const (
 	ErrCodeInvalidCredentials = "INVALID_CREDENTIALS"
@@ -81,4 +109,7 @@ const (
 	ErrCodeUnauthorized       = "UNAUTHORIZED"
 	ErrCodeForbidden          = "FORBIDDEN"
 	ErrCodeInternalError      = "INTERNAL_ERROR"
+	ErrCodeNotActivated       = "NOT_ACTIVATED"
+	ErrCodeInvalidLicense     = "INVALID_LICENSE_KEY"
+	ErrCodeAlreadyActivated   = "ALREADY_ACTIVATED"
 )

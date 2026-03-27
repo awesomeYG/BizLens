@@ -2,8 +2,10 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Config struct {
@@ -20,9 +22,26 @@ type Config struct {
 	Env                string // development / production
 	AccessTokenExpire  int    // Access Token 过期时间（分钟）
 	RefreshTokenExpire int    // Refresh Token 过期时间（天）
+	// 授权码相关
+	LicenseKey     string // 必填，授权码
+	LicenseSeats   int    // 可选，最大用户数上限（0 表示不限制）
+	LicenseExpires string // 可选，到期日期 YYYY-MM-DD
 }
 
 func Load() *Config {
+	// 加载授权码（必填）
+	licenseKey := os.Getenv("LICENSE_KEY")
+	if licenseKey == "" {
+		log.Fatal("错误：未配置环境变量 LICENSE_KEY，无法启动系统")
+	}
+	if !isValidLicenseKeyFormat(licenseKey) {
+		log.Fatal("错误：LICENSE_KEY 格式无效，应为 XXXX-XXXX-XXXX-XXXX")
+	}
+	log.Printf("授权码已配置：%s", maskLicenseKey(licenseKey))
+
+	licenseSeats := getEnvInt("LICENSE_SEATS", 0)
+	licenseExpires := os.Getenv("LICENSE_EXPIRES")
+
 	return &Config{
 		Port:       getEnv("SERVER_PORT", "3001"),
 		DBHost:     getEnv("DB_HOST", "localhost"),
@@ -37,7 +56,41 @@ func Load() *Config {
 		Env:                getEnv("ENV", "development"),
 		AccessTokenExpire:  getEnvInt("ACCESS_TOKEN_EXPIRE", 30), // 默认 30 分钟
 		RefreshTokenExpire: getEnvInt("REFRESH_TOKEN_EXPIRE", 7), // 默认 7 天
+		// 授权码相关
+		LicenseKey:     licenseKey,
+		LicenseSeats:   licenseSeats,
+		LicenseExpires: licenseExpires,
 	}
+}
+
+// isValidLicenseKeyFormat 校验授权码格式（XXXX-XXXX-XXXX-XXXX）
+func isValidLicenseKeyFormat(key string) bool {
+	if len(key) != 19 { // 16 chars + 3 hyphens
+		return false
+	}
+	parts := strings.Split(key, "-")
+	if len(parts) != 4 {
+		return false
+	}
+	for _, part := range parts {
+		if len(part) != 4 {
+			return false
+		}
+		for _, c := range part {
+			if !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// maskLicenseKey 脱敏授权码，仅显示前4位和后4位
+func maskLicenseKey(key string) string {
+	if len(key) < 9 {
+		return "****"
+	}
+	return key[:4] + "-****-****-" + key[len(key)-4:]
 }
 
 func (c *Config) DSN() string {
