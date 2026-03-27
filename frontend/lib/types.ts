@@ -173,6 +173,8 @@ export interface DataSourceConfig {
   lastSyncAt?: number;
   // 数据表/集合信息（连接后自动获取）
   tables?: string[];
+  // AI Schema 分析状态
+  schemaAnalyzed?: boolean;
 }
 
 export interface CompanyInfo {

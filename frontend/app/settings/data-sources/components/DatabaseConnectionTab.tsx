@@ -103,6 +103,7 @@ function normalizeDataSourceFromApi(raw: Record<string, unknown>): DataSourceCon
     name: String(raw.name ?? ""),
     description: raw.description ? String(raw.description) : undefined,
     status: raw.status as DataSourceConfig["status"],
+    schemaAnalyzed: raw.schemaAnalyzed === true,
   };
   if (nested) {
     base.connection = nested;
@@ -136,6 +137,7 @@ export default function DatabaseConnectionTab() {
   const [submitting, setSubmitting] = useState(false);
   const [testing, setTesting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [dataSources, setDataSources] = useState<DataSourceConfig[]>([]);
@@ -523,6 +525,48 @@ export default function DatabaseConnectionTab() {
     }
   };
 
+  const handleAnalyze = async (id: string, name: string) => {
+    if (!window.confirm(`确定要对数据源「${name}」执行 AI Schema 分析吗？`)) {
+      return;
+    }
+    setAnalyzingId(id);
+    setMessage(null);
+    try {
+      const tenantId = getTenantId();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+      const response = await fetch(`/api/tenants/${tenantId}/data-sources/${id}/schema/analyze`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ mode: "full" }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        setMessage({ type: "error", text: (err as { error?: string }).error || "AI 分析失败" });
+        return;
+      }
+      const result = (await response.json()) as { success?: boolean; analyzedAt?: string };
+      if (result.success) {
+        setDataSources((prev) =>
+          prev.map((d) => (d.id === id ? { ...d, schemaAnalyzed: true } : d))
+        );
+        setMessage({ type: "success", text: `AI 分析完成（${result.analyzedAt || ""}）。` });
+      } else {
+        setMessage({ type: "error", text: "AI 分析未返回预期结果。" });
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        setMessage({ type: "error", text: "AI 分析超时，请稍后重试。" });
+      } else {
+        setMessage({ type: "error", text: "AI 分析失败，请稍后重试。" });
+      }
+    } finally {
+      setAnalyzingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -561,7 +605,7 @@ export default function DatabaseConnectionTab() {
             暂无数据库连接。点击「新增数据库连接」添加。
           </div>
         ) : (
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="border-b border-zinc-800 bg-zinc-950/80 text-xs uppercase tracking-wide text-zinc-500">
               <tr>
                 <th className="px-4 py-3 font-medium">名称</th>
@@ -569,6 +613,7 @@ export default function DatabaseConnectionTab() {
                 <th className="px-4 py-3 font-medium">地址</th>
                 <th className="px-4 py-3 font-medium">库 / 路径</th>
                 <th className="px-4 py-3 font-medium">状态</th>
+                <th className="px-4 py-3 font-medium">AI 分析</th>
                 <th className="px-4 py-3 text-right font-medium">操作</th>
               </tr>
             </thead>
@@ -591,6 +636,20 @@ export default function DatabaseConnectionTab() {
                         {row.status || "connected"}
                       </span>
                     </td>
+                    <td className="px-4 py-3">
+                      {row.schemaAnalyzed ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-200">
+                          <svg className="h-3 w-3 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                          已分析
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full border border-zinc-600/50 bg-zinc-800/50 px-2 py-0.5 text-xs text-zinc-400">
+                          未分析
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <button
                         type="button"
@@ -599,6 +658,25 @@ export default function DatabaseConnectionTab() {
                       >
                         编辑
                       </button>
+                      {row.schemaAnalyzed ? (
+                        <button
+                          type="button"
+                          disabled={analyzingId === row.id}
+                          onClick={() => handleAnalyze(row.id, row.name)}
+                          className="mr-2 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-200 transition hover:bg-amber-500/20 disabled:opacity-50"
+                        >
+                          {analyzingId === row.id ? "分析中…" : "重新分析"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={analyzingId === row.id}
+                          onClick={() => handleAnalyze(row.id, row.name)}
+                          className="mr-2 rounded-lg border border-cyan-500/35 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/20 disabled:opacity-50"
+                        >
+                          {analyzingId === row.id ? "分析中…" : "AI 分析"}
+                        </button>
+                      )}
                       <button
                         type="button"
                         disabled={deletingId === row.id}
