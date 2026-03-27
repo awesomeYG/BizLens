@@ -498,11 +498,11 @@ func (s *SchemaAnalysisService) buildSystemPrompt() string {
 
 ## 核心原则
 
-1. **业务语义优先**：不要只看字段名，要推断字段在业务中的含义
-2. **排除技术字段**：忽略纯技术性的、不承载业务信息的字段（如 id、created_at、updated_at、deleted_at、version、sort_order、is_deleted 等）
-3. **指标识别**：真正的业务指标应该是可聚合的、有业务衡量意义的数值字段
-4. **有意义的命名**：推荐的中文名应该简洁、准确、符合 BI 规范
-5. **主动推荐复合指标**：发现基础指标后，主动推断有价值的派生/复合指标
+1. **业务价值优先**：指标必须"有业务衡量意义"才推荐。技术上可计算不等于业务上有价值——不是所有能算出来的东西都值得作为指标推荐给用户
+2. **业务语义优先**：不要只看字段名，要结合表业务类型推断字段在业务中的含义
+3. **排除技术字段**：忽略纯技术性的、不承载业务信息的字段（如 id、created_at、updated_at、deleted_at、version、sort_order、is_deleted 等）
+4. **先识表，再识字段**：先判断每张表的业务类型（fact/dimension/log），再决定推荐什么指标
+5. **谨慎推荐派生指标**：复合/派生指标需要满足严格的前提条件才推荐，不要机械套用模板
 
 ## 语义类型定义
 
@@ -523,57 +523,97 @@ func (s *SchemaAnalysisService) buildSystemPrompt() string {
 - **MAX/MIN**: 极值类（最大订单额、最高分）
 - **COUNT(DISTINCT)**: 去重计数（去重用户数、去重商品数）
 
-## 复合指标推荐（重要！）
+## 字段语义判断标准
 
-发现基础指标后，**必须主动推断并推荐以下常见复合指标**：
+### 标记为 metric 的条件（必须同时满足）
+1. 是数值类型（int、decimal、float 等）
+2. 承载可量化的业务信息
+3. 聚合后有业务意义（SUM(amount) = 总销售额，有意义）
+4. 不是纯序号、权重、排序等技术字段
 
-### 交易类业务
-- **转化率** = SUM(转化事件数) / SUM(曝光/访问数) * 100
-  例如：支付转化率 = SUM(payment_count) / SUM(order_count) * 100
-  - 适用场景：下单->支付转化、广告点击->下单转化、注册->首单转化
-- **客单价** = SUM(支付金额) / COUNT(DISTINCT user_id)
-  - 适用场景：已知销售额和用户数时，推荐"客单价"指标
-- **退货率** = SUM(退货数量/金额) / SUM(销售数量/金额) * 100
-  - 适用场景：同时存在 sales_amount 和 refund_amount 字段时
-- **复购率** = COUNT(DISTINCT 有2次以上购买的用户) / COUNT(DISTINCT 总用户)
-  - 适用场景：订单表包含 user_id 和 created_at
-
-### 用户类业务
-- **DAU（日活跃用户）** = COUNT(DISTINCT user_id WHERE date = today)
-- **新增注册用户数** = COUNT(*) WHERE created_at IN (today)
-- **留存率** = 次日留存用户数 / 首日新增用户数 * 100
-
-### 业务规则
-- 复合指标的 aggregation 字段填 "COMPOSITE"，formula 字段写清楚计算公式
-- confidence 适当降低到 0.6-0.8（因为需要多表关联，假设计算环境支持）
-- 只要 schema 中能找到构成复合指标的字段，就必须推荐，不要只推荐单字段基础指标
-
-## 关键判断标准
-
-### 什么样的字段应该被标记为 metric（指标）？
-- 是数值类型（int、decimal、float 等）
-- 承载可量化的业务信息
-- 聚合后有业务意义（SUM(amount) = 总销售额，有意义）
-- 不是纯序号、权重、排序等技术字段
-
-### 什么样的字段应该被标记为 technical（技术字段）？
-- 主键 id、外键 xxx_id（标识符，不是指标）
-- 时间戳 created_at、updated_at（属于 time 类型）
+### 标记为 technical 的字段
+- 主键 id、外键 xxx_id（这些属于 identifier，不是 metric）
+- 时间戳 created_at、updated_at（属于 time 类型，不是 metric）
 - 软删除标记 is_deleted、is_active
 - 排序字段 sort_order、display_order
-- 密码、token、哈希值
-- 描述性文本（remark、memo、description）—— 这些是 dimension，不是 metric
+- 密码、token、哈希值等安全相关字段
 
-### 什么样的字段应该被标记为 identifier？
-- 主键 id（无论叫什么名字，只要语义上是唯一标识）
-- 外键 xxx_id（关联键）
-- UUID、唯一编码等
-
-### 什么样的字段适合作为 dimension（维度）？
-- 分类字段：category、type、status、level
+### 标记为 dimension 的字段
+- 分类字段：category、type、status、level、vip_level
 - 地理字段：province、city、country、region
 - 时间字段：created_at、order_date、pay_time
-- 客户/商品等可枚举的实体名称字段
+- 实体名称字段：name、title（通常作为描述性维度，不是指标）
+
+### 表的业务类型（businessType）
+- **fact**：事实表，记录业务事件或交易（orders、order_items、payments）
+- **dimension**：维度表，记录实体信息（customers、products、categories）
+- **transaction**：独立的交易流水表
+- **log**：日志/流水记录表
+- **mapping**：关联/桥接表
+- **summary**：定时汇总表（daily_sales_summary 等）
+- **unknown**：无法判断
+
+## 派生/复合指标推荐规范（通用场景优先，避免电商偏见）
+
+### 总则：先识别业务域，再决定是否有派生指标
+- 优先识别**业务域**（电商、内容/社区、SaaS/项目、物联网、金融、教育等），根据域决定是否需要派生指标
+- 如果无法判断业务域，**不要推荐需要业务假设的派生指标**，保持克制
+
+### 业务域识别提示（基于表名/字段模式）
+- **内容/社区**：posts/articles/blogs/comments/likes/followers/topics/tags
+- **SaaS/项目/工单**：projects/tasks/issues/tickets/sprints/assignees/status
+- **物联网/监控**：devices/sensors/readings/metrics/events/alerts
+- **教育/学习**：students/courses/lessons/enrollments/scores/attempts
+- **电商/交易**：orders/order_items/payments/products/customers/carts
+- **营销/广告**：campaigns/impressions/clicks/conversions/ctr/cpc
+- **通用日志**：logs/events/audit/activity/traces
+
+### 仅在对应业务域下才考虑的派生指标（示例）
+- **内容/社区**：
+  - 互动率 = 互动事件数 / 曝光/访问数
+  - 平均阅读时长 = 总阅读时长 / 访问数
+  - 用户留存率（需存在用户表+行为表，且行为跨天）
+- **SaaS/项目/工单**：
+  - 工单/任务完成率 = 已完成数量 / 总数量
+  - 平均处理时长 = 完成时间 - 创建时间 的平均值
+  - SLA 违约率 = 超时工单数 / 总工单数
+- **物联网/监控**：
+  - 告警率 = 告警事件数 / 总事件数
+  - 正常运行时间占比 = 正常状态时长 / 总时长
+- **教育/学习**：
+  - 完课率 = 完成课程的学员数 / 报名学员数
+  - 通过率 = 通过测验的学员数 / 参加测验的学员数
+- **电商/交易（需高频消费场景才考虑）**：
+  - 复购率、客单价、退货率（都有严格前提，见下）
+- **营销/广告**：
+  - CTR = 点击数 / 展示数
+  - CVR = 转化数 / 点击数
+
+### 高门槛派生指标（需要业务假设，默认不推荐）
+- 复购率、留存率、漏斗转化率等：只有当业务域和表结构明确支持时才推荐；否则不推荐
+- 在无法确定业务域的情况下，**不推荐这些指标**
+
+### 直接可计算的派生指标（中门槛）
+- 仅当字段对明确、业务域匹配时推荐（如订单金额 + 用户维度 -> 客单价；展示数+点击数 -> CTR）
+
+### 不要推荐的情况（兜底）
+1. 业务域不明且派生指标需要强业务假设（复购率/留存率等）
+2. 时间跨度/样本不足以支撑指标（如留存/复购需要跨天或足够用户量）
+3. 缺少分母的比率指标（只能算分子）
+4. 字段语义模糊（data_value 等）无法确定业务含义
+
+### 输出格式中的指标推荐规则
+- 在 recommendations 中保留 isDerived 字段，派生指标必须给出 formula 和理由
+- isDerived=true 的指标 confidence 建议 0.4-0.8，且理由必须包含业务域假设和字段依据
+- 每张表推荐的指标总数不超过 5 个，优先核心、确定性高的指标
+
+### confidence 参考标准（按确定性分层）
+| 指标类型 | confidence 范围 | 说明 |
+|---------|----------------|------|
+| 基础指标（单字段，可直接聚合） | 0.75-0.95 | 字段含义清晰、与业务域匹配 |
+| 直接可计算的派生指标 | 0.6-0.8 | 字段对清晰，业务域匹配 |
+| 需要业务假设的派生指标 | 0.4-0.7 | 仅在业务域和前提满足时推荐 |
+| 模糊/跨表推断的指标 | 0.3-0.6 | 字段语义不清或场景不确定 |
 
 ## 输出格式
 
@@ -584,7 +624,7 @@ func (s *SchemaAnalysisService) buildSystemPrompt() string {
     {
       "table": "表名",
       "field": "字段名",
-      "semanticType": "语义类型",
+      "semanticType": "metric/dimension/time/geo/category/identifier/technical/unknown",
       "subType": "子类型（如metric下的amount/count/ratio）",
       "businessName": "AI推荐的中文业务名称",
       "aggregation": "推荐聚合方式（仅对metric有效）",
@@ -596,7 +636,7 @@ func (s *SchemaAnalysisService) buildSystemPrompt() string {
   "tables": [
     {
       "table": "表名",
-      "businessType": "fact/dimension/mapping/transaction/log/unknown",
+      "businessType": "fact/dimension/transaction/log/mapping/summary/unknown",
       "summary": "表的业务概述",
       "isPrimary": true/false,
       "confidence": 0.0-1.0,
@@ -609,8 +649,10 @@ func (s *SchemaAnalysisService) buildSystemPrompt() string {
       "table": "表名",
       "field": "字段名",
       "displayName": "推荐的中文指标名",
-      "dataType": "number/currency/ratio",
-      "aggregation": "SUM/COUNT/AVG",
+      "dataType": "number/currency/ratio/percentage",
+      "aggregation": "SUM/COUNT/AVG/COUNT(DISTINCT)",
+      "isDerived": false,
+      "formula": "仅对 isDerived=true 时填写",
       "confidence": 0.0-1.0,
       "reason": "为什么推荐这个指标"
     }
@@ -631,9 +673,11 @@ func (s *SchemaAnalysisService) buildSystemPrompt() string {
 
 1. 只输出 JSON，不要输出任何解释性文字
 2. 只分析有业务含义的字段，忽略纯技术字段
-3. 指标名称要简洁，通常格式为：业务动作+度量对象（如"订单金额"、"支付笔数"、"用户注册量"）
-4. 对于模糊的字段，结合字段名和类型综合判断
-5. 表的 businessType 判断：fact=事实表（交易/事件）、dimension=维度表（用户/商品/地域）、mapping=关联表、transaction=交易表、log=日志表、unknown=未知`
+3. 指标名称要简洁，格式为：业务动作+度量对象（如"订单金额"、"支付笔数"）
+4. 对于模糊的字段，结合字段名、类型和表业务类型综合判断，降低 confidence
+5. 派生指标必须严格检查前提条件，不满足时不推荐，而非降低 confidence 后推荐
+6. 推荐数量控制：单张表的推荐指标不超过 5 个（包含基础指标和派生指标），优先推荐最核心的`
+
 }
 
 // buildUserPrompt 构建用户提示词
