@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { extractDashboardConfig, removeActionBlocks } from "@/lib/chat/response-parser";
+import DashboardView from "@/components/DashboardView";
 
 function formatTime(ts: number): string {
   const d = new Date(ts);
@@ -61,6 +62,9 @@ function InlineDashboardPreview({
         ) : (
           <span className="text-[10px] text-zinc-500 px-2 py-0.5 rounded-full bg-white/5 border border-white/10">预览</span>
         )}
+      </div>
+      <div className="p-3">
+        <DashboardView sections={config.sections} />
       </div>
     </div>
   );

@@ -403,7 +403,13 @@ export function useChat({ tenantId, dataSummary }: UseChatOptions): UseChatRetur
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantMsgId ? { ...m, content } : m))
           );
-          await processResponseActions(content, tenantId);
+          const actionResults = await processResponseActions(content, tenantId);
+          const updatedContent = appendActionResultsToContent(content, actionResults);
+          if (updatedContent !== content) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === assistantMsgId ? { ...m, content: updatedContent } : m))
+            );
+          }
           return;
         }
 
