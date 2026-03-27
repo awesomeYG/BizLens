@@ -605,7 +605,7 @@ export default function DatabaseConnectionTab() {
             暂无数据库连接。点击「新增数据库连接」添加。
           </div>
         ) : (
-          <table className="w-full min-w-[900px] text-left text-sm">
+          <table className="w-full min-w-[1000px] text-left text-sm">
             <thead className="border-b border-zinc-800 bg-zinc-950/80 text-xs uppercase tracking-wide text-zinc-500">
               <tr>
                 <th className="px-4 py-3 font-medium">名称</th>
@@ -614,7 +614,7 @@ export default function DatabaseConnectionTab() {
                 <th className="px-4 py-3 font-medium">库 / 路径</th>
                 <th className="px-4 py-3 font-medium">状态</th>
                 <th className="px-4 py-3 font-medium">AI 分析</th>
-                <th className="px-4 py-3 text-right font-medium">操作</th>
+                <th className="px-4 py-3 text-right font-medium w-52">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -650,8 +650,8 @@ export default function DatabaseConnectionTab() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-1.5 justify-end">
+                    <td className="px-4 py-3 w-52">
+                      <div className="flex items-center gap-1.5 justify-end">
                         <button
                           type="button"
                           onClick={() => openEditModal(row)}
