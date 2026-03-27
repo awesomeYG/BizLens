@@ -111,9 +111,11 @@ func (s *MetricDiscoveryService) GetDiscoverContext(tenantID, dataSourceID strin
 
 // SmartRecommend 智能推荐关键指标
 // 核心思路：
-//  1. 优先使用 AI 已有的 Recommendations（字段级指标，如 SUM(amount)）
-//  2. 基于 AI 的 Fields 语义分析，智能推断复合指标（DAU、转化率、客单价等）
-//  3. 规则兜底，补充通用数值字段
+//  1. 强制要求 Schema 已通过 AI 分析（SchemaAnalysisService.AnalyzeSchema）
+//  2. 使用 AI 分析推荐的字段级指标（基于语义理解，比规则更准确）
+//  3. 基于 AI 的 Fields 语义分析，智能推断复合指标（DAU、转化率等）
+//
+// 不再使用规则兜底——规则兜底会产生与用户数据库无关的通用电商指标
 //
 // 全程无需额外 LLM 调用，完全复用已有分析结果
 func (s *MetricDiscoveryService) SmartRecommend(tenantID, dataSourceID string) (*SmartRecommendResponse, error) {
@@ -132,13 +134,21 @@ func (s *MetricDiscoveryService) SmartRecommend(tenantID, dataSourceID string) (
 		return nil, fmt.Errorf("解析 schema 失败: %w", err)
 	}
 
-	// 解析已有的 AI 分析结果（AI 已经分析过 schema，结果存在这里）
+	// 解析已有的 AI 分析结果（必须存在！必须经过 SchemaAnalysisService.AnalyzeSchema）
 	var aiAnalysis *model.SchemaAIAnalysis
 	if ds.AIAnalysis != "" {
 		var parsed model.SchemaAIAnalysis
 		if err := json.Unmarshal([]byte(ds.AIAnalysis), &parsed); err == nil && parsed.AnalyzedAt != "" {
 			aiAnalysis = &parsed
 		}
+	}
+
+	// 核心约束：如果 Schema 未经过 AI 分析，禁止推荐
+	// 之前的问题是：没有 AI 分析时会走到规则兜底，生成"复购率""GMV""客单价"等
+	// 与用户数据库完全无关的通用电商指标。
+	// 修复：必须先调用 SchemaAnalysisService.AnalyzeSchema 完成 AI 分析，才能推荐指标。
+	if aiAnalysis == nil || aiAnalysis.AnalyzedAt == "" {
+		return nil, fmt.Errorf("数据源尚未完成 AI Schema 分析，请先在「数据源设置」中点击「AI 分析」完成分析后，再使用指标发现功能")
 	}
 
 	// 构建表和字段的索引
@@ -152,12 +162,9 @@ func (s *MetricDiscoveryService) SmartRecommend(tenantID, dataSourceID string) (
 	compositeRecs := s.inferCompositesFromAIAnalysis(tableList, fieldIndex, aiAnalysis)
 	recommendations = append(recommendations, compositeRecs...)
 
-	// 第三步：规则兜底——补充 AI 没发现但可能有价值的通用数值字段
-	// （在 schema 未被 AI 分析的情况下使用）
-	if aiAnalysis == nil || len(aiAnalysis.Fields) == 0 {
-		fallbackRecs := s.inferKeyMetrics(tableList, fieldIndex, aiAnalysis)
-		recommendations = append(recommendations, fallbackRecs...)
-	}
+	// 规则兜底已移除：禁止在无 AI 分析的情况下生成通用电商指标
+	// 如果 AI 分析结果中没有推荐任何指标，说明该数据库的表结构可能没有明显的
+	// 可聚合字段，用户需要手动定义指标或重新设计表结构。
 
 	// 按类别分组
 	byCategory := make(map[string][]KeyMetricRecommendation)

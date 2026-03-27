@@ -128,11 +128,6 @@ export default function MetricDiscoveryModal({
       }
       const ctx = await resp.json();
       setDiscoverContext(ctx);
-
-      // 如果 schema 已分析，直接开始智能推荐
-      if (ctx.schemaAnalyzed) {
-        setStep("select"); // 用户确认后就开始分析
-      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -329,8 +324,16 @@ export default function MetricDiscoveryModal({
                     )}
                   </div>
                   {!discoverContext.schemaAnalyzed && (
-                    <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
-                      Schema 尚未分析。推荐完成后，后台会自动分析表结构，下次发现将更加准确。
+                    <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                      <div className="flex items-start gap-2">
+                        <span className="mt-0.5 shrink-0 text-amber-400">⚠️</span>
+                        <div>
+                          <div className="font-medium">数据源尚未完成 AI Schema 分析</div>
+                          <div className="mt-1 text-xs text-amber-200/80">
+                            指标发现功能依赖 AI 对表结构的语义理解。请先在左侧菜单点击「数据源设置」，选择当前数据源，点击「AI 分析」完成分析后，再回来使用指标发现功能。
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -534,10 +537,11 @@ export default function MetricDiscoveryModal({
                 <button
                   type="button"
                   onClick={handleStartDiscovery}
-                  disabled={!selectedDsId || loading}
+                  disabled={!selectedDsId || loading || (!!discoverContext && !discoverContext.schemaAnalyzed)}
                   className="rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  title={!!discoverContext && !discoverContext.schemaAnalyzed ? "请先在数据源设置中完成 AI Schema 分析" : ""}
                 >
-                  {loading ? "检查中..." : "开始发现"}
+                  {loading ? "检查中..." : (!!discoverContext && !discoverContext.schemaAnalyzed) ? "需先完成 AI 分析" : "开始发现"}
                 </button>
               </>
             )}
