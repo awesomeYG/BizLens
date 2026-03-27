@@ -247,7 +247,8 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - notification_rule 的 platformIds 为空时不得默认 fallback 到钉钉
   - notification_rule 示例中 platformIds 必须由用户明确指定，不得自行推断
   - 意图识别不得将纯文本通知类内容误判为 send_dingtalk（除非包含明确的钉钉目标词）
-  - AI 可以自主决定调用 send_im_message 工具发送消息
+  - send_im_message 工具仅在发现数据异常时调用（如核心指标突然大幅偏离正常范围）
+  - 禁止在普通数据分析、生成报表、生成大屏等常规操作中调用 send_im_message
 
 ### Chat 页面大屏自动生成偏好
 - Date: 2026-03-25

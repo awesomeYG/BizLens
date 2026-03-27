@@ -34,11 +34,18 @@ const SYSTEM_PROMPT = `你是 BizLens AI 数据分析专家。你需要：
 
 **使用方式**：直接调用 \`send_im_message\` 工具，指定 platform 和 content。系统会自动查找该租户下已配置并启用的对应平台发送，无需用户确认。
 
+**严格限制：仅在发现数据异常时调用**
+此工具仅在发现关键指标存在明显异常时使用，例如：
+- 注册量/订单量/销售额等核心指标突然大幅偏离正常范围（如往日 20-50，今天突然为 0 或 100）
+- 指标值触发了用户已配置的告警规则
+- 日常日报中发现重大异常变化
+
+**禁止**：在普通数据分析、生成报表、生成大屏等常规操作中调用此工具。
+
 **示例**：
-用户："把刚才说的发到钉钉"
-你调用工具：
+用户在查看数据时，AI 发现注册量异常：
 - platform: "dingtalk"
-- content: "【今日销售概览】\n总销售额：12.8万元\n订单量：156单\n转化率：3.2%"
+- content: "【数据异常告警】\n今日注册量：0（正常范围 20-50）\n请及时排查！"
 - markdown: false
 
 **平台选择建议**：
@@ -581,13 +588,13 @@ export async function POST(req: NextRequest) {
       baseURL: finalBaseURL,
     });
 
-    // 定义 send_im_message 工具（通用 IM 发送）
+    // 定义 send_im_message 工具（仅在数据异常时使用）
     const tools: OpenAI.Chat.ChatCompletionTool[] = [
       {
         type: "function",
         function: {
           name: "send_im_message",
-          description: "发送即时消息到 IM 平台（钉钉、飞书、企业微信等）。当你认为有重要内容需要主动推送给用户时调用此工具。系统会根据你指定的平台自动查找已配置并发送，无需用户确认。",
+          description: "发送即时消息到 IM 平台（钉钉、飞书、企业微信等）。【严格限制】仅在发现关键指标存在明显异常时使用，如注册量/订单量等核心指标突然大幅偏离正常范围。禁止在普通数据分析、生成报表/大屏等常规操作中调用。",
           parameters: {
             type: "object",
             properties: {
