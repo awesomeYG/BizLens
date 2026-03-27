@@ -330,3 +330,19 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 导航文案已更新："数据大屏" -> "观测中心"（AppHeader.tsx）
   - 设计文档：`.monkeycode/specs/dashboard-redesign-observability/`（requirements.md + design.md + tasklist.md）
 
+### 授权码激活架构（SaaS 交付模式）
+- Date: 2026-03-27
+- Context: 用户要求以 SaaS 授权码模式交付产品，管理员凭授权码激活后自主管理用户
+- Category: 架构
+- Instructions:
+  - BizLens 以授权码激活模式交付，不预设任何账号
+  - 授权码通过环境变量 `LICENSE_KEY` 配置（必填），格式 `XXXX-XXXX-XXXX-XXXX`
+  - 可选环境变量：`LICENSE_SEATS`（最大用户数）、`LICENSE_EXPIRES`（到期日期）
+  - 激活流程：访问 `/auth/login` -> 检测到 `unactivated` -> 跳转 `/auth/activate` -> 输入授权码 + 管理员信息 -> 激活成功
+  - 激活 API：`POST /api/auth/activate`，后端校验 `LICENSE_KEY` 环境变量
+  - 登录接口响应增加 `unactivated` 字段，供前端判断是否跳转激活页
+  - 测试/开发授权码：`TEST-BIZL-0000-0001`，配置在 `backend/.env.example` 和根目录 `.env.example` 中
+  - `.env.example.local` 是开发本地配置模板，复制为 `.env.local` 后使用（已被 `.gitignore` 忽略）
+  - `dev.sh` 启动脚本已更新：自动从 `.env.local` 加载环境变量，启动时显示测试授权码
+  - 设计文档：`.monkeycode/specs/admin-management/`（requirements.md + design.md + tasklist.md）
+
