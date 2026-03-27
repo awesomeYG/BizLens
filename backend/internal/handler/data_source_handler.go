@@ -15,6 +15,18 @@ type DataSourceHandler struct {
 	schemaAnalysisSvc *service.SchemaAnalysisService
 }
 
+const invalidDataSourceIDMsg = "数据源 ID 无效"
+
+func parseDataSourceIDFromPath(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for i := 0; i < len(parts)-1; i++ {
+		if parts[i] == "data-sources" && parts[i+1] != "" {
+			return parts[i+1]
+		}
+	}
+	return ""
+}
+
 func NewDataSourceHandler(dataSourceService *service.DataSourceService, schemaAnalysisSvc *service.SchemaAnalysisService) *DataSourceHandler {
 	return &DataSourceHandler{
 		dataSourceService: dataSourceService,
@@ -126,8 +138,11 @@ func (h *DataSourceHandler) ListDataSources(w http.ResponseWriter, r *http.Reque
 // GetDataSource GET /api/tenants/{id}/data-sources/{dsId}
 func (h *DataSourceHandler) GetDataSource(w http.ResponseWriter, r *http.Request) {
 	tenantID := parseTenantID(r)
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	dsID := parts[len(parts)-1]
+	dsID := parseDataSourceIDFromPath(r.URL.Path)
+	if dsID == "" {
+		writeError(w, http.StatusBadRequest, invalidDataSourceIDMsg)
+		return
+	}
 
 	ds, err := h.dataSourceService.GetDataSource(dsID, tenantID)
 	if err != nil {
@@ -307,8 +322,11 @@ func (h *DataSourceHandler) CreateDataSource(w http.ResponseWriter, r *http.Requ
 // UpdateDataSource PUT /api/tenants/{id}/data-sources/{dsId}
 func (h *DataSourceHandler) UpdateDataSource(w http.ResponseWriter, r *http.Request) {
 	tenantID := parseTenantID(r)
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	dsID := parts[len(parts)-1]
+	dsID := parseDataSourceIDFromPath(r.URL.Path)
+	if dsID == "" {
+		writeError(w, http.StatusBadRequest, invalidDataSourceIDMsg)
+		return
+	}
 
 	existing, err := h.dataSourceService.GetDataSource(dsID, tenantID)
 	if err != nil {
@@ -397,8 +415,11 @@ func (h *DataSourceHandler) UpdateDataSource(w http.ResponseWriter, r *http.Requ
 // TestDataSourceConnection POST /api/tenants/{id}/data-sources/{dsId}/test
 func (h *DataSourceHandler) TestDataSourceConnection(w http.ResponseWriter, r *http.Request) {
 	tenantID := parseTenantID(r)
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	dsID := parts[len(parts)-2] // /test 前一个是 ID
+	dsID := parseDataSourceIDFromPath(r.URL.Path)
+	if dsID == "" {
+		writeError(w, http.StatusBadRequest, invalidDataSourceIDMsg)
+		return
+	}
 
 	ds, err := h.dataSourceService.GetDataSource(dsID, tenantID)
 	if err != nil {
@@ -427,8 +448,11 @@ func (h *DataSourceHandler) TestDataSourceConnection(w http.ResponseWriter, r *h
 // DeleteDataSource DELETE /api/tenants/{id}/data-sources/{dsId}
 func (h *DataSourceHandler) DeleteDataSource(w http.ResponseWriter, r *http.Request) {
 	tenantID := parseTenantID(r)
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	dsID := parts[len(parts)-1]
+	dsID := parseDataSourceIDFromPath(r.URL.Path)
+	if dsID == "" {
+		writeError(w, http.StatusBadRequest, invalidDataSourceIDMsg)
+		return
+	}
 
 	if err := h.dataSourceService.DeleteDataSource(dsID, tenantID); err != nil {
 		writeError(w, http.StatusInternalServerError, "删除数据源失败")
@@ -441,8 +465,11 @@ func (h *DataSourceHandler) DeleteDataSource(w http.ResponseWriter, r *http.Requ
 // GetDataSourceSchema GET /api/tenants/{id}/data-sources/{dsId}/schema
 func (h *DataSourceHandler) GetDataSourceSchema(w http.ResponseWriter, r *http.Request) {
 	tenantID := parseTenantID(r)
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	dsID := parts[len(parts)-1]
+	dsID := parseDataSourceIDFromPath(r.URL.Path)
+	if dsID == "" {
+		writeError(w, http.StatusBadRequest, invalidDataSourceIDMsg)
+		return
+	}
 
 	ds, err := h.dataSourceService.GetDataSource(dsID, tenantID)
 	if err != nil {
@@ -513,8 +540,11 @@ type AnalyzedSchemaResult struct {
 // 获取当前 AI 分析状态和 schema 差异预览（不触发分析）
 func (h *DataSourceHandler) GetSchemaAnalysis(w http.ResponseWriter, r *http.Request) {
 	tenantID := parseTenantID(r)
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	dsID := parts[len(parts)-1]
+	dsID := parseDataSourceIDFromPath(r.URL.Path)
+	if dsID == "" {
+		writeError(w, http.StatusBadRequest, invalidDataSourceIDMsg)
+		return
+	}
 
 	ds, err := h.dataSourceService.GetDataSource(dsID, tenantID)
 	if err != nil {
@@ -560,8 +590,11 @@ type AnalyzeSchemaRequest struct {
 
 func (h *DataSourceHandler) AnalyzeSchema(w http.ResponseWriter, r *http.Request) {
 	tenantID := parseTenantID(r)
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	dsID := parts[len(parts)-1]
+	dsID := parseDataSourceIDFromPath(r.URL.Path)
+	if dsID == "" {
+		writeError(w, http.StatusBadRequest, invalidDataSourceIDMsg)
+		return
+	}
 
 	ds, err := h.dataSourceService.GetDataSource(dsID, tenantID)
 	if err != nil {

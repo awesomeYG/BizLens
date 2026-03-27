@@ -128,7 +128,7 @@ func (s *LLMService) CallLLMWithModel(cfg *model.AIServiceConfig, systemPrompt, 
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return "", fmt.Errorf("LLM API error: status=%d body=%s", resp.Status, string(respBody))
+		return "", s.buildLLMAPIError(resp.StatusCode, resp.Status, respBody)
 	}
 
 	var llmResp LLMResponse
@@ -192,7 +192,7 @@ func (s *LLMService) CallLLMJSON(tenantID string, systemPrompt, userPrompt strin
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return "", fmt.Errorf("LLM API error: status=%d body=%s", resp.Status, string(respBody))
+		return "", s.buildLLMAPIError(resp.StatusCode, resp.Status, respBody)
 	}
 
 	var llmResp LLMResponse
@@ -210,8 +210,8 @@ func (s *LLMService) CallLLMJSON(tenantID string, systemPrompt, userPrompt strin
 // defaultBaseURL 根据模型类型返回默认 base URL
 func (s *LLMService) defaultBaseURL(modelType string) string {
 	switch modelType {
-	case "minimax":
-		return "https://api.minimax.chat/v1"
+	case "minimax", "minmax":
+		return "https://api.minimax.io/v1"
 	case "openai":
 		return "https://api.openai.com/v1"
 	case "azure":
@@ -224,11 +224,23 @@ func (s *LLMService) defaultBaseURL(modelType string) string {
 // defaultModel 根据模型类型返回默认模型
 func (s *LLMService) defaultModel(modelType string) string {
 	switch modelType {
-	case "minimax":
+	case "minimax", "minmax":
 		return "MiniMax-Text-01"
 	case "openai":
 		return "gpt-4o-mini"
 	default:
 		return "gpt-4o-mini"
 	}
+}
+
+// buildLLMAPIError 标准化 LLM API 错误，提供更可操作的提示信息
+func (s *LLMService) buildLLMAPIError(statusCode int, status string, respBody []byte) error {
+	bodyText := string(respBody)
+	if strings.Contains(bodyText, "unsupported_country_region_territory") {
+		return fmt.Errorf(
+			"LLM API error: status_code=%d status=%s body=%s; 当前地域不支持该模型服务，请在 AI 配置中切换可用的 Base URL（如 OpenAI 兼容网关）或切换到 minimax 等可用提供商",
+			statusCode, status, bodyText,
+		)
+	}
+	return fmt.Errorf("LLM API error: status_code=%d status=%s body=%s", statusCode, status, bodyText)
 }
