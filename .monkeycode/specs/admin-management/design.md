@@ -2,225 +2,519 @@
 
 > BizLens AI 数据分析平台 - 后台管理系统
 
-## 1. 技术架构概览
+## 1. 核心变更：授权码激活流程
 
-### 1.1 整体架构
+### 1.1 变更概述
+
+原有的硬编码预设账号（`koala@qq.com / admin123`）方案替换为**授权码激活**模式：
+
+| 方面 | 旧方案 | 新方案 |
+|-----|-------|-------|
+| 初始账号 | 硬编码在 `auth_service.go` | 无预设，通过授权码激活创建 |
+| 管理员来源 | 出厂预设 | 部署后由客户自行创建 |
+| 授权方式 | 无 | 环境变量 `LICENSE_KEY` 配置授权码 |
+| 注册限制 | 任何人可注册 | 未激活时禁止注册，激活后管理员添加用户 |
+
+### 1.2 激活流程状态机
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Browser                               │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │  Next.js Frontend (frontend/)                    │   │
-│  │  ├── /admin/*     → 后台管理页面                 │   │
-│  │  ├── /settings/*  → 用户设置页面（已存在）       │   │
-│  │  ├── /chat/*      → AI 对话页面（已存在）         │   │
-│  │  └── /api/*       → Next.js API Routes           │   │
-│  └───────────────────────┬──────────────────────────┘   │
-│                          │                              │
-│  next.config.ts rewrites│ /api/* → localhost:3001      │
-│                          ▼                              │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │  Go Backend (backend/)                            │   │
-│  │  ├── /api/admin/*   → 后台管理 API（新）          │   │
-│  │  ├── /api/tenants/* → 租户级 API（已存在）        │   │
-│  │  ├── /api/datasets/* → 数据集 API（已存在）       │   │
-│  │  └── /api/auth/*   → 认证 API（已存在）           │   │
-│  └──────────────────────────────────────────────────┘   │
-│                          │                              │
-│                          ▼                              │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │  PostgreSQL 16 / SQLite                           │   │
-│  │  ├── tenants, users (已存在)                      │   │
-│  │  ├── data_sources (已存在)                        │   │
-│  │  ├── uploaded_datasets (已存在)                  │   │
-│  │  └── system_config (新增：存储配置、系统参数)     │   │
-│  └──────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
+[系统启动]
+    │
+    ▼
+查询 users 表：是否有 role=owner/admin 的用户？
+    │
+    ├── 无 → UNACTIVATED 状态 → 所有请求返回 { unactivated: true }
+    │                                       │
+    │                                       ▼
+    │                                  用户访问 /auth/login
+    │                                       │
+    │                                       ▼
+    │                             前端 redirect 到 /auth/activate
+    │                                       │
+    │                                       ▼
+    │                             用户输入授权码 + 管理员信息
+    │                                       │
+    │                                       ▼
+    │                              POST /api/auth/activate
+    │                              (校验 LICENSE_KEY 环境变量)
+    │                                       │
+    │                                       ▼
+    │                              创建 owner 用户 + JWT token
+    │                                       │
+    │                                       ▼
+    └── 有 → ACTIVATED 状态 → 正常登录/注册流程
 ```
-
-### 1.2 设计原则
-
-1. **复用优先**：前端复用全部现有 CSS/组件，后端复用现有 Service 层
-2. **渐进增强**：Admin 功能在现有系统上叠加，不破坏已有功能
-3. **统一风格**：后台管理使用与主站一致的深色主题和组件风格
-4. **安全隔离**：admin API 严格权限校验，多租户数据完全隔离
 
 ---
 
-## 2. 前端架构设计
+## 2. 后端变更
 
-### 2.1 目录结构
+### 2.1 Config 变更
+
+```go
+// backend/internal/config/config.go
+
+type Config struct {
+    // ... 现有字段 ...
+
+    // 授权相关（新增）
+    LicenseKey     string  // 必填，授权码
+    LicenseSeats   int     // 可选，最大用户数上限
+    LicenseExpires string  // 可选，到期日期 YYYY-MM-DD
+}
+
+func Load() *Config {
+    // 加载 LICENSE_KEY（必填）
+    licenseKey := os.Getenv("LICENSE_KEY")
+    if licenseKey == "" {
+        log.Fatal("错误：未配置环境变量 LICENSE_KEY，无法启动系统")
+    }
+
+    // 校验授权码格式（4段各4位）
+    if !isValidLicenseKeyFormat(licenseKey) {
+        log.Fatal("错误：LICENSE_KEY 格式无效，应为 XXXX-XXXX-XXXX-XXXX")
+    }
+
+    // 加载可选字段
+    licenseSeats := getEnvInt("LICENSE_SEATS", 0)   // 0 表示不限制
+    licenseExpires := os.Getenv("LICENSE_EXPIRES")   // YYYY-MM-DD
+
+    return &Config{
+        // ... 现有字段 ...
+        LicenseKey:     licenseKey,
+        LicenseSeats:   licenseSeats,
+        LicenseExpires: licenseExpires,
+    }
+}
+```
+
+### 2.2 Auth DTO 变更
+
+```go
+// backend/internal/dto/auth_dto.go
+
+// ActivateRequest 激活请求（新）
+type ActivateRequest struct {
+    LicenseKey string `json:"licenseKey" validate:"required"`
+    Name       string `json:"name" validate:"required"`
+    Email      string `json:"email" validate:"required,email"`
+    Password   string `json:"password" validate:"required,min=6"`
+}
+
+// ActivateResponse 激活响应（新）
+type ActivateResponse struct {
+    Activated bool          `json:"activated"`
+    User      *UserResponse `json:"user,omitempty"`
+    Tokens    *Tokens       `json:"tokens,omitempty"`
+    Error     string        `json:"error,omitempty"`
+    Code      string        `json:"code,omitempty"`
+}
+
+// LoginResponse 增加激活状态字段（修改）
+type LoginResponse struct {
+    User         *UserResponse `json:"user,omitempty"`
+    Tokens       *Tokens       `json:"tokens,omitempty"`
+    Unactivated  bool          `json:"unactivated"`  // 新增
+    SystemName   string        `json:"systemName"`   // 新增
+    Version      string        `json:"version"`     // 新增
+}
+```
+
+### 2.3 AuthService 变更
+
+```go
+// backend/internal/service/auth_service.go
+
+// 删除以下内容：
+const (
+    adminEmail    = "koala@qq.com"
+    adminName     = "管理员"
+    adminPassword = "admin123"
+)
+
+func (s *AuthService) EnsureAdminAccount() error { ... }
+
+// 修改 Register：未激活时禁止注册，激活后可注册但 role 固定为 "member"
+func (s *AuthService) Register(req *dto.RegisterRequest) (*model.User, *dto.Tokens, error) {
+    if !s.IsActivated() {
+        return nil, nil, errors.New("系统尚未激活，请先激活系统")
+    }
+    // ... 现有逻辑 ...
+}
+
+// 新增方法：
+
+// IsActivated 检查系统是否已激活（至少有一个 owner/admin）
+func (s *AuthService) IsActivated() bool {
+    var count int64
+    s.db.Model(&model.User{}).
+        Where("role IN ('owner', 'admin') AND deleted_at IS NULL").
+        Count(&count)
+    return count > 0
+}
+
+// Activate 系统激活
+func (s *AuthService) Activate(req *dto.ActivateRequest) (*model.User, *dto.Tokens, error) {
+    // 1. 校验授权码格式
+    if !isValidLicenseKeyFormat(req.LicenseKey) {
+        return nil, nil, errors.New("授权码格式无效")
+    }
+
+    // 2. 比对环境变量 LICENSE_KEY
+    if req.LicenseKey != s.cfg.LicenseKey {
+        return nil, nil, errors.New("授权码无效")
+    }
+
+    // 3. 检查是否已激活
+    if s.IsActivated() {
+        return nil, nil, errors.New("系统已被激活")
+    }
+
+    // 4. 检查用户数上限
+    if s.cfg.LicenseSeats > 0 {
+        var count int64
+        s.db.Model(&model.User{}).Count(&count)
+        if count >= int64(s.cfg.LicenseSeats) {
+            return nil, nil, errors.New("已达到授权用户数上限")
+        }
+    }
+
+    // 5. 检查邮箱是否已被注册
+    var existing model.User
+    if err := s.db.Where("email = ?", req.Email).First(&existing).Error; err == nil {
+        return nil, nil, errors.New("该邮箱已被注册")
+    }
+
+    // 6. 创建默认租户（如果不存在）
+    s.EnsureDefaultTenant()
+
+    // 7. 创建 owner 用户
+    hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+    user := &model.User{
+        ID:           uuid.New().String(),
+        TenantID:     defaultTenantID,
+        Name:         req.Name,
+        Email:        req.Email,
+        PasswordHash: string(hashedPassword),
+        Role:         "owner",
+    }
+
+    var tokens *dto.Tokens
+    s.db.Transaction(func(tx *gorm.DB) error {
+        tx.Create(user)
+        tokens, _ = s.generateTokens(tx, user.ID)
+        return nil
+    })
+
+    return user, tokens, nil
+}
+
+// ValidateLicense 获取激活状态（供登录接口使用）
+func (s *AuthService) ValidateLicense() (bool, string, string) {
+    return s.IsActivated(), "BizLens", "1.0.0"
+}
+
+// ListUsers 列出用户（支持租户筛选、关键字搜索、分页）
+func (s *AuthService) ListUsers(tenantID, keyword string, page, pageSize int) ([]model.User, int64, error) {
+    query := s.db.Model(&model.User{}).Where("deleted_at IS NULL")
+
+    if tenantID != "" {
+        query = query.Where("tenant_id = ?", tenantID)
+    }
+    if keyword != "" {
+        query = query.Where("name LIKE ? OR email LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+    }
+
+    var total int64
+    query.Count(&total)
+
+    var users []model.User
+    offset := (page - 1) * pageSize
+    query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&users)
+
+    return users, total, nil
+}
+
+// CreateUser 管理员创建用户
+func (s *AuthService) CreateUser(req *dto.CreateUserRequest) (*model.User, error) {
+    var existing model.User
+    if err := s.db.Where("email = ?", req.Email).First(&existing).Error; err == nil {
+        return nil, errors.New("该邮箱已被注册")
+    }
+
+    hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+    user := &model.User{
+        ID:           uuid.New().String(),
+        TenantID:     defaultTenantID,
+        Name:         req.Name,
+        Email:        req.Email,
+        PasswordHash: string(hashedPassword),
+        Role:         req.Role, // admin / member
+    }
+
+    if err := s.db.Create(user).Error; err != nil {
+        return nil, err
+    }
+    return user, nil
+}
+
+// UpdateUser 更新用户
+func (s *AuthService) UpdateUser(userID, name, role string) error {
+    updates := map[string]interface{}{}
+    if name != "" {
+        updates["name"] = name
+    }
+    if role != "" && role != "owner" { // owner 角色不可被修改
+        updates["role"] = role
+    }
+    return s.db.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
+}
+
+// DeleteUser 删除用户
+func (s *AuthService) DeleteUser(userID string) error {
+    return s.db.Where("id = ?", userID).Delete(&model.User{}).Error
+}
+
+// ResetUserPassword 重置密码，返回新密码明文
+func (s *AuthService) ResetUserPassword(userID string) (string, error) {
+    newPassword := generateRandomPassword(12) // 生成12位随机密码
+    hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+    err := s.db.Model(&model.User{}).Where("id = ?", userID).
+        Update("password_hash", string(hashedPassword)).Error
+    return newPassword, err
+}
+
+// generateRandomPassword 生成随机密码
+func generateRandomPassword(length int) string {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
+    b := make([]byte, length)
+    rand.Read(b)
+    for i := range b {
+        b[i] = chars[int(b[i])%len(chars)]
+    }
+    return string(b)
+}
+```
+
+### 2.4 AuthHandler 变更
+
+```go
+// backend/internal/handler/auth_handler.go
+
+// POST /api/auth/activate（新）
+func (h *AuthHandler) Activate(w http.ResponseWriter, r *http.Request) {
+    var req dto.ActivateRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        writeError(w, http.StatusBadRequest, "请求体解析失败")
+        return
+    }
+
+    user, tokens, err := h.authService.Activate(&req)
+    if err != nil {
+        json.NewEncoder(w).Encode(dto.ActivateResponse{
+            Activated: false,
+            Error:     err.Error(),
+            Code:      "ACTIVATION_FAILED",
+        })
+        return
+    }
+
+    json.NewEncoder(w).Encode(dto.ActivateResponse{
+        Activated: true,
+        User:      toUserResponse(user),
+        Tokens:    tokens,
+    })
+}
+
+// POST /api/auth/login 变更：响应增加 unactivated 字段
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+    // ... 现有登录逻辑 ...
+
+    // 登录成功后，额外返回激活状态
+    isActivated, systemName, version := h.authService.ValidateLicense()
+
+    json.NewEncoder(w).Encode(dto.LoginResponse{
+        User:        userResponse,
+        Tokens:      tokens,
+        Unactivated: !isActivated,
+        SystemName:  systemName,
+        Version:     version,
+    })
+}
+
+// POST /api/auth/register 变更：未激活时返回错误
+func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+    // ...
+    if !h.authService.IsActivated() {
+        writeError(w, http.StatusForbidden, `{"error":"系统尚未激活","code":"NOT_ACTIVATED"}`)
+        return
+    }
+    // ...
+}
+```
+
+### 2.5 路由注册变更
+
+```go
+// backend/cmd/main.go
+
+// 修改 auth 路由：
+mux.HandleFunc("/api/auth/", func(w http.ResponseWriter, r *http.Request) {
+    path := strings.TrimPrefix(r.URL.Path, "/api/auth/")
+
+    switch {
+    // POST /api/auth/activate（新）
+    case path == "activate" && r.Method == http.MethodPost:
+        authHandler.Activate(w, r)
+        return
+
+    // POST /api/auth/register（修改：增加激活状态检查）
+    case path == "register" && r.Method == http.MethodPost:
+        // 在 handler 中已处理...
+        authHandler.Register(w, r)
+        return
+
+    // POST /api/auth/login（修改：响应增加 unactivated）
+    case path == "login" && r.Method == http.MethodPost:
+        authHandler.Login(w, r)
+        return
+
+    // ... 其他路由不变 ...
+    }
+})
+
+// 移除 EnsureAdminAccount 启动调用：
+// 删除了：
+// if err := authService.EnsureAdminAccount(); err != nil {
+//     log.Fatalf("初始化超管账号失败：%v", err)
+// }
+// log.Println("超管账号初始化完成：koala@qq.com / admin123")
+```
+
+---
+
+## 3. 前端变更
+
+### 3.1 登录页适配
+
+```typescript
+// frontend/app/auth/login/page.tsx 改动
+// POST /api/auth/login 后检查 unactivated 状态
+
+const handleLogin = async () => {
+  const res = await fetch("/api/auth/login", { ... });
+  const data = await res.json();
+
+  if (data.unactivated === true) {
+    router.replace("/auth/activate");
+    return;
+  }
+  // 正常登录...
+};
+```
+
+### 3.2 激活页面（/auth/activate）
+
+视觉风格与登录页一致：深色背景、品牌渐变、玻璃卡片。
+
+授权码输入使用 4 段输入框，支持粘贴自动跳格。激活成功后保存 token 并重定向到 `/onboarding`。
+
+### 3.3 前端 API Route 变更
+
+```typescript
+// frontend/app/api/auth/activate/route.ts（新文件）
+export async function POST(req: Request) {
+  const body = await req.json();
+  const res = await fetch(`${BACKEND_URL}/api/auth/activate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return NextResponse.json(await res.json(), { status: res.status });
+}
+```
+
+---
+
+## 4. 后台管理系统架构
+
+### 4.1 目录结构
 
 ```
 frontend/app/
+├── auth/
+│   ├── login/page.tsx              # 适配 unactivated 状态
+│   └── activate/page.tsx           # 新增：激活引导页
+│
 ├── admin/                          # 后台管理（新）
-│   ├── layout.tsx                   # AdminLayout - 侧边导航 + 权限守卫
-│   ├── page.tsx                     # 仪表盘 /admin
+│   ├── layout.tsx                  # AdminLayout
+│   ├── page.tsx                    # 仪表盘
 │   ├── assets/
-│   │   ├── page.tsx                 # 数据资产总览
-│   │   ├── files/page.tsx           # 文件管理
-│   │   ├── databases/page.tsx       # 数据库管理
-│   │   └── storage/page.tsx         # 存储配置
-│   ├── tenants/
-│   │   ├── page.tsx                 # 租户列表
-│   │   └── users/page.tsx           # 用户管理
+│   │   ├── files/page.tsx         # 文件管理
+│   │   ├── databases/page.tsx     # 数据库管理
+│   │   └── storage/page.tsx       # 存储配置
+│   ├── users/
+│   │   └── page.tsx               # 用户管理（核心）
 │   └── config/
-│       └── page.tsx                 # 系统配置
-│
-frontend/components/admin/           # 后台管理专用组件（新）
-│   ├── AdminLayout.tsx              # 后台侧边导航布局
-│   ├── AdminSidebar.tsx             # 侧边导航栏
-│   ├── AdminStats.tsx               # 统计卡片
-│   ├── FileTable.tsx                # 文件管理表格
-│   ├── DatabaseTable.tsx            # 数据库连接表格
-│   ├── TenantTable.tsx               # 租户管理表格
-│   ├── UserTable.tsx                # 用户管理表格
-│   └── StorageForm.tsx              # 存储配置表单
-│
+│       └── page.tsx               # 系统配置
+
+frontend/components/admin/          # 后台管理专用组件（新）
+│   ├── AdminLayout.tsx
+│   ├── AdminSidebar.tsx
+│   ├── AdminStats.tsx
+│   ├── UserTable.tsx               # 用户管理表格
+│   ├── UserFormModal.tsx           # 添加/编辑用户弹窗
+│   ├── FileTable.tsx
+│   ├── DatabaseTable.tsx
+│   └── StorageForm.tsx
+
 frontend/lib/admin/
-│   └── api.ts                       # 后台 API 封装（新增）
+│   ├── api.ts                      # Admin API 封装
+│   └── types.ts                    # Admin 类型定义
 ```
 
-### 2.2 AdminLayout 组件设计
+### 4.2 Admin API 总览
 
-```typescript
-// frontend/components/admin/AdminLayout.tsx
-
-// 复用现有 AppHeader，但通过 navItems 注入管理专属导航
-// 后台侧边栏独立设计，支持展开/折叠
-
-interface AdminLayoutProps {
-  children: React.ReactNode;
-  // 当前激活的一级/二级导航路径
-  activePath: string;
-}
-
-// 侧边导航数据结构
-const ADMIN_SIDEBAR_NAV = [
-  {
-    label: "仪表盘",
-    icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",
-    href: "/admin",
-  },
-  {
-    label: "数据资产",
-    icon: "M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4",
-    children: [
-      { label: "文件管理", href: "/admin/assets/files" },
-      { label: "数据库", href: "/admin/assets/databases" },
-      { label: "存储配置", href: "/admin/assets/storage" },
-    ],
-  },
-  {
-    label: "租户管理",
-    icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",
-    children: [
-      { label: "租户列表", href: "/admin/tenants" },
-      { label: "用户管理", href: "/admin/tenants/users" },
-    ],
-  },
-  {
-    label: "系统配置",
-    icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z",
-    href: "/admin/config",
-  },
-];
-```
-
-### 2.3 权限守卫
-
-```typescript
-// 复用现有的 AuthGuard 模式，在 AdminLayout 中注入
-
-// frontend/components/admin/AdminAuthGuard.tsx
-// 在每个 /admin/* 页面加载时检查：
-// 1. localStorage 中有 token
-// 2. 当前用户 role 为 'admin' 或 'owner'
-// 若不满足，重定向到 /chat 并显示 toast 提示
-
-import { getCurrentUser } from "@/lib/user-store";
-
-function AdminAuthGuard({ children }: { children: React.ReactNode }) {
-  const user = getCurrentUser();
-  if (!user || (user.role !== "admin" && user.role !== "owner")) {
-    // 重定向到首页
-    return null; // 或使用 router.push
-  }
-  return <>{children}</>;
-}
-```
-
-### 2.4 样式复用策略
-
-| 现有资产 | 复用方式 |
-|---------|---------|
-| `globals.css` | 全站共享，继续使用 |
-| `.glass-card` | 后台管理卡片使用 `glass-card rounded-xl` |
-| `.btn-primary` / `.btn-secondary` | 直接使用 |
-| `.badge-*` | 直接使用 |
-| `.input-base` | 直接使用 |
-| Tailwind 工具类 | 直接使用 |
-| 现有动画类 | 直接使用 |
-| **不新增** | 不新增 CSS 变量、工具类 |
-
-后台管理页面仅在 `globals.css` 末尾追加少量管理后台专属工具类（如果需要的话）。
-
----
-
-## 3. 后端 API 设计
-
-### 3.1 API 路由总览
-
-所有 admin API 统一前缀 `/api/admin/`，需 JWT 认证 + admin 角色校验。
+所有 admin API 统一前缀 `/api/admin/`，需 JWT 认证 + admin/owner 角色。
 
 | 方法 | 路径 | 功能 |
 |-----|-----|-----|
-| GET | `/api/admin/stats` | 系统统计（仪表盘） |
-| **数据集** | | |
-| GET | `/api/admin/datasets` | 所有租户文件列表（支持分页、筛选） |
-| DELETE | `/api/admin/datasets/{id}` | 删除指定文件 |
-| **数据源** | | |
-| GET | `/api/admin/data-sources` | 所有租户数据库连接列表 |
-| POST | `/api/admin/data-sources/{id}/test` | 测试指定数据源连接 |
-| DELETE | `/api/admin/data-sources/{id}` | 删除指定数据源 |
-| **租户** | | |
-| GET | `/api/admin/tenants` | 租户列表 |
-| POST | `/api/admin/tenants` | 创建租户 |
-| GET | `/api/admin/tenants/{id}` | 获取租户详情 |
-| PUT | `/api/admin/tenants/{id}` | 更新租户 |
-| DELETE | `/api/admin/tenants/{id}` | 删除租户 |
-| **用户** | | |
-| GET | `/api/admin/users` | 用户列表（支持租户筛选） |
-| POST | `/api/admin/users` | 创建用户 |
-| PUT | `/api/admin/users/{id}` | 更新用户（角色等） |
+| GET | `/api/admin/stats` | 系统统计 |
+| **用户管理** | | |
+| GET | `/api/admin/users` | 用户列表（支持分页、搜索） |
+| POST | `/api/admin/users` | 添加用户 |
+| PUT | `/api/admin/users/{id}` | 编辑用户 |
 | DELETE | `/api/admin/users/{id}` | 删除用户 |
 | POST | `/api/admin/users/{id}/reset-password` | 重置密码 |
-| **存储配置** | | |
-| GET | `/api/admin/storage/config` | 获取存储配置 |
+| POST | `/api/admin/users/{id}/toggle` | 启用/禁用 |
+| **数据资产** | | |
+| GET | `/api/admin/datasets` | 文件列表 |
+| DELETE | `/api/admin/datasets/{id}` | 删除文件 |
+| GET | `/api/admin/data-sources` | 数据库连接列表 |
+| POST | `/api/admin/data-sources/{id}/test` | 测试连接 |
+| DELETE | `/api/admin/data-sources/{id}` | 删除连接 |
+| **存储** | | |
+| GET | `/api/admin/storage/config` | 存储配置 |
 | PUT | `/api/admin/storage/config` | 更新存储配置 |
-| GET | `/api/admin/storage/usage` | 各租户存储使用量 |
-| POST | `/api/admin/storage/cleanup` | 清理过期文件 |
 
-### 3.2 Admin Handler 设计
+### 4.3 Admin Handler
 
 ```go
 // backend/internal/handler/admin_handler.go（新文件）
 
 type AdminHandler struct {
-    authService         *service.AuthService
-    dataSourceService   *service.DataSourceService
-    datasetService      *service.DatasetService
-    storageService      *service.StorageService  // 新增
+    authService       *service.AuthService
+    dataSourceService *service.DataSourceService
+    datasetService    *service.DatasetService
+    storageService    *service.StorageService
 }
 
-func NewAdminHandler(...) *AdminHandler
-
-// AdminAuth 中间件：在 JWT 认证基础上额外检查 role == "admin"
+// AdminAuth 中间件：JWT + 角色校验
 func AdminAuth(authService *service.AuthService) func(http.Handler) http.Handler {
     return func(next http.Handler) http.Handler {
         return middleware.Auth(authService)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
             role := r.Context().Value("userRole").(string)
-            if role != "admin" {
+            if role != "admin" && role != "owner" {
                 writeError(w, http.StatusForbidden, "需要管理员权限")
                 return
             }
@@ -230,404 +524,152 @@ func AdminAuth(authService *service.AuthService) func(http.Handler) http.Handler
 }
 
 // GET /api/admin/stats
-func (h *AdminHandler) GetStats(w http.ResponseWriter, r *http.Request)
-// GET /api/admin/datasets
-func (h *AdminHandler) ListAllDatasets(w http.ResponseWriter, r *http.Request)
-// GET /api/admin/data-sources
-func (h *AdminHandler) ListAllDataSources(w http.ResponseWriter, r *http.Request)
-// GET /api/admin/tenants
-func (h *AdminHandler) ListTenants(w http.ResponseWriter, r *http.Request)
-// POST /api/admin/tenants
-func (h *AdminHandler) CreateTenant(w http.ResponseWriter, r *http.Request)
+func (h *AdminHandler) GetStats(w http.ResponseWriter, r *http.Request) { ... }
+
 // GET /api/admin/users
-func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request)
-// GET /api/admin/storage/config
-func (h *AdminHandler) GetStorageConfig(w http.ResponseWriter, r *http.Request)
-// PUT /api/admin/storage/config
-func (h *AdminHandler) UpdateStorageConfig(w http.ResponseWriter, r *http.Request)
-```
+func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) { ... }
 
-### 3.3 Storage Service 设计
+// POST /api/admin/users
+func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) { ... }
 
-```go
-// backend/internal/service/storage_service.go（新文件）
+// PUT /api/admin/users/{id}
+func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) { ... }
 
-type StorageService struct {
-    db *gorm.DB
-    // 配置项（可从数据库 SystemConfig 或环境变量读取）
-    storageType string // "local" | "s3" | "minio"
-    localPath   string
-    s3Config    S3Config
-}
+// DELETE /api/admin/users/{id}
+func (h *AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+    parts := strings.Split(r.URL.Path, "/")
+    userID := parts[len(parts)-2]
 
-type SystemConfig struct {
-    ID        string `gorm:"type:varchar(50);primaryKey"`
-    Key       string `gorm:"size:100;uniqueIndex;not null"`
-    Value     string `gorm:"type:text"`
-    UpdatedAt time.Time
-}
-
-// StorageUsage 租户存储使用量
-type StorageUsage struct {
-    TenantID    string
-    TenantName  string
-    TotalSize   int64
-    FileCount   int
-}
-```
-
-### 3.4 后端路由注册
-
-```go
-// backend/cmd/main.go 中新增
-
-// Admin Handler
-adminHandler := handler.NewAdminHandler(authService, dataSourceService, datasetService, storageService)
-
-// Admin 路由组：/api/admin/*
-// 所有路由都需要 Auth + admin 角色
-adminRouter := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-    path := strings.TrimPrefix(r.URL.Path, "/api/admin/")
-
-    switch {
-    // stats
-    case path == "stats" && r.Method == http.MethodGet:
-        adminHandler.GetStats(w, r)
+    currentUserID := r.Context().Value("userID").(string)
+    if userID == currentUserID {
+        writeError(w, http.StatusBadRequest, "无法删除自己的账号")
         return
-    // datasets
-    case path == "datasets" && r.Method == http.MethodGet:
-        adminHandler.ListAllDatasets(w, r)
-        return
-    // storage
-    case path == "storage/config" && r.Method == http.MethodGet:
-        adminHandler.GetStorageConfig(w, r)
-        return
-    // ... 其他路由
-    default:
-        http.NotFound(w, r)
     }
-})
 
-mux.Handle("/api/admin/", adminRouter)
-```
-
-注意：前端 Next.js `next.config.ts` 的 rewrites 只代理 `/api/` 到后端，所以 admin API 不需要额外配置 rewrite。
-
-### 3.5 前端 API 封装
-
-```typescript
-// frontend/lib/admin/api.ts（新文件）
-
-import { getAccessToken } from "./auth/api";
-
-const BASE = "/api/admin";
-
-async function request<T>(
-  path: string,
-  options?: RequestInit
-): Promise<T> {
-  const token = getAccessToken();
-  const res = await fetch(`${BASE}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...options?.headers,
-    },
-  });
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-  return res.json();
+    if err := h.authService.DeleteUser(userID); err != nil {
+        writeError(w, http.StatusBadRequest, err.Error())
+        return
+    }
 }
 
-// API 函数
-export const adminApi = {
-  // 统计
-  getStats: () => request<AdminStats>("/stats"),
+// POST /api/admin/users/{id}/reset-password
+func (h *AdminHandler) ResetUserPassword(w http.ResponseWriter, r *http.Request) {
+    parts := strings.Split(r.URL.Path, "/")
+    userID := parts[len(parts)-2]
 
-  // 数据集
-  listDatasets: (params?: DatasetListParams) =>
-    request<DatasetListResponse>(`/datasets?${new URLSearchParams(params as any)}`),
-  deleteDataset: (id: string) => request<void>(`/datasets/${id}`, { method: "DELETE" }),
+    newPassword, err := h.authService.ResetUserPassword(userID)
+    if err != nil {
+        writeError(w, http.StatusBadRequest, err.Error())
+        return
+    }
 
-  // 数据源
-  listDataSources: (params?: DataSourceListParams) =>
-    request<DataSourceListResponse>(`/data-sources?${new URLSearchParams(params as any)}`),
-  testDataSource: (id: string) =>
-    request<ConnectionTestResult>(`/data-sources/${id}/test`, { method: "POST" }),
-  deleteDataSource: (id: string) =>
-    request<void>(`/data-sources/${id}`, { method: "DELETE" }),
+    json.NewEncoder(w).Encode(map[string]string{"password": newPassword})
+}
 
-  // 租户
-  listTenants: (params?: TenantListParams) =>
-    request<TenantListResponse>(`/tenants?${new URLSearchParams(params as any)}`),
-  createTenant: (data: CreateTenantRequest) =>
-    request<Tenant>(`/tenants`, { method: "POST", body: JSON.stringify(data) }),
-  updateTenant: (id: string, data: UpdateTenantRequest) =>
-    request<Tenant>(`/tenants/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  deleteTenant: (id: string) => request<void>(`/tenants/${id}`, { method: "DELETE" }),
+// GET /api/admin/datasets
+func (h *AdminHandler) ListAllDatasets(w http.ResponseWriter, r *http.Request) { ... }
 
-  // 用户
-  listUsers: (params?: UserListParams) =>
-    request<UserListResponse>(`/users?${new URLSearchParams(params as any)}`),
-  createUser: (data: CreateUserRequest) =>
-    request<User>(`/users`, { method: "POST", body: JSON.stringify(data) }),
-  updateUser: (id: string, data: UpdateUserRequest) =>
-    request<User>(`/users/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  deleteUser: (id: string) => request<void>(`/users/${id}`, { method: "DELETE" }),
-  resetUserPassword: (id: string) => request<{ password: string }>(`/users/${id}/reset-password`, { method: "POST" }),
+// DELETE /api/admin/datasets/{id}
+func (h *AdminHandler) DeleteDataset(w http.ResponseWriter, r *http.Request) { ... }
 
-  // 存储
-  getStorageConfig: () => request<StorageConfig>("/storage/config"),
-  updateStorageConfig: (data: StorageConfig) =>
-    request<StorageConfig>("/storage/config", { method: "PUT", body: JSON.stringify(data) }),
-  getStorageUsage: () => request<StorageUsage[]>("/storage/usage"),
-  cleanupStorage: (olderThanDays: number) =>
-    request<CleanupResult>("/storage/cleanup", { method: "POST", body: JSON.stringify({ olderThanDays }) }),
-};
+// GET /api/admin/data-sources
+func (h *AdminHandler) ListAllDataSources(w http.ResponseWriter, r *http.Request) { ... }
+
+// POST /api/admin/data-sources/{id}/test
+func (h *AdminHandler) TestDataSource(w http.ResponseWriter, r *http.Request) {
+    parts := strings.Split(r.URL.Path, "/")
+    dsID := parts[len(parts)-2]
+    result := h.dataSourceService.TestConnection(dsID)
+    json.NewEncoder(w).Encode(result)
+}
 ```
-
----
-
-## 4. 页面详细设计
-
-### 4.1 仪表盘（/admin）
-
-**组件结构：**
-```
-AdminDashboard
-├── StatCard[]              # 4个统计卡片（租户数/用户数/文件数/连接数）
-├── RecentFilesSection       # 最近文件列表
-├── StorageOverviewSection    # 存储概览（饼图）
-└── ActiveTenantsSection      # 活跃租户趋势
-```
-
-**数据流：** `page.tsx` -> `adminApi.getStats()` -> 渲染统计卡片
-
-### 4.2 文件管理（/admin/assets/files）
-
-**组件结构：**
-```
-FileManagementPage
-├── FilterBar               # 筛选栏（租户下拉、类型下拉、时间范围）
-├── FileTable               # 表格（复用 DataTable 模式）
-│   ├── Checkbox 批量选择
-│   ├── TenantCell         # 显示所属租户
-│   ├── FileSizeCell       # 格式化文件大小
-│   ├── StatusCell         # 状态徽章
-│   └── ActionCell         # 预览/下载/删除
-└── Pagination             # 分页器
-```
-
-**表格字段：**
-| 字段 | 类型 | 说明 |
-|-----|-----|-----|
-| checkbox | Selection | 批量选择 |
-| name | Text | 文件名 |
-| tenant | Badge | 所属租户名 |
-| format | Badge | 格式（excel/csv） |
-| size | Text | 格式化大小 |
-| rows | Number | 行数 |
-| uploadedAt | Date | 上传时间 |
-| status | Badge | 状态 |
-| actions | Actions | 操作按钮 |
-
-### 4.3 数据库管理（/admin/assets/databases）
-
-**表格字段：**
-| 字段 | 类型 | 说明 |
-|-----|-----|-----|
-| name | Text | 连接名称 |
-| tenant | Badge | 所属租户 |
-| type | Badge | 数据库类型 |
-| status | Badge | 连接状态（connected/disconnected/error） |
-| lastSync | Date | 最近同步时间 |
-| actions | Actions | 测试/详情/删除 |
-
-### 4.4 存储配置（/admin/assets/storage）
-
-使用表单布局，支持动态切换：
-- 本地存储：仅显示路径字段
-- S3/MinIO：显示 Endpoint、AccessKey、SecretKey、Bucket、Region
-
-### 4.5 租户列表（/admin/tenants）
-
-表格 + 展开详情（显示关联的用户数、文件数、数据源数）
-
-### 4.6 用户管理（/admin/tenants/users）
-
-左侧租户筛选 + 右侧用户表格
 
 ---
 
 ## 5. 数据模型
 
-### 5.1 新增模型
+### 5.1 新增 SystemConfig
 
 ```go
-// backend/internal/model/model.go 中新增
+// backend/internal/model/model.go
 
 // SystemConfig 系统级配置（Key-Value）
 type SystemConfig struct {
     ID        string    `gorm:"type:varchar(50);primaryKey" json:"id"`
     Key       string    `gorm:"size:100;uniqueIndex;not null" json:"key"`
     Value     string    `gorm:"type:text" json:"value"`
-    Category  string    `gorm:"size:50;default:'storage'" json:"category"` // storage/ai/alert/retention
+    Category  string    `gorm:"size:50;default:'storage'" json:"category"` // storage/ai/alert/license
     UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // AdminStats 系统统计（聚合数据，非持久化）
 type AdminStats struct {
-    TotalTenants     int64            `json:"totalTenants"`
     TotalUsers       int64            `json:"totalUsers"`
     TotalDatasets    int64            `json:"totalDatasets"`
     TotalDataSources int64            `json:"totalDataSources"`
     TotalStorageSize int64            `json:"totalStorageSize"`
-    ActiveTenants7d  int64            `json:"activeTenants7d"`  // 7日内活跃租户数
-    RecentDatasets    []DatasetSummary `json:"recentDatasets"`   // 最近上传
-    StorageByFormat   map[string]int64 `json:"storageByFormat"` // 按格式统计
+    StorageByFormat  map[string]int64 `json:"storageByFormat"`
+    RecentDatasets   []DatasetSummary `json:"recentDatasets"`
 }
 
 type DatasetSummary struct {
-    ID          string `json:"id"`
-    Name        string `json:"name"`
-    FileName    string `json:"fileName"`
-    TenantID    string `json:"tenantId"`
-    FileSize    int64  `json:"fileSize"`
-    FileFormat  string `json:"fileFormat"`
-    CreatedAt   string `json:"createdAt"`
+    ID         string `json:"id"`
+    Name       string `json:"name"`
+    FileName   string `json:"fileName"`
+    FileSize   int64  `json:"fileSize"`
+    FileFormat string `json:"fileFormat"`
+    CreatedAt  string `json:"createdAt"`
 }
 ```
 
-### 5.2 已有模型复用
+---
 
-| 模型 | 所在文件 | 复用方式 |
-|-----|---------|---------|
-| Tenant | model/model.go | Admin API 直接查询 |
-| User | model/model.go | Admin API 直接查询 |
-| DataSource | model/model.go | 复用 List/CRUD |
-| UploadedDataset | model/dataset.go | 复用 + admin 列表扩展 |
+## 6. 环境变量清单
+
+| 变量名 | 必填 | 说明 | 示例 |
+|-------|-----|-----|------|
+| `LICENSE_KEY` | **是** | 授权码，格式 `XXXX-XXXX-XXXX-XXXX` | `BIZL-8K3M-A7PW-2N9Q` |
+| `LICENSE_SEATS` | 否 | 最大用户数上限，不填则不限制 | `50` |
+| `LICENSE_EXPIRES` | 否 | 授权到期日期，不填则永不过期 | `2027-12-31` |
+| `JWT_SECRET` | 是 | JWT 签名密钥（生产环境必须修改） | `your-secret-here` |
+| `SERVER_PORT` | 否 | 后端端口，默认 `3001` | `3001` |
+| `DB_*` | 否 | 数据库连接配置 | 见 config.go |
 
 ---
 
-## 6. 安全设计
+## 7. 实施顺序
 
-### 6.1 权限模型
+### Phase 0: 授权码激活（核心）
+1. Config 增加 `LICENSE_KEY` 校验
+2. AuthService 增加 `Activate` 方法
+3. AuthHandler 增加 `/api/auth/activate` 接口
+4. 登录接口响应增加 `unactivated` 字段
+5. 移除 `EnsureAdminAccount` 及相关代码
+6. 前端 `/auth/activate` 激活页面
+7. 登录页适配 `unactivated` 跳转
 
-```
-角色层级：
-- admin    → 可访问全部 /admin/* 功能
-- owner    → 可访问其所属租户的 /admin/* 功能（受限视图）
-- member   → 不可访问 /admin/*
+### Phase 1: 用户管理
+8. AdminService + AdminHandler（用户 CRUD）
+9. `/admin/users` 用户管理页面
+10. AppHeader 管理入口
 
-路由守卫：
-1. 前端：AdminLayout 中检查 localStorage token + user.role
-2. 后端：每个 admin API 都经过 AdminAuth 中间件校验 role
-```
+### Phase 2: 后台框架
+11. AdminLayout + 侧边导航
+12. `/admin` 仪表盘
 
-### 6.2 数据安全
+### Phase 3: 数据资产管理
+13. 文件管理 + 数据库管理 + 存储配置
 
-1. **敏感信息脱敏**：前端 API 响应中的密码/API Key 显示为 `***`，后端返回前脱敏
-2. **删除保护**：删除租户/数据源需二次确认，删除前检查关联数据
-3. **审计日志**：记录 admin 操作到 `admin_audit_logs` 表（扩展设计）
-
----
-
-## 7. 依赖与扩展点
-
-### 7.1 复用点
-
-| 现有模块 | 复用内容 |
-|---------|---------|
-| `FileUploadTab.tsx` | 上传组件复用（admin 文件管理不需上传，只看） |
-| `DatabaseConnectionTab.tsx` | 连接表单 + 测试逻辑 |
-| `data_source_service.go` | `ListDataSources`、`TestConnection`、`Delete` |
-| `dataset_service.go` | `ListDatasets`、`Delete` |
-| `globals.css` | 所有样式 |
-| `AppHeader` | 复用扩展管理入口 |
-
-### 7.2 扩展点
-
-1. **文件预览**：图片/PDF 使用 iframe 或第三方预览组件
-2. **批量操作**：文件删除、数据源删除支持批量
-3. **审计日志**：记录所有 admin 操作
-4. **通知**：admin 操作后可向相关租户发送通知
-
----
-
-## 8. 实现顺序建议
-
-### Phase 1：框架 + 仪表盘
-1. `AdminLayout.tsx` + `AdminSidebar.tsx`
-2. AppHeader 管理入口注入
-3. Admin 权限守卫
-4. 后端 `AdminHandler` + `/api/admin/stats`
-5. `/admin` 仪表盘页面
-
-### Phase 2：数据资产管理
-6. 后端 `GET /api/admin/datasets` + `/api/admin/data-sources`
-7. `/admin/assets/files` 文件管理页面
-8. `/admin/assets/databases` 数据库管理页面
-9. `/admin/assets/storage` 存储配置页面
-
-### Phase 3：租户管理
-10. 后端租户 CRUD API
-11. `/admin/tenants` 页面
-12. 后端用户 CRUD API
-13. `/admin/tenants/users` 页面
-
-### Phase 4：系统配置
+### Phase 4: 系统配置
 14. `/admin/config` 各配置区块
 
 ---
 
-## 9. 文件清单
+## 8. 安全注意事项
 
-### 前端新增文件
-```
-frontend/components/admin/
-  AdminLayout.tsx              (~120行)  后台侧边栏布局 + 权限守卫
-  AdminSidebar.tsx             (~150行)  侧边导航组件
-  AdminStats.tsx               (~60行)   统计卡片组件
-  FileTable.tsx                (~200行)  文件管理表格
-  DatabaseTable.tsx            (~180行)  数据库连接表格
-  TenantTable.tsx              (~150行)  租户管理表格
-  UserTable.tsx                (~150行)  用户管理表格
-  StorageForm.tsx              (~120行)  存储配置表单
-
-frontend/app/admin/
-  layout.tsx                  (~30行)   调用 AdminLayout
-  page.tsx                    (~80行)   仪表盘
-  assets/
-    page.tsx                  (~40行)   数据资产汇总（重定向到 files）
-    files/page.tsx            (~100行)  文件管理
-    databases/page.tsx        (~100行)  数据库管理
-    storage/page.tsx          (~100行)  存储配置
-  tenants/
-    page.tsx                  (~100行)  租户列表
-    users/page.tsx            (~100行)  用户管理
-  config/
-    page.tsx                  (~100行)  系统配置
-
-frontend/lib/admin/
-  api.ts                      (~120行)  Admin API 封装
-  types.ts                   (~80行)   Admin 相关 TypeScript 类型
-```
-
-### 后端新增/修改文件
-```
-backend/internal/
-  handler/
-    admin_handler.go          (~400行)  Admin Handler（新增）
-    admin_handler_test.go     (~100行)  单元测试（可选）
-
-  service/
-    storage_service.go       (~200行)  存储服务（新增）
-    admin_service.go         (~200行)  Admin 聚合统计服务（新增）
-
-  model/
-    model.go                  (+SystemConfig + AdminStats DTO)
-
-  cmd/main.go                 (+Admin 路由注册 ~20行)
-```
+1. **`LICENSE_KEY` 必须非空**：后端启动时校验，未配置则 `log.Fatal` 退出
+2. **暴力破解防护**：激活接口增加请求频率限制（5分钟内最多 5 次）
+3. **明文密码仅展示一次**：重置密码后返回明文一次，后续不可查
+4. **不可删除/修改 owner**：owner 不可被删除，角色不可被降级
+5. **不可删除自己**：管理员无法删除自己的账号
+6. **敏感字段脱敏**：API 响应中密码字段永不返回明文
