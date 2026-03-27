@@ -156,8 +156,13 @@ async function fetchAIConfig(tenantId: string): Promise<{ apiKey?: string; baseU
   try {
     const res = await fetch(`${backendBase}/api/tenants/${tenantId}/ai-config`, {
       method: "GET",
-      headers: { "Content-Type": "application/json", "X-Tenant-ID": tenantId },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Tenant-ID": tenantId,
+        ...(process.env.INTERNAL_API_TOKEN ? { "X-Internal-Token": process.env.INTERNAL_API_TOKEN } : {}),
+      },
       cache: "no-store",
+      signal: AbortSignal.timeout(10000),
     });
     if (res.ok) {
       const data = await res.json();

@@ -464,46 +464,52 @@ func (s *MetricDiscoveryService) inferCompositesFromAIAnalysis(
 		}
 	}
 
-	// 补充：AI 发现的金额类指标但不在 Recommendations 中的
+	// 补充：AI 识别为 metric 的基础指标，但未出现在 Recommendations 中的
 	for _, t := range tables {
 		aiFields := aiFieldIndex[t]
 		if aiFields == nil {
 			continue
 		}
 		for fname, f := range aiFields {
-			if f.SemanticType == "metric" && !containsAny(strings.ToLower(fname), "id") {
-				lower := strings.ToLower(fname)
-				if containsAny(lower, "amount", "price", "total", "revenue", "quantity", "cost") {
-					key := f.BusinessName
-					if key == "" {
-						key = fname
-					}
-					if seen[key] {
-						continue
-					}
-					seen[key] = true
-
-					dataType := "number"
-					if containsAny(lower, "amount", "price", "revenue", "cost", "total") {
-						dataType = "currency"
-					}
-
-					recs = append(recs, KeyMetricRecommendation{
-						Table:        t,
-						Field:        fname,
-						DisplayName:  f.BusinessName,
-						MetricName:   toSnakeCase(f.BusinessName),
-						DataType:     dataType,
-						Aggregation:  strings.ToUpper(f.Aggregation),
-						Formula:      fmt.Sprintf("%s(%s.%s)", strings.ToUpper(f.Aggregation), t, fname),
-						Confidence:   f.Confidence,
-						Reason:       fmt.Sprintf("AI 语义识别为 %s（置信度 %.0f%%）：%s", f.SemanticType, f.Confidence*100, f.Reason),
-						IsComposite:  false,
-						Dependencies: []string{fmt.Sprintf("%s.%s", t, fname)},
-						Category:     inferCategory(t, fname),
-					})
-				}
+			if f.SemanticType != "metric" {
+				continue
 			}
+
+			agg := normalizeMetricAggregation(f.Aggregation, f.SubType, fname)
+			if agg == "" {
+				continue
+			}
+
+			displayName := strings.TrimSpace(f.BusinessName)
+			if displayName == "" {
+				displayName = fname
+			}
+
+			key := displayName
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+
+			metricName := toSnakeCase(displayName)
+			if metricName == "" {
+				metricName = toSnakeCase(fmt.Sprintf("%s_%s", t, fname))
+			}
+
+			recs = append(recs, KeyMetricRecommendation{
+				Table:        t,
+				Field:        fname,
+				DisplayName:  displayName,
+				MetricName:   metricName,
+				DataType:     inferMetricDataType(f, fname),
+				Aggregation:  agg,
+				Formula:      buildMetricFormula(agg, t, fname),
+				Confidence:   f.Confidence,
+				Reason:       fmt.Sprintf("AI 语义识别为可聚合业务指标（置信度 %.0f%%）：%s", f.Confidence*100, f.Reason),
+				IsComposite:  false,
+				Dependencies: []string{fmt.Sprintf("%s.%s", t, fname)},
+				Category:     inferCategory(t, fname),
+			})
 		}
 	}
 
@@ -960,6 +966,49 @@ func inferCategory(table, field string) string {
 		return "流量"
 	}
 	return "其他"
+}
+
+func normalizeMetricAggregation(raw, subType, fieldName string) string {
+	agg := strings.ToUpper(strings.TrimSpace(raw))
+	switch agg {
+	case "COUNT_DISTINCT", "COUNT DISTINCT", "DISTINCT_COUNT":
+		return "COUNT(DISTINCT)"
+	case "SUM", "COUNT", "AVG", "MAX", "MIN", "COUNT(DISTINCT)":
+		return agg
+	}
+
+	lowerSubType := strings.ToLower(subType)
+	lowerField := strings.ToLower(fieldName)
+	switch {
+	case containsAny(lowerSubType, "ratio", "percentage", "percent", "rate") || containsAny(lowerField, "rate", "ratio", "percent"):
+		return "AVG"
+	case containsAny(lowerSubType, "count", "quantity", "number"):
+		return "SUM"
+	case containsAny(lowerSubType, "amount", "currency", "revenue", "cost"):
+		return "SUM"
+	default:
+		return "SUM"
+	}
+}
+
+func inferMetricDataType(field model.FieldSemanticAI, fieldName string) string {
+	lowerSubType := strings.ToLower(field.SubType)
+	lowerField := strings.ToLower(fieldName)
+	switch {
+	case containsAny(lowerSubType, "amount", "currency", "revenue", "cost") || containsAny(lowerField, "amount", "price", "revenue", "cost", "fee", "income"):
+		return "currency"
+	case containsAny(lowerSubType, "ratio", "percentage", "percent", "rate") || containsAny(lowerField, "rate", "ratio", "percent"):
+		return "percentage"
+	default:
+		return "number"
+	}
+}
+
+func buildMetricFormula(aggregation, table, field string) string {
+	if aggregation == "COUNT(DISTINCT)" {
+		return fmt.Sprintf("COUNT(DISTINCT %s.%s)", table, field)
+	}
+	return fmt.Sprintf("%s(%s.%s)", aggregation, table, field)
 }
 
 func toSnakeCase(s string) string {

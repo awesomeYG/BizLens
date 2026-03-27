@@ -403,11 +403,13 @@ async function getTenantAIConfigFromBackend(
   try {
     const headers: Record<string, string> = { "Content-Type": "application/json", "X-Tenant-ID": tenantId };
     if (authHeader) headers.Authorization = authHeader;
+    if (process.env.INTERNAL_API_TOKEN) headers["X-Internal-Token"] = process.env.INTERNAL_API_TOKEN;
 
     const res = await fetch(`${backendBase}/api/tenants/${tenantId}/ai-config`, {
       method: "GET",
       headers,
       cache: "no-store",
+      signal: AbortSignal.timeout(10000),
     });
     if (res.ok) {
       const payload = await res.json();
