@@ -31,13 +31,14 @@ export default function ActivatePage() {
 
   const handleLicenseInput = (index: number, value: string) => {
     const upper = value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-    const newForm = { ...form };
 
-    // 支持粘贴完整授权码 "BIZL-8K3M-A7PW-2N9Q"
-    if (upper.includes("-") || (value.length > 4 && index === 0)) {
+    // 检测粘贴场景：用户在第一个格子输入超长内容，或粘贴的内容包含连字符
+    if (index === 0 && value.length > 4) {
       const clean = value.replace(/[^A-Z0-9-]/g, "").toUpperCase();
       const parts = clean.split("-");
+
       if (parts.length === 4) {
+        // 标准 4 段格式 "BIZL-8K3M-A7PW-2N9Q"
         setForm({
           ...form,
           license1: (parts[0] || "").slice(0, 4),
@@ -48,8 +49,22 @@ export default function ActivatePage() {
         licenseRefs[3].current?.focus();
         return;
       }
+
+      // 无分隔符格式 "BIZL8K3MA7PW2N9Q"（恰好 16 个字符）
+      if (upper.length === 16 && !upper.includes("-")) {
+        setForm({
+          ...form,
+          license1: upper.slice(0, 4),
+          license2: upper.slice(4, 8),
+          license3: upper.slice(8, 12),
+          license4: upper.slice(12, 16),
+        });
+        licenseRefs[3].current?.focus();
+        return;
+      }
     }
 
+    const newForm = { ...form };
     const key = `license${index + 1}` as keyof typeof form;
     (newForm as Record<string, string>)[key] = upper.slice(0, 4);
     setForm(newForm);
@@ -113,7 +128,7 @@ export default function ActivatePage() {
           name: response.user.name,
           email: response.user.email,
           role: response.user.role,
-          createdAt: new Date(response.user.createdAt).getTime(),
+          createdAt: response.user.createdAt,
           isOnboarded: false,
         };
         saveCurrentUser(user as any);

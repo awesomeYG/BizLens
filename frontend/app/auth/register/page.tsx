@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { saveCurrentUser } from "@/lib/user-store";
-import { register, saveTokens } from "@/lib/auth/api";
+import { register, saveTokens, getSystemStatus } from "@/lib/auth/api";
 import type { AuthResponse } from "@/lib/types";
 
 export default function RegisterPage() {
@@ -18,6 +18,21 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [systemStatus, setSystemStatus] = useState<"loading" | "activated" | "unactivated">("loading");
+
+  useEffect(() => {
+    getSystemStatus()
+      .then((status) => {
+        if (status.unactivated) {
+          setSystemStatus("unactivated");
+        } else {
+          setSystemStatus("activated");
+        }
+      })
+      .catch(() => {
+        setSystemStatus("activated");
+      });
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -184,14 +199,44 @@ export default function RegisterPage() {
 
         <div className="max-w-md w-full">
           <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-900">
-              创建账号
-            </h2>
-            <p className="mt-2 text-gray-600">
-              开始您的 14 天免费试用
-            </p>
+            {systemStatus === "unactivated" ? (
+              <>
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-100 mb-4">
+                  <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                </div>
+                <h2 className="text-3xl font-bold text-gray-900">
+                  系统尚未激活
+                </h2>
+                <p className="mt-2 text-gray-600">
+                  注册账号前需要先激活系统，请使用授权码完成激活
+                </p>
+                <Link href="/auth/activate"
+                  className="mt-6 inline-flex justify-center w-full py-3.5 px-4 border border-transparent text-sm font-semibold rounded-xl text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-300 shadow-lg shadow-indigo-500/30">
+                  前往激活系统
+                </Link>
+              </>
+            ) : systemStatus === "loading" ? (
+              <>
+                <h2 className="text-3xl font-bold text-gray-900">
+                  加载中...
+                </h2>
+              </>
+            ) : (
+              <>
+                <h2 className="text-3xl font-bold text-gray-900">
+                  创建账号
+                </h2>
+                <p className="mt-2 text-gray-600">
+                  开始您的 14 天免费试用
+                </p>
+              </>
+            )}
           </div>
           
+          {systemStatus === "activated" && (
           <form className="space-y-5" onSubmit={handleSubmit}>
             {/* 输入框组 */}
             <div className="space-y-4">
@@ -428,6 +473,7 @@ export default function RegisterPage() {
               </svg>
             </Link>
           </form>
+          )}
         </div>
       </div>
     </div>

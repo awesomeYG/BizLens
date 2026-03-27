@@ -266,8 +266,37 @@ export async function activate(data: {
   email: string;
   password: string;
 }): Promise<ActivateResponse> {
-  return request<ActivateResponse>("/auth/activate", {
+  const response = await fetch(`${API_BASE_URL}/auth/activate`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
+
+  // 解析响应体（无论状态码都读取 body）
+  const contentType = response.headers.get("content-type") || "";
+  let body: any = {};
+  if (contentType.includes("application/json")) {
+    const text = await response.text();
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = { error: text };
+      }
+    }
+  } else {
+    body.error = await response.text();
+  }
+
+  // 成功（200/201/204）直接返回结构化数据
+  if (response.ok) {
+    return body as ActivateResponse;
+  }
+
+  // 失败时返回结构化的 ActivateResponse，供前端判断
+  return {
+    activated: false,
+    error: body.error || response.statusText,
+    code: body.code,
+  };
 }

@@ -86,12 +86,17 @@ export function saveCurrentUser(user: UserSessionWithAuth): void {
   // 如果用户带有 Token 信息，保存到 auth storage
   if (user.accessToken || user.refreshToken) {
     // Token 已经由 api.ts 管理，这里只保存用户基本信息
+    // createdAt 可能是 number（UserSession）或 string（User API 响应），统一转为时间戳
+    const createdAtMs =
+      typeof user.createdAt === "number"
+        ? user.createdAt
+        : new Date(user.createdAt).getTime();
     const session: UserSession = {
       id: user.id,
       tenantId: user.tenantId,
       name: user.name,
       email: user.email,
-      createdAt: user.createdAt,
+      createdAt: createdAtMs,
       isOnboarded: user.isOnboarded,
       companyInfo: user.companyInfo,
       dataSources: user.dataSources,

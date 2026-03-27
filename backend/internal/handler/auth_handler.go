@@ -301,10 +301,33 @@ func (h *AuthHandler) Activate(w http.ResponseWriter, r *http.Request) {
 
 	user, tokens, err := h.authService.Activate(&req)
 	if err != nil {
-		writeJSON(w, http.StatusOK, dto.ActivateResponse{
+		// 根据错误类型返回对应的 HTTP 状态码
+		statusCode := http.StatusBadRequest
+		errCode := "ACTIVATION_FAILED"
+		errMsg := err.Error()
+
+		switch {
+		case strings.Contains(errMsg, "授权码格式无效"):
+			statusCode = http.StatusBadRequest
+			errCode = dto.ErrCodeInvalidLicense
+		case strings.Contains(errMsg, "授权码无效"):
+			statusCode = http.StatusUnauthorized
+			errCode = dto.ErrCodeInvalidLicense
+		case strings.Contains(errMsg, "已被激活"):
+			statusCode = http.StatusConflict
+			errCode = dto.ErrCodeAlreadyActivated
+		case strings.Contains(errMsg, "用户数上限"):
+			statusCode = http.StatusForbidden
+			errCode = dto.ErrCodeInternalError
+		case strings.Contains(errMsg, "已被注册"):
+			statusCode = http.StatusConflict
+			errCode = dto.ErrCodeEmailAlreadyExists
+		}
+
+		writeJSON(w, statusCode, dto.ActivateResponse{
 			Activated: false,
-			Error:     err.Error(),
-			Code:      "ACTIVATION_FAILED",
+			Error:     errMsg,
+			Code:      errCode,
 		})
 		return
 	}
