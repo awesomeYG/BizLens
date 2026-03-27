@@ -15,6 +15,23 @@ type SchemaAnalysisService struct {
 	aiConfigService *AIConfigService
 }
 
+func normalizeStringSlice(v interface{}) []string {
+	switch t := v.(type) {
+	case []string:
+		return t
+	case []interface{}:
+		out := make([]string, 0, len(t))
+		for _, it := range t {
+			if s, ok := it.(string); ok && s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
 // NewSchemaAnalysisService 创建 Schema 分析服务
 func NewSchemaAnalysisService(llmService *LLMService, aiConfigService *AIConfigService) *SchemaAnalysisService {
 	return &SchemaAnalysisService{
@@ -80,7 +97,7 @@ func (s *SchemaAnalysisService) DiffSchema(oldAnalysis *model.SchemaAIAnalysis, 
 	}
 
 	newSchema, _ := DeserializeSchemaInfo(newDS.SchemaInfo)
-	newTables, _ := newSchema["tables"].([]string)
+	newTables := normalizeStringSlice(newSchema["tables"])
 	newStructure, _ := newSchema["structure"].(map[string]interface{})
 
 	// 遍历新 schema，找新增的表和字段
@@ -458,7 +475,7 @@ func (s *SchemaAnalysisService) buildSchemaText(ds *model.DataSource) string {
 		return ""
 	}
 
-	tables, _ := schema["tables"].([]string)
+	tables := normalizeStringSlice(schema["tables"])
 	structure, _ := schema["structure"].(map[string]interface{})
 
 	sb.WriteString(fmt.Sprintf("共 %d 张表:\n\n", len(tables)))

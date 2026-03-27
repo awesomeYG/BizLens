@@ -4,6 +4,8 @@ import (
 	"ai-bi-server/internal/service"
 	"encoding/json"
 	"net/http"
+	"os"
+	"strings"
 )
 
 type AIConfigHandler struct {
@@ -39,6 +41,15 @@ func maskAPIKey(value string) string {
 	return value[:4] + "****" + value[len(value)-4:]
 }
 
+func shouldIncludeAPIKey(r *http.Request) bool {
+	internalToken := strings.TrimSpace(os.Getenv("INTERNAL_API_TOKEN"))
+	if internalToken == "" {
+		return false
+	}
+	reqToken := strings.TrimSpace(r.Header.Get("X-Internal-Token"))
+	return reqToken != "" && reqToken == internalToken
+}
+
 func (h *AIConfigHandler) GetAIConfig(w http.ResponseWriter, r *http.Request) {
 	tenantID := parseTenantID(r)
 	if tenantID == "" {
@@ -57,12 +68,14 @@ func (h *AIConfigHandler) GetAIConfig(w http.ResponseWriter, r *http.Request) {
 		ModelType: cfg.ModelType,
 		Model:     cfg.Model,
 		BaseURL:   cfg.BaseURL,
-		APIKey:    cfg.APIKey,
 		HasAPIKey: cfg.APIKey != "",
 		UpdatedAt: cfg.UpdatedAt.Format("2006-01-02 15:04:05"),
 	}
 	if cfg.APIKey != "" {
 		resp.MaskedKey = maskAPIKey(cfg.APIKey)
+	}
+	if cfg.APIKey != "" && shouldIncludeAPIKey(r) {
+		resp.APIKey = cfg.APIKey
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -95,7 +108,6 @@ func (h *AIConfigHandler) UpsertAIConfig(w http.ResponseWriter, r *http.Request)
 		ModelType: cfg.ModelType,
 		Model:     cfg.Model,
 		BaseURL:   cfg.BaseURL,
-		APIKey:    cfg.APIKey,
 		HasAPIKey: cfg.APIKey != "",
 		UpdatedAt: cfg.UpdatedAt.Format("2006-01-02 15:04:05"),
 	}
