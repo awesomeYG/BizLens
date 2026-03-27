@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCurrentUser, loginUser } from "@/lib/user-store";
+import { getSystemStatus } from "@/lib/auth/api";
 import AppHeader from "@/components/AppHeader";
 
 export default function HomePage() {
   const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
   const [question, setQuestion] = useState("");
+  const [unactivated, setUnactivated] = useState(false);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -16,7 +18,20 @@ export default function HomePage() {
       router.push(user.isOnboarded ? "/chat" : "/onboarding");
       return;
     }
-    setHydrated(true);
+
+    // 检测系统激活状态，未激活时显示激活入口
+    getSystemStatus()
+      .then((status) => {
+        if (status.unactivated) {
+          setUnactivated(true);
+        }
+      })
+      .catch(() => {
+        // 网络错误时按已激活处理，让用户继续尝试
+      })
+      .finally(() => {
+        setHydrated(true);
+      });
   }, [router]);
 
   const handleQuickStart = async () => {
@@ -44,22 +59,51 @@ export default function HomePage() {
         showNav={false}
         showLogout={false}
         actions={
-          <>
+          unactivated ? (
             <button
-              onClick={() => router.push("/auth/login")}
-              className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+              onClick={() => router.push("/auth/activate")}
+              className="px-3 py-1.5 text-xs bg-amber-500 text-white rounded-lg hover:bg-amber-400 transition-colors"
             >
-              登录
+              激活系统
             </button>
-            <button
-              onClick={() => router.push("/auth/register")}
-              className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors"
-            >
-              注册
-            </button>
-          </>
+          ) : (
+            <>
+              <button
+                onClick={() => router.push("/auth/login")}
+                className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+              >
+                登录
+              </button>
+              <button
+                onClick={() => router.push("/auth/register")}
+                className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors"
+              >
+                注册
+              </button>
+            </>
+          )
         }
       />
+
+      {/* 未激活提示 Banner */}
+      {unactivated && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20">
+          <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-amber-400">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <span>系统尚未激活，需要授权码才能使用</span>
+            </div>
+            <button
+              onClick={() => router.push("/auth/activate")}
+              className="px-3 py-1 text-xs bg-amber-500 text-white rounded-lg hover:bg-amber-400 transition-colors"
+            >
+              前往激活
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 主要内容 - 居中对话框 */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 pb-20">
