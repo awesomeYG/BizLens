@@ -240,6 +240,15 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 前端 SimpleChatPanel 增加了"给钉钉发句话"直接发送快捷指令（走 /api/tenants/{id}/notifications/send）
   - 前端 IMPlatformForm 钉钉配置增加了 Stream 模式提示和 AppKey:AppSecret 格式说明
 
+### 禁止 notification_rule 自动 fallback 到钉钉偏好
+- Date: 2026-03-27
+- Context: 用户反馈 AI 在普通操作（如"生成个表单"）时会错误给钉钉发消息
+- Instructions:
+  - notification_rule 的 platformIds 为空时不得默认 fallback 到钉钉
+  - notification_rule 示例中 platformIds 必须由用户明确指定，不得自行推断
+  - 意图识别不得将纯文本通知类内容误判为 send_dingtalk（除非包含明确的钉钉目标词）
+  - AI 可以自主决定调用 send_im_message 工具发送消息
+
 ### Chat 页面大屏自动生成偏好
 - Date: 2026-03-25
 - Context: 用户要求在 chat 页面对话即可直接生成可在数据大屏查看的大屏

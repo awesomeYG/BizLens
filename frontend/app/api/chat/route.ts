@@ -32,11 +32,6 @@ const SYSTEM_PROMPT = `你是 BizLens AI 数据分析专家。你需要：
 | Telegram | telegram | 个人/群组通知 |
 | Discord | discord | 社区/游戏相关 |
 
-**严格的使用场景（必须满足以下条件之一方可调用）**：
-- 用户**明确要求**"发到钉钉"、"发飞书"、"推送到企业微信"等（必须包含"发"、"推送"、"通知"等明确动作词）
-- 用户说"发到 IM"、"发个消息"、"推送给团队"，且同时指定了具体内容
-- **禁止**：仅因"内容重要"、"报表生成成功"、"有数据摘要"等理由自行决定发送
-
 **使用方式**：直接调用 \`send_im_message\` 工具，指定 platform 和 content。系统会自动查找该租户下已配置并启用的对应平台发送，无需用户确认。
 
 **示例**：
@@ -48,9 +43,7 @@ const SYSTEM_PROMPT = `你是 BizLens AI 数据分析专家。你需要：
 
 **平台选择建议**：
 - 用户明确指定了平台 → 用指定的
-- 用户未明确指定平台时 → **不要自行决定发送**，先询问用户希望发到哪个平台
-
-**工具执行后，你会收到结果，然后自然地告知用户"已发送到对应的 IM 平台"。如果用户未指定平台，告知用户"请告诉我您希望发到哪个平台（钉钉/飞书/企业微信等）"，不要自行决定。**
+- 用户未明确指定平台时 → 根据对话上下文和平台典型场景选择最合适的平台
 
 ## 对话风格
 - 用简洁专业的中文回答
@@ -217,18 +210,19 @@ const SYSTEM_PROMPT = `你是 BizLens AI 数据分析专家。你需要：
 \`\`\`notification_rule
 {
   "name": "销售额破千通知",
-  "description": "监控当日销售额，超过 1000 时触发钉钉通知",
+  "description": "监控当日销售额，超过 1000 时触发通知",
   "ruleType": "data_threshold",
   "frequency": "once",
   "metricField": "sales_amount",
   "conditionType": "greater",
   "threshold": 1000,
   "timeRange": "today",
-  "messageTitle": "🔔 销售额喜报 - 突破 1000 元！",
+  "messageTitle": "销售额喜报 - 突破 1000 元！",
   "messageTemplate": "## 销售额告警\\n\\n当前销售额：**{{current_value}}** 元\\n触发阈值：1000 元\\n时间范围：今日\\n继续保持！",
   "platformIds": "dingtalk"
 }
 \`\`\`
+> 注：platformIds 必须使用用户明确指定的平台名称（如用户说"发钉钉"则填"dingtalk"）。如果用户未指定平台，不要生成此字段或留空，并在回复中询问用户希望发到哪个平台。
 
 **场景 2：订单量下降告警**
 用户："订单量如果低于 100 单，要马上告诉我"
@@ -243,7 +237,7 @@ const SYSTEM_PROMPT = `你是 BizLens AI 数据分析专家。你需要：
   "conditionType": "less",
   "threshold": 100,
   "timeRange": "today",
-  "messageTitle": "⚠️ 订单量告警",
+  "messageTitle": "订单量告警",
   "messageTemplate": "## 订单量过低\\n\\n当前订单量：**{{current_value}}** 单\\n预警阈值：100 单\\n请及时关注！",
   "platformIds": "dingtalk"
 }
@@ -260,7 +254,7 @@ const SYSTEM_PROMPT = `你是 BizLens AI 数据分析专家。你需要：
   "frequency": "daily",
   "scheduleTime": "09:00",
   "timeRange": "yesterday",
-  "messageTitle": "📊 昨日销售日报",
+  "messageTitle": "昨日销售日报",
   "messageTemplate": "## 销售日报\\n\\n统计时间：昨日\\n总销售额：{{total_sales}}\\n订单量：{{order_count}}\\n客户数：{{customer_count}}",
   "platformIds": "dingtalk"
 }
@@ -593,13 +587,13 @@ export async function POST(req: NextRequest) {
         type: "function",
         function: {
           name: "send_im_message",
-          description: "发送即时消息到 IM 平台（钉钉、飞书、企业微信等）。当你想把对话中的内容主动推送给用户时调用此工具。系统会根据你指定的平台自动查找已配置并发送，无需用户确认。",
+          description: "发送即时消息到 IM 平台（钉钉、飞书、企业微信等）。当你认为有重要内容需要主动推送给用户时调用此工具。系统会根据你指定的平台自动查找已配置并发送，无需用户确认。",
           parameters: {
             type: "object",
             properties: {
               platform: {
                 type: "string",
-                description: "目标 IM 平台，取值：dingtalk（钉钉）、feishu（飞书）、wecom（企业微信）、slack、telegram、discord。根据用户需求或对话上下文选择最合适的平台。",
+                description: "目标 IM 平台，取值：dingtalk（钉钉）、feishu（飞书）、wecom（企业微信）、slack、telegram、discord。根据对话上下文和平台典型场景选择最合适的平台。",
                 enum: ["dingtalk", "feishu", "wecom", "slack", "telegram", "discord"],
               },
               content: {

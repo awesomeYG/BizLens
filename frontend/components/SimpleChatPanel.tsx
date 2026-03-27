@@ -966,11 +966,8 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
         }
 
         if (requestedTokens.length === 0) {
-          enabledConfigs.forEach((cfg: any) => {
-            if (String(cfg?.type || "").toLowerCase() === "dingtalk") {
-              resolvedIds.add(String(cfg.id));
-            }
-          });
+          // platformIds 未指定时，不自动选择任何平台
+          // 由用户在 IM 配置页面手动关联，或在创建规则后编辑
         }
 
         ruleConfig.platformIds = Array.from(resolvedIds).join(",");
