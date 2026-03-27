@@ -29,39 +29,40 @@ export default function ActivatePage() {
     useRef<HTMLInputElement>(null),
   ];
 
+  const fillLicenseByRawText = (rawValue: string, startIndex = 0) => {
+    const clean = rawValue.replace(/[^A-Z0-9]/gi, "").toUpperCase();
+    if (!clean) {
+      return false;
+    }
+
+    const chunks: string[] = [];
+    for (let i = 0; i < clean.length && chunks.length < 4; i += 4) {
+      chunks.push(clean.slice(i, i + 4));
+    }
+
+    if (!chunks.length) {
+      return false;
+    }
+
+    const newForm = { ...form };
+    let lastFilledIndex = startIndex;
+    for (let i = 0; i < chunks.length && startIndex + i < 4; i++) {
+      const key = `license${startIndex + i + 1}` as keyof typeof form;
+      (newForm as Record<string, string>)[key] = chunks[i];
+      lastFilledIndex = startIndex + i;
+    }
+
+    setForm(newForm);
+    licenseRefs[Math.min(lastFilledIndex + 1, 3)].current?.focus();
+    return true;
+  };
+
   const handleLicenseInput = (index: number, value: string) => {
     const upper = value.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
     // 检测粘贴场景：用户在第一个格子输入超长内容，或粘贴的内容包含连字符
-    if (index === 0 && value.length > 4) {
-      const clean = value.replace(/[^A-Z0-9-]/g, "").toUpperCase();
-      const parts = clean.split("-");
-
-      if (parts.length === 4) {
-        // 标准 4 段格式 "BIZL-8K3M-A7PW-2N9Q"
-        setForm({
-          ...form,
-          license1: (parts[0] || "").slice(0, 4),
-          license2: (parts[1] || "").slice(0, 4),
-          license3: (parts[2] || "").slice(0, 4),
-          license4: (parts[3] || "").slice(0, 4),
-        });
-        licenseRefs[3].current?.focus();
-        return;
-      }
-
-      // 无分隔符格式 "BIZL8K3MA7PW2N9Q"（恰好 16 个字符）
-      if (upper.length === 16 && !upper.includes("-")) {
-        setForm({
-          ...form,
-          license1: upper.slice(0, 4),
-          license2: upper.slice(4, 8),
-          license3: upper.slice(8, 12),
-          license4: upper.slice(12, 16),
-        });
-        licenseRefs[3].current?.focus();
-        return;
-      }
+    if (index === 0 && value.length > 4 && fillLicenseByRawText(value, 0)) {
+      return;
     }
 
     const newForm = { ...form };
@@ -73,6 +74,17 @@ export default function ActivatePage() {
     if (upper.length === 4 && index < 3) {
       licenseRefs[index + 1].current?.focus();
     }
+  };
+
+  const handleLicensePaste = (index: number, e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pastedText = e.clipboardData.getData("text");
+    if (!pastedText) {
+      return;
+    }
+
+    // 阻止浏览器默认粘贴截断，改为按 4 位分段自动填充
+    e.preventDefault();
+    fillLicenseByRawText(pastedText, index === 0 ? 0 : index);
   };
 
   const handleActivate = async () => {
@@ -241,6 +253,7 @@ export default function ActivatePage() {
                       maxLength={4}
                       value={[form.license1, form.license2, form.license3, form.license4][i]}
                       onChange={(e) => handleLicenseInput(i, e.target.value)}
+                      onPaste={(e) => handleLicensePaste(i, e)}
                       onKeyDown={(e) => {
                         if (e.key === "Backspace" && ![form.license1, form.license2, form.license3, form.license4][i] && i > 0) {
                           licenseRefs[i - 1].current?.focus();

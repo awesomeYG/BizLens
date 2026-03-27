@@ -71,6 +71,14 @@ func (h *DailySummaryHandler) getLatestSummary(w http.ResponseWriter, r *http.Re
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	if summary == nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"summary": nil,
+		})
+		return
+	}
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"summary": summary,

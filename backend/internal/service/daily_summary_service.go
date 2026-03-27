@@ -3,6 +3,7 @@ package service
 import (
 	"ai-bi-server/internal/model"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -930,6 +931,9 @@ func (s *DailySummaryService) GetLatestSummary(tenantID string) (*model.DailySum
 		Order("summary_date DESC").
 		First(&summary).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &summary, nil

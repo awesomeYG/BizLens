@@ -176,22 +176,8 @@ type FileDataSourceConfig struct {
 	UploadedAt int64  `json:"uploadedAt"`
 }
 
-// checkAdminPermission 检查是否为超管用户
-func (h *DataSourceHandler) checkAdminPermission(r *http.Request) bool {
-	email := r.Context().Value("userEmail")
-	if email == nil {
-		return false
-	}
-	return email.(string) == "koala@qq.com"
-}
-
 // CreateDataSource POST /api/tenants/{id}/data-sources
 func (h *DataSourceHandler) CreateDataSource(w http.ResponseWriter, r *http.Request) {
-	if !h.checkAdminPermission(r) {
-		writeError(w, http.StatusForbidden, "只有管理员可以创建数据源")
-		return
-	}
-
 	tenantID := parseTenantID(r)
 	if tenantID == "" {
 		writeError(w, http.StatusBadRequest, "缺少租户 ID")
@@ -320,11 +306,6 @@ func (h *DataSourceHandler) CreateDataSource(w http.ResponseWriter, r *http.Requ
 
 // UpdateDataSource PUT /api/tenants/{id}/data-sources/{dsId}
 func (h *DataSourceHandler) UpdateDataSource(w http.ResponseWriter, r *http.Request) {
-	if !h.checkAdminPermission(r) {
-		writeError(w, http.StatusForbidden, "只有管理员可以修改数据源")
-		return
-	}
-
 	tenantID := parseTenantID(r)
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	dsID := parts[len(parts)-1]
@@ -415,11 +396,6 @@ func (h *DataSourceHandler) UpdateDataSource(w http.ResponseWriter, r *http.Requ
 
 // TestDataSourceConnection POST /api/tenants/{id}/data-sources/{dsId}/test
 func (h *DataSourceHandler) TestDataSourceConnection(w http.ResponseWriter, r *http.Request) {
-	if !h.checkAdminPermission(r) {
-		writeError(w, http.StatusForbidden, "只有管理员可以测试数据源连接")
-		return
-	}
-
 	tenantID := parseTenantID(r)
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	dsID := parts[len(parts)-2] // /test 前一个是 ID
@@ -450,11 +426,6 @@ func (h *DataSourceHandler) TestDataSourceConnection(w http.ResponseWriter, r *h
 
 // DeleteDataSource DELETE /api/tenants/{id}/data-sources/{dsId}
 func (h *DataSourceHandler) DeleteDataSource(w http.ResponseWriter, r *http.Request) {
-	if !h.checkAdminPermission(r) {
-		writeError(w, http.StatusForbidden, "只有管理员可以删除数据源")
-		return
-	}
-
 	tenantID := parseTenantID(r)
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	dsID := parts[len(parts)-1]
