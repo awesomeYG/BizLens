@@ -48,6 +48,8 @@ export default function SettingsPage() {
   const providerRef = useRef<HTMLDivElement>(null);
   const modelRef = useRef<HTMLDivElement>(null);
 
+  const getTenantId = () => user?.tenantId || user?.id || "demo-tenant";
+
   const buildAuthHeaders = (withJsonContentType = true): HeadersInit => {
     const headers: Record<string, string> = {};
     if (withJsonContentType) {
@@ -78,7 +80,7 @@ export default function SettingsPage() {
     const loadConfig = async () => {
       const currentUser = getCurrentUser();
       setUser(currentUser);
-      const tenantId = currentUser?.id || "demo-tenant";
+      const tenantId = currentUser?.tenantId || currentUser?.id || "demo-tenant";
 
       try {
         const response = await fetch(`/api/tenants/${tenantId}/ai-config`, {
@@ -111,7 +113,7 @@ export default function SettingsPage() {
   }, []);
 
   const handleSave = async () => {
-    const tenantId = user?.id || "demo-tenant";
+    const tenantId = getTenantId();
     setSaveError(null);
 
     try {
@@ -157,7 +159,7 @@ export default function SettingsPage() {
         headers: buildAuthHeaders(),
         body: JSON.stringify({
           messages: [{ role: "user", content: "Hello, this is a test." }],
-          tenantId: user?.id || "demo-tenant",
+          tenantId: getTenantId(),
           aiConfig: testAiConfig,
         }),
       });
