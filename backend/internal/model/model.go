@@ -536,15 +536,15 @@ type DashboardSection struct {
 
 // DashboardTemplate 大屏模板（故事模板）
 type DashboardTemplate struct {
-	ID          string `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
-	TenantID    string `gorm:"type:varchar(50);index" json:"tenantId"` // 为空表示系统预置模板
-	Name        string `gorm:"size:200;not null" json:"name"`          // 模板名称（如"大促作战大屏"）
-	Description string `gorm:"type:text" json:"description"`           // 模板描述
-	Category    string `gorm:"size:100;not null" json:"category"`      // 分类（如"sales"/"operations"/"finance"）
-	Icon        string `gorm:"size:100" json:"icon"`                   // 图标
-	IsSystem    bool   `gorm:"default:false" json:"isSystem"`          // 是否系统预置
-	IsPublic    bool   `gorm:"default:false" json:"isPublic"`          // 是否公开
-	Tags        string `gorm:"size:500" json:"tags"`                   // 标签（JSON 数组）
+	ID          string  `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID    *string `gorm:"type:varchar(50);index;default:null" json:"tenantId"` // nil 表示系统预置模板
+	Name        string  `gorm:"size:200;not null" json:"name"`                       // 模板名称（如"大促作战大屏"）
+	Description string  `gorm:"type:text" json:"description"`                        // 模板描述
+	Category    string  `gorm:"size:100;not null" json:"category"`                   // 分类（如"sales"/"operations"/"finance"）
+	Icon        string  `gorm:"size:100" json:"icon"`                                // 图标
+	IsSystem    bool    `gorm:"default:false" json:"isSystem"`                       // 是否系统预置
+	IsPublic    bool    `gorm:"default:false" json:"isPublic"`                       // 是否公开
+	Tags        string  `gorm:"size:500" json:"tags"`                                // 标签（JSON 数组）
 	// 布局配置
 	LayoutConfig string `gorm:"type:text" json:"layoutConfig"` // 整体布局配置（JSON）
 	// 配色配置
@@ -883,6 +883,7 @@ func AutoMigrate(db *gorm.DB) error {
 			ON UPDATE CASCADE
 			ON DELETE RESTRICT
 		`).Error
+		_ = db.Exec(`UPDATE "dashboard_templates" SET "tenant_id" = NULL WHERE "tenant_id" = ''`).Error
 	}
 
 	return nil

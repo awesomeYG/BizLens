@@ -133,6 +133,9 @@ func (s *DashboardTemplateService) CreateTemplate(template *model.DashboardTempl
 	if template.ID == "" {
 		template.ID = uuid.New().String()
 	}
+	if template.TenantID != nil && *template.TenantID == "" {
+		template.TenantID = nil
+	}
 	template.CreatedAt = time.Now()
 	template.UpdatedAt = time.Now()
 
@@ -141,6 +144,9 @@ func (s *DashboardTemplateService) CreateTemplate(template *model.DashboardTempl
 
 // UpdateTemplate 更新模板
 func (s *DashboardTemplateService) UpdateTemplate(id string, updates map[string]interface{}) error {
+	if tenantID, ok := updates["tenant_id"]; ok && tenantID == "" {
+		updates["tenant_id"] = nil
+	}
 	updates["updated_at"] = time.Now()
 	return s.db.Model(&model.DashboardTemplate{}).Where("id = ?", id).Updates(updates).Error
 }
