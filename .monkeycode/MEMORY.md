@@ -346,3 +346,13 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - `dev.sh` 启动脚本已更新：自动从 `.env.local` 加载环境变量，启动时显示测试授权码
   - 设计文档：`.monkeycode/specs/admin-management/`（requirements.md + design.md + tasklist.md）
 
+### 前端启动与 Next 配置约定
+- Date: 2026-03-31
+- Context: Agent 在执行 forgot-password 页面修复与预览验证时发现
+- Category: 构建方法
+- Instructions:
+  - 前端独立工程位于 `frontend/`，依赖安装与启动命令需在该目录执行
+  - 前端开发启动命令：`cd /workspace/frontend && npm run dev`
+  - 前端构建命令：`cd /workspace/frontend && npm run build`
+  - 当前 Next.js 版本为 15.3.2，预览域名放行依赖 `allowedDevOrigins` 与 `experimental.serverActions.allowedOrigins`
+  - `experimental.allowedHosts` 不受该版本 `NextConfig` 类型支持，加入后会导致 TypeScript 构建失败
