@@ -18,6 +18,35 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 const ACCESS_TOKEN_KEY = "auth_access_token";
 const REFRESH_TOKEN_KEY = "auth_refresh_token";
 const TOKEN_EXPIRES_AT_KEY = "auth_token_expires_at";
+const LEGACY_ACCESS_TOKEN_KEY = "access_token";
+const LEGACY_REFRESH_TOKEN_KEY = "refresh_token";
+const USER_STORAGE_KEY = "ai-bi-user-session";
+
+function readLegacySessionToken(field: "accessToken" | "refreshToken"): string | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = localStorage.getItem(USER_STORAGE_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw) as { accessToken?: string; refreshToken?: string };
+    const value = session[field];
+    return typeof value === "string" && value.trim() ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function migrateLegacyToken(primaryKey: string, legacyKey: string, value: string | null): string | null {
+  if (typeof window === "undefined") return value;
+  if (!value) return null;
+
+  localStorage.setItem(primaryKey, value);
+  const legacyValue = localStorage.getItem(legacyKey);
+  if (legacyValue === value) {
+    localStorage.removeItem(legacyKey);
+  }
+  return value;
+}
 
 /**
  * 存储 Token
@@ -35,7 +64,12 @@ export function saveTokens(tokens: Tokens): void {
  */
 export function getAccessToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(ACCESS_TOKEN_KEY);
+
+  const current = localStorage.getItem(ACCESS_TOKEN_KEY);
+  if (current) return current;
+
+  const legacy = localStorage.getItem(LEGACY_ACCESS_TOKEN_KEY) || readLegacySessionToken("accessToken");
+  return migrateLegacyToken(ACCESS_TOKEN_KEY, LEGACY_ACCESS_TOKEN_KEY, legacy);
 }
 
 /**
@@ -43,7 +77,12 @@ export function getAccessToken(): string | null {
  */
 export function getRefreshToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
+
+  const current = localStorage.getItem(REFRESH_TOKEN_KEY);
+  if (current) return current;
+
+  const legacy = localStorage.getItem(LEGACY_REFRESH_TOKEN_KEY) || readLegacySessionToken("refreshToken");
+  return migrateLegacyToken(REFRESH_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY, legacy);
 }
 
 /**
