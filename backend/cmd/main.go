@@ -7,6 +7,7 @@ import (
 	"ai-bi-server/internal/model"
 	"ai-bi-server/internal/service"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -50,7 +51,7 @@ func main() {
 	}
 
 	if err != nil {
-		log.Fatalf("数据库连接失败：%v", err)
+		log.Fatalf("数据库连接失败：%v", formatDatabaseConnectionError(cfg, err))
 	}
 	log.Println("数据库连接成功")
 
@@ -885,4 +886,26 @@ func main() {
 	if err := http.ListenAndServe(addr, recoveryMiddleware(middleware.CORS(mux))); err != nil {
 		log.Fatalf("服务启动失败：%v", err)
 	}
+}
+
+func formatDatabaseConnectionError(cfg *config.Config, err error) error {
+	if cfg.UseSQLite {
+		return err
+	}
+
+	var hints []string
+	if cfg.DatabaseURL == "" {
+		hints = append(hints, fmt.Sprintf("当前连接配置: DB_HOST=%s DB_PORT=%s DB_USER=%s DB_NAME=%s", cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBName))
+		hints = append(hints, "可在项目根目录创建 `.env.local`，填写正确的 `DB_USER`/`DB_PASSWORD`/`DB_NAME`，或直接设置 `DATABASE_URL`")
+	}
+
+	if cfg.Env != "production" {
+		hints = append(hints, "开发环境可使用 `./dev.sh` 默认启用 SQLite，或执行 `./dev.sh --postgres` 启动 Docker PostgreSQL")
+	}
+
+	if len(hints) == 0 {
+		return err
+	}
+
+	return errors.New(err.Error() + "；" + strings.Join(hints, "；"))
 }

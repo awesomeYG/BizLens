@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -9,14 +10,15 @@ import (
 )
 
 type Config struct {
-	Port       string
-	DBHost     string
-	DBPort     string
-	DBUser     string
-	DBPassword string
-	DBName     string
-	DBSSLMode  string
-	UseSQLite  bool
+	Port        string
+	DatabaseURL string
+	DBHost      string
+	DBPort      string
+	DBUser      string
+	DBPassword  string
+	DBName      string
+	DBSSLMode   string
+	UseSQLite   bool
 	// 认证相关
 	JWTSecret          string
 	Env                string // development / production
@@ -35,6 +37,8 @@ type Config struct {
 }
 
 func Load() *Config {
+	loadEnvFiles()
+
 	// 加载授权码（必填）
 	licenseKey := os.Getenv("LICENSE_KEY")
 	if licenseKey == "" {
@@ -49,14 +53,15 @@ func Load() *Config {
 	licenseExpires := os.Getenv("LICENSE_EXPIRES")
 
 	return &Config{
-		Port:       getEnv("SERVER_PORT", "3001"),
-		DBHost:     getEnv("DB_HOST", "localhost"),
-		DBPort:     getEnv("DB_PORT", "5432"),
-		DBUser:     getEnv("DB_USER", "postgres"),
-		DBPassword: getEnv("DB_PASSWORD", "postgres"),
-		DBName:     getEnv("DB_NAME", "ai_bi"),
-		DBSSLMode:  getEnv("DB_SSLMODE", "disable"),
-		UseSQLite:  getEnv("USE_SQLITE", "true") == "true",
+		Port:        getEnv("SERVER_PORT", "3001"),
+		DatabaseURL: getEnv("DATABASE_URL", ""),
+		DBHost:      getEnv("DB_HOST", "localhost"),
+		DBPort:      getEnv("DB_PORT", "5432"),
+		DBUser:      getEnv("DB_USER", "postgres"),
+		DBPassword:  getEnv("DB_PASSWORD", "postgres"),
+		DBName:      getEnv("DB_NAME", "ai_bi"),
+		DBSSLMode:   getEnv("DB_SSLMODE", "disable"),
+		UseSQLite:   getEnv("USE_SQLITE", "true") == "true",
 		// 认证相关
 		JWTSecret:          getEnv("JWT_SECRET", "change-this-secret-in-production"),
 		Env:                getEnv("ENV", "development"),
@@ -116,10 +121,67 @@ func (c *Config) DSN() string {
 		}
 		return fmt.Sprintf("file:%s?cache=shared", sqlitePath)
 	}
+	if c.DatabaseURL != "" {
+		return c.DatabaseURL
+	}
 	return fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		c.DBHost, c.DBPort, c.DBUser, c.DBPassword, c.DBName, c.DBSSLMode,
 	)
+}
+
+func loadEnvFiles() {
+	locked := make(map[string]struct{})
+	for _, entry := range os.Environ() {
+		key, _, found := strings.Cut(entry, "=")
+		if found && key != "" {
+			locked[key] = struct{}{}
+		}
+	}
+
+	paths := []string{
+		filepath.Join("..", ".env"),
+		".env",
+		filepath.Join("..", ".env.local"),
+		".env.local",
+	}
+
+	for _, path := range paths {
+		loadEnvFile(path, locked)
+	}
+}
+
+func loadEnvFile(path string, locked map[string]struct{}) {
+	file, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		line = strings.TrimPrefix(line, "export ")
+		key, value, found := strings.Cut(line, "=")
+		if !found {
+			continue
+		}
+
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		value = strings.Trim(value, `"'`)
+		if key == "" || value == "" {
+			continue
+		}
+		if _, exists := locked[key]; exists {
+			continue
+		}
+		_ = os.Setenv(key, value)
+	}
 }
 
 func getEnv(key, fallback string) string {
