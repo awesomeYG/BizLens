@@ -22,6 +22,12 @@ type Config struct {
 	Env                string // development / production
 	AccessTokenExpire  int    // Access Token 过期时间（分钟）
 	RefreshTokenExpire int    // Refresh Token 过期时间（天）
+	AppBaseURL         string
+	SMTPHost           string
+	SMTPPort           string
+	SMTPUser           string
+	SMTPPassword       string
+	SMTPFrom           string
 	// 授权码相关
 	LicenseKey     string // 必填，授权码
 	LicenseSeats   int    // 可选，最大用户数上限（0 表示不限制）
@@ -56,6 +62,12 @@ func Load() *Config {
 		Env:                getEnv("ENV", "development"),
 		AccessTokenExpire:  getEnvInt("ACCESS_TOKEN_EXPIRE", 30), // 默认 30 分钟
 		RefreshTokenExpire: getEnvInt("REFRESH_TOKEN_EXPIRE", 7), // 默认 7 天
+		AppBaseURL:         getEnv("APP_BASE_URL", "http://localhost:3000"),
+		SMTPHost:           getEnv("SMTP_HOST", ""),
+		SMTPPort:           getEnv("SMTP_PORT", "587"),
+		SMTPUser:           getEnv("SMTP_USER", ""),
+		SMTPPassword:       getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:           getEnv("SMTP_FROM", ""),
 		// 授权码相关
 		LicenseKey:     licenseKey,
 		LicenseSeats:   licenseSeats,

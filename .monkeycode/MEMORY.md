@@ -356,3 +356,15 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 前端构建命令：`cd /workspace/frontend && npm run build`
   - 当前 Next.js 版本为 15.3.2，预览域名放行依赖 `allowedDevOrigins` 与 `experimental.serverActions.allowedOrigins`
   - `experimental.allowedHosts` 不受该版本 `NextConfig` 类型支持，加入后会导致 TypeScript 构建失败
+
+### 密码重置邮件流程
+- Date: 2026-03-31
+- Context: Agent 在实现 forgot-password 真正邮件找回密码流程时发现
+- Category: 代码结构
+- Instructions:
+  - 后端新增公开认证接口：`POST /api/auth/forgot-password`、`GET /api/auth/reset-password/validate`、`POST /api/auth/reset-password`
+  - 密码重置令牌存储在 `backend/internal/model/model.go` 的 `PasswordResetToken` 表，数据库中只保存 token 的 SHA-256 哈希
+  - 重置链接格式为 `APP_BASE_URL/auth/reset-password?token=...`，默认有效期 30 分钟，同一用户只保留最新一条未使用链接
+  - 邮件发送由 `backend/internal/service/email_service.go` 负责，依赖环境变量 `SMTP_HOST`、`SMTP_PORT`、`SMTP_USER`、`SMTP_PASSWORD`、`SMTP_FROM`
+  - 未配置 SMTP 时，后端在开发环境会把重置链接输出到日志，接口仍返回通用成功提示，避免暴露邮箱是否存在
+  - 前端页面位于 `frontend/app/auth/forgot-password/page.tsx` 和 `frontend/app/auth/reset-password/page.tsx`

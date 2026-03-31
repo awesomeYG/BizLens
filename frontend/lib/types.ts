@@ -424,6 +424,24 @@ export interface ActivateResponse {
   code?: string;
 }
 
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ForgotPasswordResponse {
+  message: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  newPassword: string;
+}
+
+export interface ValidateResetTokenResponse {
+  valid: boolean;
+  message?: string;
+}
+
 // 更新 UserSession 以支持 Token
 export interface UserSessionWithAuth extends UserSession {
   accessToken?: string;

@@ -34,6 +34,18 @@ type User struct {
 	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
 }
 
+// PasswordResetToken 密码重置令牌
+type PasswordResetToken struct {
+	ID        string     `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	UserID    string     `gorm:"type:varchar(50);not null;index" json:"userId"`
+	TokenHash string     `gorm:"size:255;not null;uniqueIndex" json:"-"`
+	ExpiresAt time.Time  `gorm:"index" json:"expiresAt"`
+	UsedAt    *time.Time `json:"usedAt,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
+
+	User User `gorm:"foreignKey:UserID" json:"-"`
+}
+
 // IMPlatformType IM 平台类型
 type IMPlatformType string
 
@@ -845,6 +857,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&DashboardSection{},
 		// 认证相关
 		&RefreshToken{},
+		&PasswordResetToken{},
 		&AuthProvider{},
 		// 手动上传数据集
 		&UploadedDataset{},

@@ -5,9 +5,13 @@ import (
 	"ai-bi-server/internal/dto"
 	"ai-bi-server/internal/model"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
+	"net/url"
 	"strings"
 	"time"
 
@@ -22,6 +26,7 @@ import (
 type AuthService struct {
 	db     *gorm.DB
 	cfg    *config.Config
+	email  *EmailService
 	signer jose.Signer
 }
 
@@ -35,7 +40,7 @@ type Claims struct {
 }
 
 // NewAuthService 创建认证服务
-func NewAuthService(db *gorm.DB, cfg *config.Config) (*AuthService, error) {
+func NewAuthService(db *gorm.DB, cfg *config.Config, emailService *EmailService) (*AuthService, error) {
 	// 创建 JWT 签名器
 	key := []byte(cfg.JWTSecret)
 	signingKey := jose.SigningKey{
@@ -51,6 +56,7 @@ func NewAuthService(db *gorm.DB, cfg *config.Config) (*AuthService, error) {
 	return &AuthService{
 		db:     db,
 		cfg:    cfg,
+		email:  emailService,
 		signer: signer,
 	}, nil
 }
@@ -295,6 +301,108 @@ func (s *AuthService) ChangePassword(userID string, oldPassword, newPassword str
 	}
 
 	return s.db.Model(&user).Update("password_hash", string(hashedPassword)).Error
+}
+
+// RequestPasswordReset 发起密码重置邮件
+func (s *AuthService) RequestPasswordReset(email string) error {
+	var user model.User
+	if err := s.db.Where("email = ?", email).Limit(1).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return fmt.Errorf("查询用户失败：%w", err)
+	}
+
+	rawToken, tokenHash, err := generateResetToken()
+	if err != nil {
+		return fmt.Errorf("生成重置令牌失败：%w", err)
+	}
+
+	expiresAt := time.Now().Add(30 * time.Minute)
+	resetToken := &model.PasswordResetToken{
+		ID:        uuid.NewString(),
+		UserID:    user.ID,
+		TokenHash: tokenHash,
+		ExpiresAt: expiresAt,
+	}
+
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.PasswordResetToken{}).
+			Where("user_id = ? AND used_at IS NULL", user.ID).
+			Update("used_at", time.Now()).Error; err != nil {
+			return err
+		}
+		return tx.Create(resetToken).Error
+	}); err != nil {
+		return fmt.Errorf("保存重置令牌失败：%w", err)
+	}
+
+	resetURL := fmt.Sprintf("%s/auth/reset-password?token=%s", strings.TrimRight(s.cfg.AppBaseURL, "/"), url.QueryEscape(rawToken))
+	if s.email != nil && s.email.IsConfigured() {
+		if err := s.email.SendPasswordResetEmail(user.Email, user.Name, resetURL, expiresAt); err != nil {
+			return fmt.Errorf("发送重置邮件失败：%w", err)
+		}
+		return nil
+	}
+
+	log.Printf("密码重置邮件未发送（SMTP 未配置），重置链接：%s", resetURL)
+	return nil
+}
+
+// ValidatePasswordResetToken 校验密码重置令牌
+func (s *AuthService) ValidatePasswordResetToken(token string) error {
+	_, err := s.findValidPasswordResetToken(token)
+	return err
+}
+
+// ResetPasswordWithToken 使用重置令牌重置密码
+func (s *AuthService) ResetPasswordWithToken(token, newPassword string) error {
+	resetToken, err := s.findValidPasswordResetToken(token)
+	if err != nil {
+		return err
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("密码加密失败：%w", err)
+	}
+
+	now := time.Now()
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.User{}).Where("id = ?", resetToken.UserID).Updates(map[string]interface{}{
+			"password_hash":  string(hashedPassword),
+			"login_attempts": 0,
+			"locked_until":   nil,
+		}).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Model(&model.PasswordResetToken{}).Where("id = ?", resetToken.ID).Update("used_at", now).Error; err != nil {
+			return err
+		}
+
+		return tx.Model(&model.RefreshToken{}).Where("user_id = ? AND revoked = ?", resetToken.UserID, false).Updates(map[string]interface{}{
+			"revoked":    true,
+			"revoked_at": now,
+		}).Error
+	})
+}
+
+func (s *AuthService) findValidPasswordResetToken(token string) (*model.PasswordResetToken, error) {
+	tokenHash := hashResetToken(token)
+	var resetToken model.PasswordResetToken
+	if err := s.db.Where("token_hash = ?", tokenHash).Limit(1).First(&resetToken).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("重置链接无效或已失效")
+		}
+		return nil, fmt.Errorf("查询重置令牌失败：%w", err)
+	}
+
+	if resetToken.UsedAt != nil || time.Now().After(resetToken.ExpiresAt) {
+		return nil, errors.New("重置链接无效或已失效")
+	}
+
+	return &resetToken, nil
 }
 
 // generateTokens 为用户生成访问令牌和刷新令牌
@@ -632,6 +740,20 @@ func generateRandomPassword(length int) string {
 		b[i] = chars[int(b[i])%len(chars)]
 	}
 	return string(b)
+}
+
+func generateResetToken() (string, string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", err
+	}
+	rawToken := base64.RawURLEncoding.EncodeToString(b)
+	return rawToken, hashResetToken(rawToken), nil
+}
+
+func hashResetToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 // isValidLicenseKeyFormat 校验授权码格式（XXXX-XXXX-XXXX-XXXX）

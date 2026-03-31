@@ -280,6 +280,80 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "密码修改成功"})
 }
 
+// ForgotPassword 发起找回密码邮件
+// POST /api/auth/forgot-password
+func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var req dto.ForgotPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "请求体解析失败")
+		return
+	}
+
+	if req.Email == "" {
+		writeError(w, http.StatusBadRequest, "email 必填")
+		return
+	}
+
+	if err := h.authService.RequestPasswordReset(req.Email); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, dto.ForgotPasswordResponse{
+		Message: "如果该邮箱已注册，我们会向其发送密码重置邮件，请注意查收。",
+	})
+}
+
+// ValidateResetPasswordToken 校验重置密码令牌
+// GET /api/auth/reset-password/validate?token=...
+func (h *AuthHandler) ValidateResetPasswordToken(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		writeJSON(w, http.StatusBadRequest, dto.ValidateResetTokenResponse{
+			Valid:   false,
+			Message: "缺少重置令牌",
+		})
+		return
+	}
+
+	if err := h.authService.ValidatePasswordResetToken(token); err != nil {
+		writeJSON(w, http.StatusBadRequest, dto.ValidateResetTokenResponse{
+			Valid:   false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, dto.ValidateResetTokenResponse{Valid: true})
+}
+
+// ResetPassword 使用重置令牌重置密码
+// POST /api/auth/reset-password
+func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req dto.ResetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "请求体解析失败")
+		return
+	}
+
+	if req.Token == "" || req.NewPassword == "" {
+		writeError(w, http.StatusBadRequest, "token 和 newPassword 必填")
+		return
+	}
+
+	if len(req.NewPassword) < 6 {
+		writeError(w, http.StatusBadRequest, "新密码长度至少 6 位")
+		return
+	}
+
+	if err := h.authService.ResetPasswordWithToken(req.Token, req.NewPassword); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "密码已重置，请使用新密码登录"})
+}
+
 // Activate 处理激活请求
 // POST /api/auth/activate
 func (h *AuthHandler) Activate(w http.ResponseWriter, r *http.Request) {

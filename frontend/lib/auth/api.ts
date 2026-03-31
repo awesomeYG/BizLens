@@ -6,6 +6,10 @@ import type {
   Tokens,
   RefreshTokenRequest,
   ActivateResponse,
+  ForgotPasswordRequest,
+  ForgotPasswordResponse,
+  ResetPasswordRequest,
+  ValidateResetTokenResponse,
 } from "../types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
@@ -252,6 +256,40 @@ export async function changePassword(data: {
   newPassword: string;
 }): Promise<void> {
   return request("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function forgotPassword(
+  data: ForgotPasswordRequest
+): Promise<ForgotPasswordResponse> {
+  return request<ForgotPasswordResponse>("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function validateResetPasswordToken(
+  token: string
+): Promise<ValidateResetTokenResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/auth/reset-password/validate?token=${encodeURIComponent(token)}`,
+    {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+
+  const body = (await response.json().catch(() => ({}))) as ValidateResetTokenResponse;
+  return {
+    valid: response.ok && body.valid !== false,
+    message: body.message,
+  };
+}
+
+export async function resetPassword(data: ResetPasswordRequest): Promise<{ message: string }> {
+  return request<{ message: string }>("/auth/reset-password", {
     method: "POST",
     body: JSON.stringify(data),
   });

@@ -201,7 +201,8 @@ func main() {
 	}
 
 	// 认证服务
-	authService, err := service.NewAuthService(db, cfg)
+	emailService := service.NewEmailService(cfg)
+	authService, err := service.NewAuthService(db, cfg, emailService)
 	if err != nil {
 		log.Fatalf("创建认证服务失败：%v", err)
 	}
@@ -254,6 +255,21 @@ func main() {
 		// POST /api/auth/login
 		case path == "login" && r.Method == http.MethodPost:
 			authHandler.Login(w, r)
+			return
+
+		// POST /api/auth/forgot-password
+		case path == "forgot-password" && r.Method == http.MethodPost:
+			authHandler.ForgotPassword(w, r)
+			return
+
+		// GET /api/auth/reset-password/validate
+		case path == "reset-password/validate" && r.Method == http.MethodGet:
+			authHandler.ValidateResetPasswordToken(w, r)
+			return
+
+		// POST /api/auth/reset-password
+		case path == "reset-password" && r.Method == http.MethodPost:
+			authHandler.ResetPassword(w, r)
 			return
 
 		// POST /api/auth/logout (需要认证)

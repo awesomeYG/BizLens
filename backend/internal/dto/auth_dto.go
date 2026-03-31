@@ -33,6 +33,28 @@ type ChangePasswordRequest struct {
 	NewPassword string `json:"newPassword" validate:"required,min=6"`
 }
 
+// ForgotPasswordRequest 忘记密码请求
+type ForgotPasswordRequest struct {
+	Email string `json:"email" validate:"required,email"`
+}
+
+// ForgotPasswordResponse 忘记密码响应
+type ForgotPasswordResponse struct {
+	Message string `json:"message"`
+}
+
+// ResetPasswordRequest 重置密码请求
+type ResetPasswordRequest struct {
+	Token       string `json:"token" validate:"required"`
+	NewPassword string `json:"newPassword" validate:"required,min=6"`
+}
+
+// ValidateResetTokenResponse 校验重置令牌响应
+type ValidateResetTokenResponse struct {
+	Valid   bool   `json:"valid"`
+	Message string `json:"message,omitempty"`
+}
+
 // Tokens 访问令牌和刷新令牌
 type Tokens struct {
 	AccessToken  string `json:"accessToken"`
