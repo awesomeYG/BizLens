@@ -547,7 +547,7 @@ type DashboardSection struct {
 	ID          string               `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
 	TenantID    string               `gorm:"type:varchar(50);index" json:"tenantId"`   // 可为空，系统模板的区块无 tenantID
 	TemplateID  string               `gorm:"type:varchar(50);index" json:"templateId"` // 关联的模板 ID
-	InstanceID  string               `gorm:"type:varchar(50);index" json:"instanceId"` // 关联的实例 ID
+	InstanceID  *string              `gorm:"type:varchar(50);index;default:null" json:"instanceId,omitempty"` // 关联的实例 ID（模板区块应为 NULL）
 	Type        DashboardSectionType `gorm:"size:50;not null" json:"type"`             // kpi/trend/ranking/map/pie/bar/line/area/funnel/table/insight/alert/custom
 	Title       string               `gorm:"size:200" json:"title"`                    // 区块标题
 	Metrics     string               `gorm:"type:text" json:"metrics"`                 // 关联的指标（JSON 数组）
@@ -925,6 +925,8 @@ func AutoMigrate(db *gorm.DB) error {
 			ON DELETE RESTRICT
 		`).Error
 		_ = db.Exec(`UPDATE "dashboard_templates" SET "tenant_id" = NULL WHERE "tenant_id" = ''`).Error
+		// 系统模板区块不属于任何实例：把历史遗留的空字符串 instance_id 修正为 NULL，避免外键约束失败
+		_ = db.Exec(`UPDATE "dashboard_sections" SET "instance_id" = NULL WHERE "instance_id" = ''`).Error
 	}
 
 	return nil

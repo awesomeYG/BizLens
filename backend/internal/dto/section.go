@@ -75,7 +75,7 @@ func (d *SectionDTO) ToDashboardSectionModel(ownerType SectionOwnerType, ownerID
 	case OwnerTemplate:
 		s.TemplateID = ownerID
 	case OwnerDashboardInstance:
-		s.InstanceID = ownerID
+		s.InstanceID = &ownerID
 	}
 
 	// 序列化数组字段

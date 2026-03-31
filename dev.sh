@@ -264,7 +264,8 @@ start_backend() {
     else
         log_info "数据库模式：PostgreSQL"
         export DB_HOST="${DB_HOST:-localhost}"
-        export DB_PORT="${DB_PORT:-5432}"
+        # macOS 上常见本机 Postgres 占用 5432；Docker Compose 默认映射到 5433
+        export DB_PORT="${DB_PORT:-5433}"
         export DB_USER="${DB_USER:-postgres}"
         export DB_PASSWORD="${DB_PASSWORD:-postgres}"
         export DB_NAME="${DB_NAME:-ai_bi}"

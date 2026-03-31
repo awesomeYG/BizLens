@@ -680,7 +680,7 @@ func (s *DashboardTemplateService) GenerateDashboardFromTemplate(
 		newSection.ID = uuid.New().String()
 		newSection.TenantID = tenantID
 		newSection.TemplateID = "" // 清空模板 ID
-		newSection.InstanceID = instance.ID
+		newSection.InstanceID = &instance.ID
 		newSection.CreatedAt = time.Now()
 		newSection.UpdatedAt = time.Now()
 
