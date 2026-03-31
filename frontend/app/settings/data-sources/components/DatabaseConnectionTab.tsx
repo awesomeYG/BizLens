@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { DataSourceConfig, DataSourceType, DatabaseConnectionConfig } from "@/lib/types";
 import { getAccessToken } from "@/lib/auth/api";
+import { startSchemaAnalysisTask, waitForSchemaAnalysisTask } from "@/lib/schema-analysis";
 import { getCurrentUser, saveOnboardingDraft } from "@/lib/user-store";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
@@ -529,40 +530,23 @@ export default function DatabaseConnectionTab() {
     setDeleteConfirm({ id, name });
   };
 
-  const executeAnalyze = async (id: string, name: string) => {
+  const executeAnalyze = async (id: string) => {
     setAnalyzingId(id);
     setMessage(null);
     try {
       const tenantId = getTenantId();
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000);
-      const response = await fetch(`/api/tenants/${tenantId}/data-sources/${id}/schema/analyze`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ mode: "full" }),
-        signal: controller.signal,
+      const headers = getAuthHeaders();
+      const task = await startSchemaAnalysisTask({ tenantId, dataSourceId: id, mode: "full", headers });
+      const result = await waitForSchemaAnalysisTask({
+        tenantId,
+        dataSourceId: id,
+        taskId: task.id,
+        headers,
       });
-      clearTimeout(timeoutId);
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        setMessage({ type: "error", text: (err as { error?: string }).error || "AI 分析失败" });
-        return;
-      }
-      const result = (await response.json()) as { success?: boolean; analyzedAt?: string };
-      if (result.success) {
-        setDataSources((prev) =>
-          prev.map((d) => (d.id === id ? { ...d, schemaAnalyzed: true } : d))
-        );
-        setMessage({ type: "success", text: `AI 分析完成（${result.analyzedAt || ""}）。` });
-      } else {
-        setMessage({ type: "error", text: "AI 分析未返回预期结果。" });
-      }
+      setDataSources((prev) => prev.map((d) => (d.id === id ? { ...d, schemaAnalyzed: true } : d)));
+      setMessage({ type: "success", text: `AI 分析完成（${result.completedAt || result.updatedAt || "刚刚"}）。` });
     } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") {
-        setMessage({ type: "error", text: "AI 分析超时，请稍后重试。" });
-      } else {
-        setMessage({ type: "error", text: "AI 分析失败，请稍后重试。" });
-      }
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "AI 分析失败，请稍后重试。" });
     } finally {
       setAnalyzingId(null);
     }
@@ -1068,7 +1052,7 @@ export default function DatabaseConnectionTab() {
         onConfirm={async () => {
           const target = analyzeConfirm;
           if (!target) return;
-          await executeAnalyze(target.id, target.name);
+          await executeAnalyze(target.id);
           setAnalyzeConfirm(null);
         }}
       />

@@ -120,7 +120,8 @@ func main() {
 	aiConfigService := service.NewAIConfigService(db)
 	llmService := service.NewLLMService(aiConfigService)
 	schemaAnalysisService := service.NewSchemaAnalysisService(llmService, aiConfigService)
-	dataSourceHandler := handler.NewDataSourceHandler(dataSourceService, schemaAnalysisService)
+	schemaAnalysisTaskService := service.NewSchemaAnalysisTaskService(db, dataSourceService, schemaAnalysisService)
+	dataSourceHandler := handler.NewDataSourceHandler(dataSourceService, schemaAnalysisService, schemaAnalysisTaskService)
 	schemaHandler := handler.NewSchemaHandler(dataSourceService)
 	notificationRuleService := service.NewNotificationRuleService(db, imService)
 	notificationRuleHandler := handler.NewNotificationRuleHandler(notificationRuleService)
@@ -454,9 +455,16 @@ func main() {
 				dataSourceHandler.GetSchemaAnalysis(w, r)
 				return
 
-			// POST /api/tenants/{id}/data-sources/{dsId}/schema/analyze
-			case len(parts) == 5 && parts[3] == "schema" && parts[4] == "analyze" && r.Method == http.MethodPost:
-				dataSourceHandler.AnalyzeSchema(w, r)
+			// GET/POST /api/tenants/{id}/data-sources/{dsId}/schema/analyze
+			case len(parts) == 5 && parts[3] == "schema" && parts[4] == "analyze":
+				switch r.Method {
+				case http.MethodGet:
+					dataSourceHandler.GetAnalyzeSchemaTaskStatus(w, r)
+				case http.MethodPost:
+					dataSourceHandler.AnalyzeSchema(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
 				return
 
 			// POST /api/tenants/{id}/data-sources/{dsId}/query/repair

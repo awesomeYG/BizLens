@@ -9,11 +9,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type DataSourceHandler struct {
 	dataSourceService *service.DataSourceService
 	schemaAnalysisSvc *service.SchemaAnalysisService
+	schemaTaskSvc     *service.SchemaAnalysisTaskService
 }
 
 const invalidDataSourceIDMsg = "数据源 ID 无效"
@@ -28,10 +31,11 @@ func parseDataSourceIDFromPath(path string) string {
 	return ""
 }
 
-func NewDataSourceHandler(dataSourceService *service.DataSourceService, schemaAnalysisSvc *service.SchemaAnalysisService) *DataSourceHandler {
+func NewDataSourceHandler(dataSourceService *service.DataSourceService, schemaAnalysisSvc *service.SchemaAnalysisService, schemaTaskSvc *service.SchemaAnalysisTaskService) *DataSourceHandler {
 	return &DataSourceHandler{
 		dataSourceService: dataSourceService,
 		schemaAnalysisSvc: schemaAnalysisSvc,
+		schemaTaskSvc:     schemaTaskSvc,
 	}
 }
 
@@ -535,6 +539,39 @@ type AnalyzedSchemaResult struct {
 	MetricCount    int                 `json:"metricCount"`
 	DimensionCount int                 `json:"dimensionCount"`
 	Diff           *service.SchemaDiff `json:"diff,omitempty"`
+	Task           *SchemaTaskResponse `json:"task,omitempty"`
+}
+
+type SchemaTaskResponse struct {
+	ID           string                         `json:"id"`
+	Mode         string                         `json:"mode"`
+	Status       model.SchemaAnalysisTaskStatus `json:"status"`
+	ErrorMessage string                         `json:"errorMessage,omitempty"`
+	StartedAt    *time.Time                     `json:"startedAt,omitempty"`
+	CompletedAt  *time.Time                     `json:"completedAt,omitempty"`
+	CreatedAt    time.Time                      `json:"createdAt"`
+	UpdatedAt    time.Time                      `json:"updatedAt"`
+	Diff         *service.SchemaDiff            `json:"diff,omitempty"`
+}
+
+func (h *DataSourceHandler) buildSchemaTaskResponse(task *model.SchemaAnalysisTask) *SchemaTaskResponse {
+	if task == nil {
+		return nil
+	}
+	resp := &SchemaTaskResponse{
+		ID:           task.ID,
+		Mode:         task.Mode,
+		Status:       task.Status,
+		ErrorMessage: task.ErrorMessage,
+		StartedAt:    task.StartedAt,
+		CompletedAt:  task.CompletedAt,
+		CreatedAt:    task.CreatedAt,
+		UpdatedAt:    task.UpdatedAt,
+	}
+	if diff, err := h.schemaTaskSvc.DeserializeDiff(task); err == nil {
+		resp.Diff = diff
+	}
+	return resp
 }
 
 // GetSchemaAnalysis GET /api/tenants/{id}/data-sources/{dsId}/schema/analysis
@@ -580,6 +617,10 @@ func (h *DataSourceHandler) GetSchemaAnalysis(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+	if task, err := h.schemaTaskSvc.GetLatestTask(tenantID, dsID); err == nil {
+		result.Task = h.buildSchemaTaskResponse(task)
+	}
+
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -613,58 +654,52 @@ func (h *DataSourceHandler) AnalyzeSchema(w http.ResponseWriter, r *http.Request
 		json.NewDecoder(r.Body).Decode(&req)
 	}
 
-	var analysis *model.SchemaAIAnalysis
-	var diff *service.SchemaDiff
-
-	// 判断分析模式
-	if req.Mode == "full" {
-		// 强制全量重分析
-		analysis, err = h.schemaAnalysisSvc.AnalyzeSchema(tenantID, ds)
-	} else {
-		// 增量更新（默认）
-		oldAnalysis, _ := service.DeserializeAIAnalysis(ds.AIAnalysis)
-		analysis, diff, err = h.schemaAnalysisSvc.IncrementalAnalyzeSchema(tenantID, ds, oldAnalysis)
+	task, existing, err := h.schemaTaskSvc.StartTask(tenantID, dsID, req.Mode)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "创建分析任务失败")
+		return
 	}
 
+	writeJSON(w, http.StatusAccepted, map[string]interface{}{
+		"success":  true,
+		"existing": existing,
+		"task":     h.buildSchemaTaskResponse(task),
+		"message":  "AI Schema 分析任务已启动",
+	})
+}
+
+func (h *DataSourceHandler) GetAnalyzeSchemaTaskStatus(w http.ResponseWriter, r *http.Request) {
+	tenantID := parseTenantID(r)
+	dsID := parseDataSourceIDFromPath(r.URL.Path)
+	if dsID == "" {
+		writeError(w, http.StatusBadRequest, invalidDataSourceIDMsg)
+		return
+	}
+
+	if _, err := h.dataSourceService.GetDataSource(dsID, tenantID); err != nil {
+		writeError(w, http.StatusNotFound, "数据源不存在")
+		return
+	}
+
+	taskID := strings.TrimSpace(r.URL.Query().Get("taskId"))
+	var task *model.SchemaAnalysisTask
+	var err error
+	if taskID != "" {
+		task, err = h.schemaTaskSvc.GetTask(tenantID, dsID, taskID)
+	} else {
+		task, err = h.schemaTaskSvc.GetLatestTask(tenantID, dsID)
+	}
 	if err != nil {
-		if errors.Is(err, service.ErrAIConfigMissingAPIKey) {
-			writeJSON(w, http.StatusBadRequest, map[string]interface{}{
-				"success": false,
-				"error":   "AI 分析失败：未配置 API Key",
-				"message": "请先在 /api/tenants/{tenantId}/ai-config 配置 apiKey（以及可选的 baseUrl/modelType/model）",
-			})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			writeError(w, http.StatusNotFound, "分析任务不存在")
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
-			"success": false,
-			"error":   "AI 分析失败：" + err.Error(),
-			"message": "请检查 AI 配置（API Key、模型等）是否正确",
-		})
-		return
-	}
-
-	// 保存分析结果
-	analysisJSON, err := service.SerializeAIAnalysis(analysis)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "保存分析结果失败")
-		return
-	}
-
-	ds.AIAnalysis = analysisJSON
-	if err := h.dataSourceService.UpdateDataSource(ds); err != nil {
-		writeError(w, http.StatusInternalServerError, "更新数据源失败")
+		writeError(w, http.StatusInternalServerError, "获取分析任务失败")
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"success":        true,
-		"mode":           req.Mode,
-		"analyzedAt":     analysis.AnalyzedAt,
-		"modelUsed":      analysis.ModelUsed,
-		"fieldCount":     len(analysis.Fields),
-		"tableCount":     len(analysis.Tables),
-		"metricCount":    len(analysis.Recommendations),
-		"dimensionCount": len(analysis.Dimensions),
-		"diff":           diff,
+		"success": true,
+		"task":    h.buildSchemaTaskResponse(task),
 	})
 }

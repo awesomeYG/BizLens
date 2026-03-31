@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { DataSourceConfig } from "@/lib/types";
 import { getAccessToken } from "@/lib/auth/api";
+import { startSchemaAnalysisTask, waitForSchemaAnalysisTask } from "@/lib/schema-analysis";
 import { getCurrentUser } from "@/lib/user-store";
 
 /** AI 智能推荐的关键指标 */
@@ -153,17 +154,19 @@ export default function MetricDiscoveryModal({
     if (discoverContext && !discoverContext.schemaAnalyzed) {
       setStep("schemaAnalyzing");
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 180000);
-        const analyzeResp = await fetch(
-          `/api/tenants/${tenantId}/data-sources/${selectedDsId}/schema/analyze`,
-          { method: "POST", headers: getAuthHeaders(), body: JSON.stringify({ mode: "full" }), signal: controller.signal }
-        );
-        clearTimeout(timeoutId);
-        if (!analyzeResp.ok) {
-          const err = await analyzeResp.json().catch(() => ({ error: "AI 分析失败" }));
-          throw new Error((err as { error: string }).error);
-        }
+        const headers = getAuthHeaders();
+        const task = await startSchemaAnalysisTask({
+          tenantId,
+          dataSourceId: selectedDsId,
+          mode: "full",
+          headers,
+        });
+        await waitForSchemaAnalysisTask({
+          tenantId,
+          dataSourceId: selectedDsId,
+          taskId: task.id,
+          headers,
+        });
         // 分析完成后刷新上下文
         await checkDiscoverContextRef.current?.();
       } catch (e) {

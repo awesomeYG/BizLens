@@ -251,6 +251,33 @@ type DataSource struct {
 	Tenant Tenant `gorm:"foreignKey:TenantID" json:"-"`
 }
 
+type SchemaAnalysisTaskStatus string
+
+const (
+	SchemaAnalysisTaskPending   SchemaAnalysisTaskStatus = "pending"
+	SchemaAnalysisTaskRunning   SchemaAnalysisTaskStatus = "running"
+	SchemaAnalysisTaskSucceeded SchemaAnalysisTaskStatus = "succeeded"
+	SchemaAnalysisTaskFailed    SchemaAnalysisTaskStatus = "failed"
+)
+
+// SchemaAnalysisTask 异步 schema AI 分析任务
+type SchemaAnalysisTask struct {
+	ID           string                   `gorm:"type:varchar(50);primaryKey;default:null" json:"id"`
+	TenantID     string                   `gorm:"type:varchar(50);not null;index" json:"tenantId"`
+	DataSourceID string                   `gorm:"type:varchar(50);not null;index" json:"dataSourceId"`
+	Mode         string                   `gorm:"size:20;not null;default:'incremental'" json:"mode"`
+	Status       SchemaAnalysisTaskStatus `gorm:"size:20;not null;default:'pending';index" json:"status"`
+	ErrorMessage string                   `gorm:"type:text" json:"errorMessage,omitempty"`
+	DiffJSON     string                   `gorm:"type:text" json:"-"`
+	StartedAt    *time.Time               `json:"startedAt,omitempty"`
+	CompletedAt  *time.Time               `json:"completedAt,omitempty"`
+	CreatedAt    time.Time                `json:"createdAt"`
+	UpdatedAt    time.Time                `json:"updatedAt"`
+
+	Tenant     Tenant     `gorm:"foreignKey:TenantID" json:"-"`
+	DataSource DataSource `gorm:"foreignKey:DataSourceID" json:"-"`
+}
+
 // FieldSemanticAI AI 对单个字段的语义分析结果
 type FieldSemanticAI struct {
 	Field        string   `json:"field"`                  // 字段名
@@ -845,6 +872,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&ChatConversation{},
 		&ChatConversationMessage{},
 		&DataSource{},
+		&SchemaAnalysisTask{},
 		&NotificationRule{},
 		// 语义层模型
 		&Metric{},
