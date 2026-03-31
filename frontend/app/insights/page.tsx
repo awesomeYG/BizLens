@@ -108,12 +108,31 @@ export default function InsightsPage() {
     return fetch(url, { ...options, headers: { ...headers, ...options?.headers } });
   }, []);
 
+  const parseResponseBody = useCallback(async (res: Response) => {
+    const contentType = res.headers.get("content-type") || "";
+    const text = await res.text();
+
+    if (!text) {
+      return null;
+    }
+
+    if (contentType.includes("application/json")) {
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { error: text };
+      }
+    }
+
+    return { error: text };
+  }, []);
+
   const fetchLatest = useCallback(async () => {
     try {
       const res = await authFetch(`/api/tenants/${tenantId}/daily-summary/latest`);
+      const data = await parseResponseBody(res);
       if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.summary) {
+        if (data?.success && data.summary) {
           setSummary(data.summary);
           try {
             setParsedContent(JSON.parse(data.summary.content));
@@ -130,9 +149,9 @@ export default function InsightsPage() {
   const fetchHistory = useCallback(async () => {
     try {
       const res = await authFetch(`/api/tenants/${tenantId}/daily-summary`);
+      const data = await parseResponseBody(res);
       if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.summaries) {
+        if (data?.success && data.summaries) {
           setHistorySummaries(data.summaries);
         }
       }
@@ -154,8 +173,8 @@ export default function InsightsPage() {
       const res = await authFetch(`/api/tenants/${tenantId}/daily-summary/generate`, {
         method: "POST",
       });
-      const data = await res.json();
-      if (res.ok && data.success && data.summary) {
+      const data = await parseResponseBody(res);
+      if (res.ok && data?.success && data.summary) {
         setSummary(data.summary);
         try {
           setParsedContent(JSON.parse(data.summary.content));
@@ -166,7 +185,7 @@ export default function InsightsPage() {
         setGenerateSuccess(true);
         setTimeout(() => setGenerateSuccess(false), 3000);
       } else {
-        const errorMsg = data.error || `生成失败 (${res.status})`;
+        const errorMsg = data?.error || `生成失败 (${res.status})`;
         // 特殊错误：数据源或指标未配置
         if (errorMsg.includes("no_active_data_source") || errorMsg.includes("no_metrics")) {
           setGenerateError("请先在数据源页面配置数据库并确认要监控的指标");
@@ -175,7 +194,7 @@ export default function InsightsPage() {
         }
       }
     } catch (err) {
-      setGenerateError("网络错误，请检查后端服务是否正常运行");
+      setGenerateError(err instanceof Error ? err.message : "网络错误，请检查后端服务是否正常运行");
     } finally {
       setGenerating(false);
     }
