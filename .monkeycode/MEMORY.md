@@ -369,3 +369,19 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 邮件内容采用 multipart/alternative，同时发送纯文本和 HTML 模板；587 端口优先尝试 STARTTLS，465 端口走 TLS 直连
   - 未配置 SMTP 时，后端在开发环境会把重置链接输出到日志，接口仍返回通用成功提示，避免暴露邮箱是否存在
   - 前端页面位于 `frontend/app/auth/forgot-password/page.tsx` 和 `frontend/app/auth/reset-password/page.tsx`
+
+### AI Schema 分析依赖 AI 配置
+- Date: 2026-03-31
+- Context: Agent 在排查“数据库连接正常但 AI 分析失败”时发现
+- Category: 代码模式
+- Instructions:
+  - 数据库连接成功只说明数据库凭据可用，不代表 AI 分析链路可用；Schema 分析还依赖租户级 `AIServiceConfig`
+  - `backend/internal/service/ai_config_service.go` 在租户首次访问时会自动初始化 `openai + gpt-4o-mini` 配置，但不会自动写入 API Key
+  - `backend/internal/service/schema_analysis_service.go` 的 Schema 分析最终通过 `LLMService.CallLLMJSON` 调用外部模型接口
+  - 若未配置 API Key，AI 分析会失败；需要在 `frontend/app/settings/ai/page.tsx` 先保存 AI 配置后再执行 Schema 分析
+
+### 弹窗交互偏好
+- Date: 2026-03-31
+- Context: 用户要求 AI 分析按钮的二次确认不要使用原生弹窗
+- Instructions:
+  - 交互中的二次确认弹窗优先使用项目内自定义 Modal/Dialog，不使用浏览器原生 `window.confirm`

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { DataSourceConfig, DataSourceType, DatabaseConnectionConfig } from "@/lib/types";
 import { getAccessToken } from "@/lib/auth/api";
 import { getCurrentUser, saveOnboardingDraft } from "@/lib/user-store";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 const DATABASE_TYPE_OPTIONS: Array<{ value: DataSourceType; label: string }> = [
   { value: "mysql", label: "MySQL" },
@@ -146,6 +147,8 @@ export default function DatabaseConnectionTab() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [analyzeConfirm, setAnalyzeConfirm] = useState<{ id: string; name: string; analyzed: boolean } | null>(null);
   const typeMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -499,10 +502,7 @@ export default function DatabaseConnectionTab() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`确定删除数据库连接「${name}」？此操作不可撤销。`)) {
-      return;
-    }
+  const executeDelete = async (id: string, name: string) => {
     setDeletingId(id);
     try {
       const tenantId = getTenantId();
@@ -525,10 +525,11 @@ export default function DatabaseConnectionTab() {
     }
   };
 
-  const handleAnalyze = async (id: string, name: string) => {
-    if (!window.confirm(`确定要对数据源「${name}」执行 AI Schema 分析吗？`)) {
-      return;
-    }
+  const handleDelete = (id: string, name: string) => {
+    setDeleteConfirm({ id, name });
+  };
+
+  const executeAnalyze = async (id: string, name: string) => {
     setAnalyzingId(id);
     setMessage(null);
     try {
@@ -565,6 +566,10 @@ export default function DatabaseConnectionTab() {
     } finally {
       setAnalyzingId(null);
     }
+  };
+
+  const handleAnalyze = (id: string, name: string, analyzed: boolean) => {
+    setAnalyzeConfirm({ id, name, analyzed });
   };
 
   return (
@@ -657,7 +662,7 @@ export default function DatabaseConnectionTab() {
                           <button
                             type="button"
                             disabled={analyzingId === row.id}
-                            onClick={() => handleAnalyze(row.id, row.name)}
+                            onClick={() => handleAnalyze(row.id, row.name, true)}
                             className="whitespace-nowrap rounded-lg border border-amber-500/35 bg-amber-500/10 px-2.5 py-1.5 text-xs font-medium text-amber-200 transition hover:bg-amber-500/20 disabled:opacity-50"
                           >
                             {analyzingId === row.id ? "分析中…" : "重新分析"}
@@ -666,7 +671,7 @@ export default function DatabaseConnectionTab() {
                           <button
                             type="button"
                             disabled={analyzingId === row.id}
-                            onClick={() => handleAnalyze(row.id, row.name)}
+                            onClick={() => handleAnalyze(row.id, row.name, false)}
                             className="whitespace-nowrap rounded-lg border border-cyan-500/35 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/20 disabled:opacity-50"
                           >
                             {analyzingId === row.id ? "分析中…" : "AI 分析"}
@@ -978,6 +983,57 @@ export default function DatabaseConnectionTab() {
           </div>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={Boolean(deleteConfirm)}
+        title={deleteConfirm ? `确认删除“${deleteConfirm.name}”` : "确认删除数据源"}
+        description="删除后当前数据源配置将立即移除，且无法撤销。"
+        confirmText="确认删除"
+        tone="danger"
+        busy={deleteConfirm ? deletingId === deleteConfirm.id : false}
+        details={
+          <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-rose-100">
+            请确认当前数据源不再被报表、观测中心或告警规则使用。
+          </div>
+        }
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={async () => {
+          const target = deleteConfirm;
+          if (!target) return;
+          await executeDelete(target.id, target.name);
+          setDeleteConfirm(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(analyzeConfirm)}
+        title={analyzeConfirm ? (analyzeConfirm.analyzed ? "确认重新分析" : "确认开始分析") : "确认开始分析"}
+        description={
+          analyzeConfirm
+            ? `即将对数据源“${analyzeConfirm.name}”执行 AI Schema 分析，用于识别字段语义、推荐指标和维度。${analyzeConfirm.analyzed ? " 重新分析会基于当前 schema 覆盖已有分析结果。" : ""}`
+            : ""
+        }
+        confirmText={analyzeConfirm?.analyzed ? "确认重新分析" : "确认开始分析"}
+        busy={analyzeConfirm ? analyzingId === analyzeConfirm.id : false}
+        details={
+          <>
+            <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3">
+              <div className="font-medium text-zinc-100">将执行的操作</div>
+              <p className="mt-1 text-zinc-400">调用已配置的 AI 模型分析当前数据库 schema，过程可能持续几十秒到两分钟。</p>
+            </div>
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-amber-100">
+              开始前请确认 AI 配置已填写 API Key，否则本次分析会直接失败。
+            </div>
+          </>
+        }
+        onClose={() => setAnalyzeConfirm(null)}
+        onConfirm={async () => {
+          const target = analyzeConfirm;
+          if (!target) return;
+          await executeAnalyze(target.id, target.name);
+          setAnalyzeConfirm(null);
+        }}
+      />
     </div>
   );
 }

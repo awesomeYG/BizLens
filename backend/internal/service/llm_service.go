@@ -13,6 +13,8 @@ import (
 	"ai-bi-server/internal/model"
 )
 
+const missingAPIKeyMessage = "AI 配置未填写 API Key，请先到设置页完成 AI 配置后再重试"
+
 // LLMService 统一 LLM 调用服务
 type LLMService struct {
 	aiConfigService *AIConfigService
@@ -82,6 +84,10 @@ func (s *LLMService) CallLLM(tenantID string, systemPrompt, userPrompt string) (
 
 // CallLLMWithModel 使用指定配置调用 LLM
 func (s *LLMService) CallLLMWithModel(cfg *model.AIServiceConfig, systemPrompt, userPrompt string) (string, error) {
+	if err := s.validateConfig(cfg); err != nil {
+		return "", err
+	}
+
 	baseURL := cfg.BaseURL
 	if baseURL == "" {
 		baseURL = s.defaultBaseURL(cfg.ModelType)
@@ -149,6 +155,9 @@ func (s *LLMService) CallLLMJSON(tenantID string, systemPrompt, userPrompt strin
 	if err != nil {
 		return "", fmt.Errorf("failed to get AI config: %w", err)
 	}
+	if err := s.validateConfig(cfg); err != nil {
+		return "", err
+	}
 
 	baseURL := cfg.BaseURL
 	if baseURL == "" {
@@ -205,6 +214,19 @@ func (s *LLMService) CallLLMJSON(tenantID string, systemPrompt, userPrompt strin
 	}
 
 	return llmResp.Choices[0].Message.Content, nil
+}
+
+func (s *LLMService) validateConfig(cfg *model.AIServiceConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("AI 配置不存在，请先完成 AI 配置")
+	}
+	if strings.TrimSpace(cfg.APIKey) == "" {
+		return fmt.Errorf(missingAPIKeyMessage)
+	}
+	if strings.TrimSpace(cfg.BaseURL) == "" && strings.TrimSpace(s.defaultBaseURL(cfg.ModelType)) == "" {
+		return fmt.Errorf("当前 AI 提供商需要配置 Base URL，请先到设置页补全后再重试")
+	}
+	return nil
 }
 
 // defaultBaseURL 根据模型类型返回默认 base URL

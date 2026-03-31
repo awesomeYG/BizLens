@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { Toast } from "@/components/ui/Toast";
 import {
   getCurrentUser,
   quickLoginWithMockData,
@@ -15,33 +17,39 @@ export default function DebugPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [mockMode, setMockModeState] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
     setUser(getCurrentUser());
     setMockModeState(isMockMode());
   }, []);
 
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 2500);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
   const handleQuickLogin = () => {
     quickLoginWithMockData();
     setUser(getCurrentUser());
-    alert("✓ 已使用 Mock 数据快速登录\n\n点击确定跳转到首页");
-    router.push("/");
+    setToast({ message: "已使用 Mock 数据快速登录，正在跳转首页", type: "success" });
+    setTimeout(() => router.push("/"), 600);
   };
 
   const handleClearData = () => {
-    if (confirm("确定要清除所有本地数据吗？")) {
-      logoutUser();
-      setUser(null);
-      localStorage.removeItem("bizlens-config");
-      localStorage.removeItem("ai-bi-user-session");
-      alert("✓ 已清除所有本地数据");
-    }
+    logoutUser();
+    setUser(null);
+    localStorage.removeItem("bizlens-config");
+    localStorage.removeItem("ai-bi-user-session");
+    setToast({ message: "已清除所有本地数据", type: "success" });
   };
 
   const handleToggleMockMode = () => {
     setMockMode(!mockMode);
     setMockModeState(!mockMode);
-    alert(`Mock 模式已${!mockMode ? "启用" : "禁用"}`);
+    setToast({ message: `Mock 模式已${!mockMode ? "启用" : "禁用"}`, type: "success" });
   };
 
   const handleResetOnboarding = () => {
@@ -50,7 +58,7 @@ export default function DebugPage() {
       currentUser.isOnboarded = false;
       localStorage.setItem("ai-bi-user-session", JSON.stringify(currentUser));
       setUser(currentUser);
-      alert("✓ 已重置 onboarding 状态\n\n刷新页面后将重新显示初始化向导");
+      setToast({ message: "已重置 onboarding 状态，刷新页面后将重新显示初始化向导", type: "success" });
     }
   };
 
@@ -127,7 +135,7 @@ export default function DebugPage() {
               </button>
 
               <button
-                onClick={handleClearData}
+                onClick={() => setShowClearConfirm(true)}
                 className="px-4 py-3 bg-red-600 rounded-lg hover:bg-red-700 text-left"
               >
                 🗑️ 清除所有数据
@@ -204,6 +212,26 @@ export default function DebugPage() {
             </div>
           </div>
         </div>
+
+        <ConfirmDialog
+          open={showClearConfirm}
+          title="确认清除所有本地数据"
+          description="这会清空当前浏览器里的本地登录态与调试配置。"
+          confirmText="确认清除"
+          tone="danger"
+          details={
+            <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-rose-100">
+              包括用户会话、调试配置和本地缓存，清除后需要重新登录或重新设置。
+            </div>
+          }
+          onClose={() => setShowClearConfirm(false)}
+          onConfirm={() => {
+            handleClearData();
+            setShowClearConfirm(false);
+          }}
+        />
+
+        {toast ? <Toast message={toast.message} type={toast.type} /> : null}
       </div>
     </div>
   );

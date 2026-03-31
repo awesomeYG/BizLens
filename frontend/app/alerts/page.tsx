@@ -22,6 +22,7 @@ import {
 import AppHeader from "@/components/AppHeader";
 import IMSectionNav from "@/components/IMSectionNav";
 import EmptyState from "@/components/ui/EmptyState";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { Toast } from "@/components/ui/Toast";
 import TabSwitcher from "@/components/ui/TabSwitcher";
 import { SkeletonCard } from "@/components/ui/Skeleton";
@@ -50,6 +51,7 @@ function AlertsContent() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string } | null>(null);
 
   // 表单状态
   const [formType, setFormType] = useState<AlertSourceType>("quick_alert");
@@ -200,14 +202,17 @@ function AlertsContent() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("确定删除此规则？")) return;
+  const executeDelete = async (id: string) => {
     await fetch(`/api/tenants/${tenantId}/alerts/${id}`, {
       method: "DELETE",
       headers: authHeaders(),
     });
     setToast({ message: "规则已删除", type: "success" });
     await loadData();
+  };
+
+  const handleDelete = (id: string) => {
+    setDeleteConfirm({ id });
   };
 
   const handleToggle = async (item: UnifiedAlertItem) => {
@@ -711,6 +716,26 @@ function AlertsContent() {
 
       {/* Toast */}
       {toast && <Toast message={toast.message} type={toast.type} />}
+
+      <ConfirmDialog
+        open={Boolean(deleteConfirm)}
+        title="确认删除此规则"
+        description="删除后该告警规则会立即失效，且无法撤销。"
+        confirmText="确认删除"
+        tone="danger"
+        details={
+          <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-rose-100">
+            如果该规则仍在生产环境使用，删除后将不再产生告警通知。
+          </div>
+        }
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={async () => {
+          const target = deleteConfirm;
+          if (!target) return;
+          await executeDelete(target.id);
+          setDeleteConfirm(null);
+        }}
+      />
     </div>
   );
 }
