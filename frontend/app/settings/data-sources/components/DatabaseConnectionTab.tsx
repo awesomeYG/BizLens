@@ -1014,15 +1014,53 @@ export default function DatabaseConnectionTab() {
             : ""
         }
         confirmText={analyzeConfirm?.analyzed ? "确认重新分析" : "确认开始分析"}
+        tone="warning"
         busy={analyzeConfirm ? analyzingId === analyzeConfirm.id : false}
         details={
           <>
-            <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3">
-              <div className="font-medium text-zinc-100">将执行的操作</div>
-              <p className="mt-1 text-zinc-400">调用已配置的 AI 模型分析当前数据库 schema，过程可能持续几十秒到两分钟。</p>
+            <div className="overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(135deg,rgba(245,158,11,0.12),rgba(255,255,255,0.02))]">
+              <div className="border-b border-white/10 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-zinc-50">分析任务概览</div>
+                    <p className="mt-1 text-xs text-zinc-400">本次会读取数据库 schema，并生成字段语义、业务指标与维度建议。</p>
+                  </div>
+                  <div className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[11px] font-medium text-amber-100">
+                    预计 30s - 2min
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 px-4 py-4 sm:grid-cols-3">
+                <div className="rounded-2xl border border-white/8 bg-black/20 px-3 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">数据源</div>
+                  <div className="mt-2 line-clamp-2 text-sm font-medium text-zinc-100">{analyzeConfirm?.name || "当前数据源"}</div>
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-black/20 px-3 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">分析范围</div>
+                  <div className="mt-2 text-sm font-medium text-zinc-100">Schema + 业务语义</div>
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-black/20 px-3 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">结果用途</div>
+                  <div className="mt-2 text-sm font-medium text-zinc-100">指标发现与 AI 问答</div>
+                </div>
+              </div>
             </div>
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-amber-100">
-              开始前请确认 AI 配置已填写 API Key，否则本次分析会直接失败。
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3">
+                <div className="text-sm font-medium text-zinc-100">分析流程</div>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-300">
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">读取表结构</span>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">识别字段语义</span>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">生成指标建议</span>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-amber-100">
+                <div className="text-sm font-medium">开始前检查</div>
+                <p className="mt-1 text-sm text-amber-100/80">请确认 AI 配置已填写 API Key；如果是重新分析，新的结果会覆盖当前 schema 分析内容。</p>
+              </div>
             </div>
           </>
         }

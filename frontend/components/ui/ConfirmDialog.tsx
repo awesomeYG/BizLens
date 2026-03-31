@@ -90,7 +90,7 @@ export default function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.12),transparent_32%),rgba(0,0,0,0.78)] p-4 backdrop-blur-md"
       role="presentation"
       onClick={(event) => {
         if (event.target === event.currentTarget && !busy) {
@@ -99,38 +99,52 @@ export default function ConfirmDialog({
       }}
     >
       <div
-        className={`w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-zinc-950/95 bg-gradient-to-br ${style.panel} shadow-2xl shadow-black/40`}
+        className={`relative w-full max-w-lg overflow-hidden rounded-[28px] border border-white/12 bg-zinc-950/95 bg-gradient-to-br ${style.panel} shadow-[0_32px_80px_rgba(0,0,0,0.55)]`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="border-b border-white/10 px-6 py-5">
-          <div className="flex items-start gap-4">
-            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border ${style.iconWrap}`}>
-              <ToneIcon tone={tone} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] ${style.badge}`}>
-                <span className={`h-2 w-2 rounded-full ${style.dot}`} />
-                操作确认
-              </div>
-              <h3 id="confirm-dialog-title" className="mt-3 text-xl font-semibold text-white">
-                {title}
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-zinc-400">{description}</p>
-            </div>
-          </div>
-        </div>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.14),transparent_68%)]" />
 
-        {details ? <div className="space-y-3 px-6 py-5 text-sm text-zinc-300">{details}</div> : null}
-
-        <div className="flex flex-col gap-3 border-t border-white/10 px-6 py-4 sm:flex-row sm:justify-end">
+        <div className="relative border-b border-white/10 px-6 py-5 sm:px-7">
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-xl border border-zinc-700 px-5 py-3 text-sm font-medium text-zinc-200 transition hover:bg-white/5 disabled:opacity-50"
+            aria-label="关闭弹窗"
+            className="absolute right-5 top-5 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white disabled:opacity-40"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path strokeLinecap="round" d="M5 5l10 10M15 5L5 15" />
+            </svg>
+          </button>
+
+          <div className="flex items-start gap-4">
+            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border shadow-lg shadow-black/20 ${style.iconWrap}`}>
+              <ToneIcon tone={tone} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium tracking-[0.18em] uppercase ${style.badge}`}>
+                <span className={`h-2 w-2 rounded-full ${style.dot}`} />
+                操作确认
+              </div>
+              <h3 id="confirm-dialog-title" className="mt-3 text-[22px] font-semibold tracking-tight text-white">
+                {title}
+              </h3>
+              <p className="mt-2 max-w-[30rem] text-sm leading-6 text-zinc-400">{description}</p>
+            </div>
+          </div>
+        </div>
+
+        {details ? <div className="relative space-y-3 px-6 py-5 text-sm text-zinc-300 sm:px-7">{details}</div> : null}
+
+        <div className="relative flex flex-col gap-3 border-t border-white/10 bg-white/[0.02] px-6 py-4 sm:flex-row sm:justify-end sm:px-7">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-2xl border border-zinc-700/80 bg-zinc-900/70 px-5 py-3 text-sm font-medium text-zinc-200 transition hover:bg-white/5 disabled:opacity-50"
           >
             {cancelText}
           </button>
@@ -138,7 +152,7 @@ export default function ConfirmDialog({
             type="button"
             onClick={() => void onConfirm()}
             disabled={busy}
-            className={`rounded-xl px-5 py-3 text-sm font-medium transition disabled:opacity-60 ${style.button}`}
+            className={`rounded-2xl px-5 py-3 text-sm font-medium shadow-lg shadow-black/20 transition disabled:opacity-60 ${style.button}`}
           >
             {busy ? "处理中..." : confirmText}
           </button>
