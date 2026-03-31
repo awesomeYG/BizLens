@@ -4,6 +4,7 @@ import (
 	"ai-bi-server/internal/model"
 	"ai-bi-server/internal/service"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -626,6 +627,14 @@ func (h *DataSourceHandler) AnalyzeSchema(w http.ResponseWriter, r *http.Request
 	}
 
 	if err != nil {
+		if errors.Is(err, service.ErrAIConfigMissingAPIKey) {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"error":   "AI 分析失败：未配置 API Key",
+				"message": "请先在 /api/tenants/{tenantId}/ai-config 配置 apiKey（以及可选的 baseUrl/modelType/model）",
+			})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"success": false,
 			"error":   "AI 分析失败：" + err.Error(),

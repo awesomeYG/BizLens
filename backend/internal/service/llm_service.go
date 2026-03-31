@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,9 @@ import (
 )
 
 const missingAPIKeyMessage = "AI 配置未填写 API Key，请先到设置页完成 AI 配置后再重试"
+
+// ErrAIConfigMissingAPIKey 表示租户未配置 LLM API Key
+var ErrAIConfigMissingAPIKey = errors.New("ai config missing api key")
 
 // LLMService 统一 LLM 调用服务
 type LLMService struct {
@@ -94,6 +98,10 @@ func (s *LLMService) CallLLMWithModel(cfg *model.AIServiceConfig, systemPrompt, 
 	}
 	baseURL = strings.TrimSuffix(baseURL, "/")
 
+	if strings.TrimSpace(cfg.APIKey) == "" {
+		return "", ErrAIConfigMissingAPIKey
+	}
+
 	modelName := cfg.Model
 	if modelName == "" {
 		modelName = s.defaultModel(cfg.ModelType)
@@ -164,6 +172,10 @@ func (s *LLMService) CallLLMJSON(tenantID string, systemPrompt, userPrompt strin
 		baseURL = s.defaultBaseURL(cfg.ModelType)
 	}
 	baseURL = strings.TrimSuffix(baseURL, "/")
+
+	if strings.TrimSpace(cfg.APIKey) == "" {
+		return "", ErrAIConfigMissingAPIKey
+	}
 
 	modelName := cfg.Model
 	if modelName == "" {
