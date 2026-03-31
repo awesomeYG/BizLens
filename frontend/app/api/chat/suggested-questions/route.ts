@@ -123,6 +123,8 @@ function resolveTenantIdFromAuthHeader(authHeader?: string | null): string | und
   }
 }
 
+const DEFAULT_TENANT_ID = "default";
+
 const SUGGESTION_SYSTEM_PROMPT = `你是 BizLens 的智能数据分析师助手。你的任务是根据以下信息，生成 4~6 个最符合用户实际业务场景的个性化推荐问题。
 
 ## 生成规则
@@ -369,7 +371,7 @@ export async function POST(req: NextRequest) {
       };
     };
 
-    const resolvedTenantId = tokenTenantId || tenantId || "demo-tenant";
+    const resolvedTenantId = tokenTenantId || tenantId || DEFAULT_TENANT_ID;
 
     // ── 缓存命中检查（快速路径） ──
     // 先用一个粗粒度 key 尝试命中，避免发起 3 个后端请求 + LLM 调用

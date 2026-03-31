@@ -16,10 +16,12 @@ export interface ChatPanelProps {
   onDataSummaryChange?: (summary: string) => void;
 }
 
+const DEFAULT_TENANT_ID = "default";
+
 export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPanelProps>) {
   const router = useRouter();
   const currentUser = useMemo(() => getCurrentUser(), []);
-  const tenantId = currentUser?.tenantId || currentUser?.id || "demo-tenant";
+  const tenantId = currentUser?.tenantId || DEFAULT_TENANT_ID;
 
   // -------------------------------------------------------------------------
   // 数据摘要
@@ -112,7 +114,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
     if (suggestionsLoadedRef.current) return;
 
     const user = getCurrentUser();
-    const userTenantId = user?.tenantId || user?.id || "demo-tenant";
+    const userTenantId = user?.tenantId || DEFAULT_TENANT_ID;
     const token = getAccessToken();
 
     suggestionsAbortControllerRef.current?.abort();

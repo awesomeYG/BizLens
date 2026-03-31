@@ -63,6 +63,8 @@ function resolveTenantIdFromAuthHeader(authHeader?: string | null): string | und
   }
 }
 
+const DEFAULT_TENANT_ID = "default";
+
 // ============================================================================
 // API 端点
 // ============================================================================
@@ -88,7 +90,7 @@ export async function POST(req: NextRequest) {
       (typeof companyProfile === "object" && companyProfile !== null && "tenantId" in companyProfile
         ? (companyProfile as { tenantId?: string }).tenantId
         : undefined) ||
-      "demo-tenant";
+      DEFAULT_TENANT_ID;
 
     // -------------------------------------------------------------------------
     // 1. 获取上下文数据

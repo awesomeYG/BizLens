@@ -45,6 +45,13 @@ interface AnalysisEvaluation {
   }>;
 }
 
+const DEFAULT_TENANT_ID = "default";
+
+function resolveTenantId() {
+  const user = getCurrentUser();
+  return user?.tenantId || DEFAULT_TENANT_ID;
+}
+
 function buildSparklinePoints(values: number[], width = 240, height = 56): string {
   if (values.length === 0) return "";
   if (values.length === 1) return `0,${height / 2}`;
@@ -225,8 +232,7 @@ export default function ChatPanel({
 
   const fetchAnalysisEvaluation = async () => {
     try {
-      const user = getCurrentUser();
-      const tenantId = user?.id || "demo-tenant";
+      const tenantId = resolveTenantId();
       const res = await fetch(`/api/tenants/${tenantId}/analysis/evaluation`);
       const data = await res.json();
       if (res.ok && data?.evaluation) {
@@ -309,8 +315,7 @@ export default function ChatPanel({
 
       try {
         const alertConfig = JSON.parse(alertMatch[1]);
-        const user = getCurrentUser();
-        const tenantId = user?.id || "demo-tenant";
+        const tenantId = resolveTenantId();
         const alertRes = await fetch(`/api/tenants/${tenantId}/alerts`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -340,8 +345,7 @@ export default function ChatPanel({
 
       try {
         const ruleConfig = JSON.parse(notificationMatch[1]);
-        const user = getCurrentUser();
-        const tenantId = user?.id || "demo-tenant";
+        const tenantId = resolveTenantId();
         const ruleRes = await fetch(`/api/tenants/${tenantId}/notification-rules`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -377,8 +381,7 @@ export default function ChatPanel({
 
       try {
         const reportConfig = JSON.parse(reportMatch[1]);
-        const user = getCurrentUser();
-        const tenantId = user?.id || "demo-tenant";
+        const tenantId = resolveTenantId();
 
         const created = await request<Report>(
           `/tenants/${tenantId}/reports`,
@@ -430,8 +433,7 @@ export default function ChatPanel({
 
       try {
         const dsConfig = JSON.parse(dsMatch[1]);
-        const user = getCurrentUser();
-        const tenantId = user?.id || "demo-tenant";
+        const tenantId = resolveTenantId();
         const token = getAccessToken();
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -491,8 +493,7 @@ export default function ChatPanel({
 
       try {
         const rcaRequest = JSON.parse(rcaMatch[1]);
-        const user = getCurrentUser();
-        const tenantId = user?.id || "demo-tenant";
+        const tenantId = resolveTenantId();
         const token = getAccessToken();
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
