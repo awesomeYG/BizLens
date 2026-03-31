@@ -57,6 +57,7 @@ export default function MetricsPage() {
   const [discoverDialogOpen, setDiscoverDialogOpen] = useState(false);
   const [discoveredMetrics, setDiscoveredMetrics] = useState<Metric[]>([]);
   const [editingMetric, setEditingMetric] = useState<Metric | null>(null);
+  const [deleteMetricId, setDeleteMetricId] = useState<string | null>(null);
 
   // Form states
   const [formData, setFormData] = useState<Partial<Metric>>({
@@ -189,7 +190,6 @@ export default function MetricsPage() {
   }
 
   async function handleDeleteMetric(metricId: string) {
-    if (!confirm('确定要删除这个指标吗？')) return;
     try {
       await deleteMetric(metricId);
       await loadMetrics();
@@ -204,6 +204,10 @@ export default function MetricsPage() {
         variant: 'destructive',
       });
     }
+  }
+
+  function requestDeleteMetric(metricId: string) {
+    setDeleteMetricId(metricId);
   }
 
   function openEditDialog(metric: Metric) {
@@ -396,7 +400,7 @@ export default function MetricsPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteMetric(metric.id)}
+                          onClick={() => requestDeleteMetric(metric.id)}
                         >
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
@@ -642,6 +646,35 @@ export default function MetricsPage() {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteMetricId} onOpenChange={(open) => !open && setDeleteMetricId(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>确认删除指标</DialogTitle>
+            <DialogDescription>
+              删除后该指标将立即移除，且无法撤销。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            如果该指标仍被图表、告警或分析流程使用，请先确认影响范围。
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteMetricId(null)}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!deleteMetricId) return;
+                await handleDeleteMetric(deleteMetricId);
+                setDeleteMetricId(null);
+              }}
+            >
+              确认删除
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

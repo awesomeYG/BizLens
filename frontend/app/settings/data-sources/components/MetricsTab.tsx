@@ -6,6 +6,7 @@ import type { DataSourceConfig, DataSourceType } from "@/lib/types";
 import { getAccessToken } from "@/lib/auth/api";
 import { getCurrentUser } from "@/lib/user-store";
 import MetricDiscoveryModal from "./MetricDiscoveryModal";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 type FilterStatus = "all" | MetricStatus;
 
@@ -75,6 +76,11 @@ export default function MetricsTab() {
   const [discoverDsId, setDiscoverDsId] = useState<string>("");
   const [discoverResult, setDiscoverResult] = useState<{ count: number } | null>(null);
   const [showSmartModal, setShowSmartModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<
+    | { mode: "single"; id: string; name: string }
+    | { mode: "batch"; count: number }
+    | null
+  >(null);
 
   const getTenantId = useCallback(() => {
     const user = getCurrentUser();
@@ -232,8 +238,7 @@ export default function MetricsTab() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`确定删除指标「${name}」？此操作不可撤销。`)) return;
+  const executeDelete = async (id: string, name: string) => {
     try {
       const tenantId = getTenantId();
       const response = await fetch(`/api/tenants/${tenantId}/metrics/${id}`, {
@@ -252,9 +257,12 @@ export default function MetricsTab() {
     }
   };
 
-  const handleBatchDelete = async () => {
+  const handleDelete = (id: string, name: string) => {
+    setDeleteConfirm({ mode: "single", id, name });
+  };
+
+  const executeBatchDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`确定删除选中的 ${selectedIds.size} 个指标？此操作不可撤销。`)) return;
     setDeleting(true);
     setMessage(null);
     try {
@@ -277,6 +285,11 @@ export default function MetricsTab() {
     } finally {
       setDeleting(false);
     }
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedIds.size === 0) return;
+    setDeleteConfirm({ mode: "batch", count: selectedIds.size });
   };
 
   const draftMetrics = metrics.filter((m) => m.status === "draft");
@@ -562,6 +575,41 @@ export default function MetricsTab() {
         onDiscoverComplete={() => {
           fetchMetrics();
           setDiscoverResult({ count: 0 });
+        }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteConfirm)}
+        title={
+          deleteConfirm?.mode === "single"
+            ? `确认删除指标“${deleteConfirm.name}”`
+            : deleteConfirm?.mode === "batch"
+              ? `确认删除选中的 ${deleteConfirm.count} 个指标`
+              : "确认删除指标"
+        }
+        description={
+          deleteConfirm?.mode === "single"
+            ? "删除后该指标会立即从列表中移除，且无法撤销。"
+            : "批量删除后这些指标会立即从列表中移除，且无法撤销。"
+        }
+        confirmText={deleteConfirm?.mode === "batch" ? "确认批量删除" : "确认删除"}
+        tone="danger"
+        busy={deleting}
+        details={
+          <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-rose-100">
+            已激活或仍被其他模块引用的指标，不建议直接删除，请先确认影响范围。
+          </div>
+        }
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={async () => {
+          const target = deleteConfirm;
+          if (!target) return;
+          if (target.mode === "single") {
+            await executeDelete(target.id, target.name);
+          } else {
+            await executeBatchDelete();
+          }
+          setDeleteConfirm(null);
         }}
       />
     </div>

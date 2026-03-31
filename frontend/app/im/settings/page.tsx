@@ -9,6 +9,7 @@ import IMPlatformForm from "@/components/IMPlatformForm";
 import AppHeader from "@/components/AppHeader";
 import IMSectionNav from "@/components/IMSectionNav";
 import EmptyState from "@/components/ui/EmptyState";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { Toast } from "@/components/ui/Toast";
 import { SkeletonGrid } from "@/components/ui/Skeleton";
 import HeroSection from "@/components/ui/HeroSection";
@@ -23,6 +24,7 @@ export default function IMSettingsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<IMConfigCreateRequest>({ type: "dingtalk", name: "", webhookUrl: "", secret: "", keyword: "", enabled: true });
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string } | null>(null);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -94,8 +96,7 @@ export default function IMSettingsPage() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("确定删除此配置？")) return;
+  const executeDelete = async (id: string) => {
     try {
       await request(`/tenants/${tenantId}/im-configs/${id}`, { method: "DELETE" });
       await loadConfigs();
@@ -104,6 +105,10 @@ export default function IMSettingsPage() {
       const msg = e instanceof Error ? e.message : "删除失败";
       setToast({ message: msg, type: "error" });
     }
+  };
+
+  const handleDelete = (id: string) => {
+    setDeleteConfirm({ id });
   };
 
   const handleTest = async (id: string) => {
@@ -245,6 +250,26 @@ export default function IMSettingsPage() {
 
       {/* Toast Notification */}
       {toast && <Toast message={toast.message} type={toast.type} />}
+
+      <ConfirmDialog
+        open={Boolean(deleteConfirm)}
+        title="确认删除此配置"
+        description="删除后该 IM 平台配置会立即失效，且无法撤销。"
+        confirmText="确认删除"
+        tone="danger"
+        details={
+          <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-rose-100">
+            与该平台相关的测试发送、告警通知和 AI 主动通知都会受到影响。
+          </div>
+        }
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={async () => {
+          const target = deleteConfirm;
+          if (!target) return;
+          await executeDelete(target.id);
+          setDeleteConfirm(null);
+        }}
+      />
     </div>
   );
 }
