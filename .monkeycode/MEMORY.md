@@ -366,5 +366,6 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 密码重置令牌存储在 `backend/internal/model/model.go` 的 `PasswordResetToken` 表，数据库中只保存 token 的 SHA-256 哈希
   - 重置链接格式为 `APP_BASE_URL/auth/reset-password?token=...`，默认有效期 30 分钟，同一用户只保留最新一条未使用链接
   - 邮件发送由 `backend/internal/service/email_service.go` 负责，依赖环境变量 `SMTP_HOST`、`SMTP_PORT`、`SMTP_USER`、`SMTP_PASSWORD`、`SMTP_FROM`
+  - 邮件内容采用 multipart/alternative，同时发送纯文本和 HTML 模板；587 端口优先尝试 STARTTLS，465 端口走 TLS 直连
   - 未配置 SMTP 时，后端在开发环境会把重置链接输出到日志，接口仍返回通用成功提示，避免暴露邮箱是否存在
   - 前端页面位于 `frontend/app/auth/forgot-password/page.tsx` 和 `frontend/app/auth/reset-password/page.tsx`
