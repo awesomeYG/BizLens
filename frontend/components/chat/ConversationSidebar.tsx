@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ChatConversationSummary } from "@/lib/chat/types";
 
 function formatHistoryDate(value?: string): string {
@@ -56,11 +57,16 @@ export function ConversationSidebar({
   onCancelDelete,
   onTitleChange,
 }: ConversationSidebarProps) {
+  const [mounted, setMounted] = useState(false);
   const filteredConversations = searchQuery.trim()
     ? conversations.filter((item) =>
         `${item.title} ${item.preview}`.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : conversations;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <aside className="w-full shrink-0 border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-xl lg:w-80 lg:border-b-0 lg:border-r">
@@ -130,39 +136,67 @@ export function ConversationSidebar({
       </div>
 
       {/* Delete Confirmation Modal */}
-      {pendingDeleteConversationId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-md rounded-2xl border border-zinc-700/60 bg-zinc-900/95 p-6 shadow-2xl shadow-black/50">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-500/15">
-                <svg className="h-5 w-5 text-rose-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <h3 className="text-base font-semibold text-zinc-100">确认删除对话</h3>
-            </div>
-            <p className="mb-6 text-sm text-zinc-400">
-              确定要删除「{conversations.find((c) => c.id === pendingDeleteConversationId)?.title || "新对话"}」吗？删除后将无法恢复。
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={onCancelDelete}
-                className="flex-1 rounded-xl border border-zinc-700 bg-zinc-800/80 px-5 py-2.5 text-sm font-medium text-zinc-200 transition hover:bg-zinc-700/80"
-              >
-                取消
-              </button>
-              <button
-                onClick={onConfirmDelete}
-                disabled={sidebarBusyId === pendingDeleteConversationId}
-                className="flex-1 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-rose-500 disabled:opacity-60"
-              >
-                {sidebarBusyId === pendingDeleteConversationId ? "删除中..." : "确认删除"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <DeleteConfirmationModal
+        mounted={mounted}
+        conversationTitle={conversations.find((c) => c.id === pendingDeleteConversationId)?.title || "新对话"}
+        open={Boolean(pendingDeleteConversationId)}
+        busy={sidebarBusyId === pendingDeleteConversationId}
+        onCancel={onCancelDelete}
+        onConfirm={onConfirmDelete}
+      />
     </aside>
+  );
+}
+
+function DeleteConfirmationModal({
+  mounted,
+  conversationTitle,
+  open,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  mounted: boolean;
+  conversationTitle: string;
+  open: boolean;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!mounted || !open) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="mx-4 w-full max-w-md rounded-2xl border border-zinc-700/60 bg-zinc-900/95 p-6 shadow-2xl shadow-black/50">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-500/15">
+            <svg className="h-5 w-5 text-rose-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 className="text-base font-semibold text-zinc-100">确认删除对话</h3>
+        </div>
+        <p className="mb-6 text-sm text-zinc-400">
+          确定要删除「{conversationTitle}」吗？删除后将无法恢复。
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-xl border border-zinc-700 bg-zinc-800/80 px-5 py-2.5 text-sm font-medium text-zinc-200 transition hover:bg-zinc-700/80"
+          >
+            取消
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            className="flex-1 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-rose-500 disabled:opacity-60"
+          >
+            {busy ? "删除中..." : "确认删除"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 

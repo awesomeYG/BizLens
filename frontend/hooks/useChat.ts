@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { request } from "@/lib/auth/api";
+import { getAccessToken, request } from "@/lib/auth/api";
 import { getCurrentUser } from "@/lib/user-store";
 import { parseConnectionUriFromText } from "@/lib/chat/response-parser";
 import { createDataSourceFromURI, processResponseActions, appendActionResultsToContent } from "@/lib/chat/action-handlers";
@@ -344,7 +344,7 @@ export function useChat({ tenantId, dataSummary }: UseChatOptions): UseChatRetur
       manualStopRef.current = false;
 
       try {
-        const token = localStorage.getItem("access_token");
+        const token = getAccessToken();
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -479,7 +479,7 @@ export function useChat({ tenantId, dataSummary }: UseChatOptions): UseChatRetur
 
   const sendDingtalkMessage = useCallback(
     async (content: string) => {
-      const token = localStorage.getItem("access_token");
+      const token = getAccessToken();
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
 

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useChat } from "@/hooks/useChat";
+import { getAccessToken } from "@/lib/auth/api";
 import { getCurrentUser } from "@/lib/user-store";
 import { createDashboardInstance } from "@/lib/dashboard-store";
 import { removeActionBlocks } from "@/lib/chat/response-parser";
@@ -112,7 +113,7 @@ export default function SimpleChatPanel({ onDataSummaryChange }: Readonly<ChatPa
 
     const user = getCurrentUser();
     const userTenantId = user?.tenantId || user?.id || "demo-tenant";
-    const token = localStorage.getItem("access_token");
+    const token = getAccessToken();
 
     suggestionsAbortControllerRef.current?.abort();
     const abortController = new AbortController();
