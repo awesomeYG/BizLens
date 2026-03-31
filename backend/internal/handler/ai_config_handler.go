@@ -44,10 +44,26 @@ func maskAPIKey(value string) string {
 func shouldIncludeAPIKey(r *http.Request) bool {
 	internalToken := strings.TrimSpace(os.Getenv("INTERNAL_API_TOKEN"))
 	if internalToken == "" {
-		return false
+		if strings.TrimSpace(r.Header.Get("X-Include-Secret")) != "true" {
+			return false
+		}
+		userID, _ := r.Context().Value("userID").(string)
+		jwtTenantID, _ := r.Context().Value("tenantID").(string)
+		pathTenantID := parseTenantIDFromPath(r)
+		return userID != "" && jwtTenantID != "" && pathTenantID != "" && jwtTenantID == pathTenantID
 	}
 	reqToken := strings.TrimSpace(r.Header.Get("X-Internal-Token"))
-	return reqToken != "" && reqToken == internalToken
+	if reqToken != "" && reqToken == internalToken {
+		return true
+	}
+
+	if strings.TrimSpace(r.Header.Get("X-Include-Secret")) != "true" {
+		return false
+	}
+	userID, _ := r.Context().Value("userID").(string)
+	jwtTenantID, _ := r.Context().Value("tenantID").(string)
+	pathTenantID := parseTenantIDFromPath(r)
+	return userID != "" && jwtTenantID != "" && pathTenantID != "" && jwtTenantID == pathTenantID
 }
 
 func (h *AIConfigHandler) GetAIConfig(w http.ResponseWriter, r *http.Request) {

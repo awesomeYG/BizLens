@@ -404,6 +404,7 @@ async function getTenantAIConfigFromBackend(
     const headers: Record<string, string> = { "Content-Type": "application/json", "X-Tenant-ID": tenantId };
     if (authHeader) headers.Authorization = authHeader;
     if (process.env.INTERNAL_API_TOKEN) headers["X-Internal-Token"] = process.env.INTERNAL_API_TOKEN;
+    headers["X-Include-Secret"] = "true";
 
     const res = await fetch(`${backendBase}/api/tenants/${tenantId}/ai-config`, {
       method: "GET",
