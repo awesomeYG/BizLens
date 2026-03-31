@@ -48,6 +48,21 @@ interface TenantDataSourceContext {
   }>;
 }
 
+function resolveTenantIdFromAuthHeader(authHeader?: string | null): string | undefined {
+  if (!authHeader?.startsWith("Bearer ")) return undefined;
+
+  const token = authHeader.slice(7).trim();
+  const parts = token.split(".");
+  if (parts.length < 2) return undefined;
+
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as { tenantId?: string };
+    return typeof payload.tenantId === "string" && payload.tenantId.trim() ? payload.tenantId : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // ============================================================================
 // API 端点
 // ============================================================================
@@ -55,6 +70,7 @@ interface TenantDataSourceContext {
 export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization");
+    const tokenTenantId = resolveTenantIdFromAuthHeader(authHeader);
     const body = await req.json() as ChatRequestBody;
     const { messages, dataSummary, dataSchema, companyProfile, conversationContext, tenantId: clientTenantId, aiConfig: clientAiConfig } = body;
 
@@ -64,7 +80,8 @@ export async function POST(req: NextRequest) {
     }
 
     const latestUserMessage = [...messages].reverse().find((m) => m.role === "user")?.content || "";
-    const tenantId = clientTenantId ||
+    const tenantId = tokenTenantId ||
+      clientTenantId ||
       (typeof conversationContext === "object" && conversationContext !== null && "tenantId" in conversationContext
         ? (conversationContext as { tenantId?: string }).tenantId
         : undefined) ||

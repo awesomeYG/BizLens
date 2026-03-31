@@ -108,6 +108,21 @@ interface ConversationSummary {
   messageCount: number;
 }
 
+function resolveTenantIdFromAuthHeader(authHeader?: string | null): string | undefined {
+  if (!authHeader?.startsWith("Bearer ")) return undefined;
+
+  const token = authHeader.slice(7).trim();
+  const parts = token.split(".");
+  if (parts.length < 2) return undefined;
+
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as { tenantId?: string };
+    return typeof payload.tenantId === "string" && payload.tenantId.trim() ? payload.tenantId : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const SUGGESTION_SYSTEM_PROMPT = `你是 BizLens 的智能数据分析师助手。你的任务是根据以下信息，生成 4~6 个最符合用户实际业务场景的个性化推荐问题。
 
 ## 生成规则
@@ -335,6 +350,7 @@ const DEFAULT_QUESTIONS = [
 export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization");
+    const tokenTenantId = resolveTenantIdFromAuthHeader(authHeader);
     const body = await req.json();
     const {
       tenantId,
@@ -353,7 +369,7 @@ export async function POST(req: NextRequest) {
       };
     };
 
-    const resolvedTenantId = tenantId || "demo-tenant";
+    const resolvedTenantId = tokenTenantId || tenantId || "demo-tenant";
 
     // ── 缓存命中检查（快速路径） ──
     // 先用一个粗粒度 key 尝试命中，避免发起 3 个后端请求 + LLM 调用
